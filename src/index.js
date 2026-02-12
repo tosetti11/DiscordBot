@@ -116,6 +116,9 @@ async function handleSelectMenu(interaction) {
   if (id === 'deletebet_select') {
     return deletebet.handleDeleteSelect(interaction);
   }
+  if (id === 'editbet2_select') {
+    return require('./commands/betting/editbet').handleEditBetSelect(interaction);
+  }
 }
 
 // ─── Button Router ───
@@ -160,6 +163,9 @@ async function handleModalSubmit(interaction) {
   }
   if (id === 'deletebet_confirm_modal') {
     return deletebet.handleDeleteConfirmModal(interaction);
+  }
+  if (id.startsWith('editbet2_modal_')) {
+    return require('./commands/betting/editbet').handleEditBetModal(interaction);
   }
 }
 
