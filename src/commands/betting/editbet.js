@@ -9,13 +9,11 @@ const command = new SlashCommandBuilder()
   .addStringOption(option =>
     option.setName('slip')
       .setDescription('Slip number to edit (e.g. RIC-001)')
-      .setRequired(false)
-  )
+      .setRequired(false))
   .addUserOption(option =>
     option.setName('user')
       .setDescription('(Admin) Search bets by user')
-      .setRequired(false)
-  );
+      .setRequired(false));
   .addStringOption(option =>
     option.setName('slip')
       .setDescription('Slip number to edit (e.g. RIC-001)')
