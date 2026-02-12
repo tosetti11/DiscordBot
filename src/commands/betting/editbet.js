@@ -4,8 +4,8 @@ const { buildBetEmbed } = require('../../utils/embeds');
 const { PermissionFlagsBits } = require('discord.js');
 
 const command = new SlashCommandBuilder()
-  .setName('editbet')
-  .setDescription('(Admin) Edit an existing bet')
+  .setName('editbet2')
+  .setDescription('(Admin) Edit an existing bet (test)')
   .addStringOption(option =>
     option.setName('slip')
       .setDescription('Slip number to edit (e.g. RIC-001)')
