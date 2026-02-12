@@ -6,6 +6,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 const db = require('../../database/queries');
+const { PermissionFlagsBits } = require('discord.js');
 const { buildBetEmbed } = require('../../utils/embeds');
 const { SPORT_NAMES, STATUS_EMOJI } = require('../../config/constants');
 const { formatOdds } = require('../../utils/odds');
@@ -15,15 +16,32 @@ const closeSessions = new Map();
 
 const command = new SlashCommandBuilder()
   .setName('closebet')
-  .setDescription('Close an open bet as win, loss, or push');
+  .setDescription('Close an open bet as win, loss, or push')
+  .addUserOption(option =>
+    option.setName('user')
+      .setDescription('(Admin) Select a user to close their bets')
+      .setRequired(false)
+  );
 
 async function execute(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
-  const openBets = await db.getOpenBets(interaction.user.id, interaction.guildId);
+  // Admins can select a user to close their bets
+  const targetUser = interaction.options.getUser('user');
+  let userId = interaction.user.id;
+  let isAdmin = false;
+  if (targetUser) {
+    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.editReply({ content: '❌ Only admins can close bets for other users.' });
+    }
+    userId = targetUser.id;
+    isAdmin = true;
+  }
+
+  const openBets = await db.getOpenBets(userId, interaction.guildId);
 
   if (openBets.length === 0) {
-    return interaction.editReply({ content: '📭 You have no open bets to close.' });
+    return interaction.editReply({ content: `📭 ${targetUser ? 'This user has' : 'You have'} no open bets to close.` });
   }
 
   const options = openBets.slice(0, 25).map(bet => {
@@ -48,6 +66,11 @@ async function execute(interaction) {
     };
   });
 
+  // Store admin session for target user
+  if (isAdmin) {
+    closeSessions.set(interaction.user.id, { adminFor: userId });
+  }
+
   const row = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId('closebet_select')
@@ -66,12 +89,19 @@ async function handleBetSelect(interaction) {
   const betId = interaction.values[0];
   const bet = await db.getBet(betId);
 
+  // Check if this is an admin session
+  const adminSession = closeSessions.get(interaction.user.id);
+  let sessionUserId = interaction.user.id;
+  if (adminSession && adminSession.adminFor) {
+    sessionUserId = adminSession.adminFor;
+  }
+
   if (bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0) {
     const session = {
       betId,
       legs: bet.parlay_legs.sort((a, b) => a.leg_number - b.leg_number),
     };
-    closeSessions.set(interaction.user.id, session);
+    closeSessions.set(sessionUserId, session);
     return showParlayDashboard(interaction, session, 'update');
   }
 

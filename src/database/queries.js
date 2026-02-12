@@ -1,3 +1,16 @@
+/**
+ * Update bet fields (admin edit)
+ */
+async function updateBetFields(betId, fields) {
+  const { data, error } = await supabase
+    .from('bets')
+    .update(fields)
+    .eq('id', betId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
 const { supabase } = require('../config/supabase');
 
 /**
@@ -278,8 +291,8 @@ async function getAllBetsInGuild(guildId, { status, discordId, sport, team, minU
 /**
  * Delete a bet completely (and its parlay legs via CASCADE)
  */
-async function deleteBet(betId, discordId) {
-  // Verify ownership
+async function deleteBet(betId, discordId, isAdmin = false) {
+  // Verify ownership unless admin
   const { data: bet, error: fetchErr } = await supabase
     .from('bets')
     .select('id, discord_id, message_id, channel_id')
@@ -288,7 +301,7 @@ async function deleteBet(betId, discordId) {
 
   if (fetchErr) throw fetchErr;
   if (!bet) return null;
-  if (bet.discord_id !== discordId) return { error: 'not_owner' };
+  if (!isAdmin && bet.discord_id !== discordId) return { error: 'not_owner' };
 
   const { error } = await supabase
     .from('bets')
@@ -314,4 +327,5 @@ module.exports = {
   getBetBySlip,
   getAllBetsInGuild,
   deleteBet,
+  updateBetFields,
 };

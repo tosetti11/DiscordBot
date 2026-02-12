@@ -7,6 +7,7 @@ const {
   TextInputStyle,
 } = require('discord.js');
 const db = require('../../database/queries');
+const { PermissionFlagsBits } = require('discord.js');
 const { buildBetEmbed } = require('../../utils/embeds');
 const { SPORT_NAMES, STATUS_EMOJI } = require('../../config/constants');
 const { formatOdds } = require('../../utils/odds');
@@ -17,6 +18,11 @@ const pendingDeletes = new Map();
 const command = new SlashCommandBuilder()
   .setName('deletebet')
   .setDescription('Permanently delete one of your bets')
+  .addUserOption(option =>
+    option.setName('user')
+      .setDescription('(Admin) Select a user to delete their bets')
+      .setRequired(false)
+  )
   .addStringOption(option =>
     option.setName('slip')
       .setDescription('Slip number to delete (e.g. RIC-001)')
@@ -24,6 +30,17 @@ const command = new SlashCommandBuilder()
 
 async function execute(interaction) {
   await interaction.deferReply({ ephemeral: true });
+
+  const targetUser = interaction.options.getUser('user');
+  let userId = interaction.user.id;
+  let isAdmin = false;
+  if (targetUser) {
+    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.editReply({ content: '❌ Only admins can delete bets for other users.' });
+    }
+    userId = targetUser.id;
+    isAdmin = true;
+  }
 
   const slipSearch = interaction.options.getString('slip');
 
@@ -33,7 +50,7 @@ async function execute(interaction) {
     if (!bet) {
       return interaction.editReply({ content: `📭 No bet found with slip **${slipSearch.toUpperCase()}**` });
     }
-    if (bet.discord_id !== interaction.user.id) {
+    if (!isAdmin && bet.discord_id !== interaction.user.id) {
       return interaction.editReply({ content: '❌ You can only delete your own bets.' });
     }
 
@@ -43,10 +60,10 @@ async function execute(interaction) {
   }
 
   // No slip provided - show list of user's bets
-  const bets = await db.getUserBets(interaction.user.id, interaction.guildId, 25);
+  const bets = await db.getUserBets(userId, interaction.guildId, 25);
 
   if (bets.length === 0) {
-    return interaction.editReply({ content: '📭 You have no bets to delete.' });
+    return interaction.editReply({ content: `📭 ${targetUser ? 'This user has' : 'You have'} no bets to delete.` });
   }
 
   const options = bets.slice(0, 25).map(bet => {
@@ -72,6 +89,11 @@ async function execute(interaction) {
     };
   });
 
+  // Store admin session for target user
+  if (isAdmin) {
+    pendingDeletes.set(interaction.user.id, { adminFor: userId });
+  }
+
   const row = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId('deletebet_select')
@@ -90,10 +112,19 @@ async function handleDeleteSelect(interaction) {
   const betId = interaction.values[0];
   const bet = await db.getBet(betId);
 
+  // Check if this is an admin session
+  const adminSession = pendingDeletes.get(interaction.user.id);
+  let sessionUserId = interaction.user.id;
+  let isAdmin = false;
+  if (adminSession && adminSession.adminFor) {
+    sessionUserId = adminSession.adminFor;
+    isAdmin = true;
+  }
+
   if (!bet) {
     return interaction.update({ content: '❌ Bet not found.', components: [] });
   }
-  if (bet.discord_id !== interaction.user.id) {
+  if (!isAdmin && bet.discord_id !== interaction.user.id) {
     return interaction.update({ content: '❌ You can only delete your own bets.', components: [] });
   }
 
@@ -172,14 +203,21 @@ async function handleDeleteConfirmModal(interaction) {
     });
   }
 
+  // Check if this is an admin session
+  let isAdmin = false;
+  const adminSession = pendingDeletes.get(userId);
+  if (adminSession && adminSession.adminFor) {
+    isAdmin = true;
+  }
+
   try {
     const bet = await db.getBet(betId);
-    const result = await db.deleteBet(betId, userId);
+    const result = await db.deleteBet(betId, userId, isAdmin);
 
     if (!result) {
       return interaction.reply({ content: '❌ Bet not found.', ephemeral: true });
     }
-    if (result.error === 'not_owner') {
+    if (!isAdmin && result.error === 'not_owner') {
       return interaction.reply({ content: '❌ You can only delete your own bets.', ephemeral: true });
     }
 
