@@ -4,15 +4,18 @@ const { REST, Routes } = require('discord.js');
 // Import all commands
 const enterbet = require('./commands/betting/enterbet');
 const closebet = require('./commands/betting/closebet');
+
 const mybets = require('./commands/betting/mybets');
 const mystats = require('./commands/betting/mystats');
 const leaderboard = require('./commands/betting/leaderboard');
 const viewbets = require('./commands/betting/viewbets');
 const deletebet = require('./commands/betting/deletebet');
+const editbet = require('./commands/betting/editbet');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 
-const commands = [
+
+const commandObjs = [
   enterbet.command,
   closebet.command,
   mybets.command,
@@ -20,9 +23,15 @@ const commands = [
   leaderboard.command,
   viewbets.command,
   deletebet.command,
+  editbet.command,
   help.command,
   convertodds.command,
-].map(cmd => cmd.toJSON());
+];
+console.log('Registering the following commands:');
+for (const c of commandObjs) {
+  console.log('-', c.name || (c.data && c.data.name) || '[unknown]');
+}
+const commands = commandObjs.map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
