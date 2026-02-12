@@ -3,19 +3,19 @@ const db = require('../../database/queries');
 const { buildBetEmbed } = require('../../utils/embeds');
 const { PermissionFlagsBits } = require('discord.js');
 
-const command = new SlashCommandBuilder()
-  .setName('editbet2')
-  .setDescription('(Admin) Edit an existing bet (test)')
-  .addStringOption(option =>
-    option.setName('slip')
-      .setDescription('Slip number to edit (e.g. RIC-001)')
-      .setRequired(false)
-  )
-  .addUserOption(option =>
-    option.setName('user')
-      .setDescription('(Admin) Search bets by user')
-      .setRequired(false)
-  );
+const command = new SlashCommandBuilder();
+command.setName('editbet2');
+command.setDescription('(Admin) Edit an existing bet (test)');
+command.addStringOption(option =>
+  option.setName('slip')
+    .setDescription('Slip number to edit (e.g. RIC-001)')
+    .setRequired(false)
+);
+command.addUserOption(option =>
+  option.setName('user')
+    .setDescription('(Admin) Search bets by user')
+    .setRequired(false)
+);
   .addStringOption(option =>
     option.setName('slip')
       .setDescription('Slip number to edit (e.g. RIC-001)')
