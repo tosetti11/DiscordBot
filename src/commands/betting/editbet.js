@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const db = require('../../database/queries');
-const { buildBetEmbed } = require('.../../utils/embeds');
+const { buildBetEmbed } = require('../../utils/embeds');
 const { PermissionFlagsBits } = require('discord.js');
 
 const command = new SlashCommandBuilder()
