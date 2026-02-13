@@ -11,6 +11,7 @@ const leaderboard = require('./commands/betting/leaderboard');
 const viewbets = require('./commands/betting/viewbets');
 const deletebet = require('./commands/betting/deletebet');
 const editbet = require('./commands/betting/editbet');
+const advancedstats = require('./commands/betting/advancedstats');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 
@@ -24,6 +25,7 @@ const commandObjs = [
   viewbets.command,
   deletebet.command,
   editbet.command,
+  advancedstats.command,
   help.command,
   convertodds.command,
 ];
