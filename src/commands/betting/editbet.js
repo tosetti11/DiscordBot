@@ -1,26 +1,22 @@
 const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const db = require('../../database/queries');
-const { buildBetEmbed } = require('../../utils/embeds');
+const { buildBetEmbed } = require('.../../utils/embeds');
 const { PermissionFlagsBits } = require('discord.js');
 
 const command = new SlashCommandBuilder()
-  .setName('editbet2')
-  .setDescription('(Admin) Edit an existing bet (test)')
-  .addStringOption(option =>
-    option.setName('slip')
-      .setDescription('Slip number to edit (e.g. RIC-001)')
-      .setRequired(false)
-  )
-  .addUserOption(option =>
-    option.setName('user')
-      .setDescription('(Admin) Search bets by user')
-      .setRequired(false)
-  );
-  .addStringOption(option =>
-    option.setName('slip')
-      .setDescription('Slip number to edit (e.g. RIC-001)')
-      .setRequired(true)
-  );
+    .setName('editbet2')
+    .setDescription('(Admin) Edit an existing bet (test)')
+    .addStringOption(option =>
+        option.setName('slip')
+            .setDescription('Slip number to edit (e.g. RIC-001)')
+            .setRequired(false)
+    )
+    .addUserOption(option =>
+        option.setName('user')
+            .setDescription('(Admin) Search bets by user')
+            .setRequired(false)
+
+    );
 
 async function execute(interaction) {
   if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
