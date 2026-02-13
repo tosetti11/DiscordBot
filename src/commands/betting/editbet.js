@@ -122,6 +122,7 @@ async function handleEditBetSelect(interaction) {
     if (interaction.customId.startsWith('editbet2_status_')) {
       const userId = interaction.customId.replace('editbet2_status_', '');
       const status = interaction.values[0]; // 'open' or 'closed'
+      console.log('[editbet2] Status select:', { userId, status, guildId: interaction.guildId });
       // 'closed' means won/lost/push — use .in filter; 'open' is exact match
       const filterOpts = { discordId: userId, limit: 25 };
       if (status === 'closed') {
@@ -129,7 +130,9 @@ async function handleEditBetSelect(interaction) {
       } else {
         filterOpts.status = status;
       }
+      console.log('[editbet2] Filter opts:', filterOpts);
       const bets = await db.getAllBetsInGuild(interaction.guildId, filterOpts);
+      console.log('[editbet2] Bets found:', bets.length, bets.map(b => ({ id: b.id, slip: b.slip_number, status: b.status, discord_id: b.discord_id })));
       console.log('[editbet2] Bets found:', bets.length);
       if (!bets.length) {
         replied = true;
