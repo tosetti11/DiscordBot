@@ -126,7 +126,7 @@ async function handleEditBetSelect(interaction) {
       // 'closed' means won/lost/push — use .in filter; 'open' is exact match
       const filterOpts = { discordId: userId, limit: 25 };
       if (status === 'closed') {
-        filterOpts.statusIn = ['won', 'lost', 'push'];
+        filterOpts.statusIn = ['win', 'loss', 'push'];
       } else {
         filterOpts.status = status;
       }
