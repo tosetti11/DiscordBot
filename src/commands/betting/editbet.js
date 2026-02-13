@@ -112,13 +112,22 @@ async function handleEditBetModal(interaction) {
 
 // Handle select menu for admin user search
 async function handleEditBetSelect(interaction) {
+  let replied = false;
   try {
+    console.log('[editbet2] handleEditBetSelect called:', {
+      customId: interaction.customId,
+      values: interaction.values,
+      user: interaction.user?.id,
+      guild: interaction.guildId
+    });
     // Step 2: If status select, show bets for user/status
     if (interaction.customId.startsWith('editbet2_status_')) {
       const userId = interaction.customId.replace('editbet2_status_', '');
       const status = interaction.values[0];
       const bets = await db.getAllBetsInGuild(interaction.guildId, { status, discordId: userId, limit: 25 });
+      console.log('[editbet2] Bets found:', bets.length);
       if (!bets.length) {
+        replied = true;
         return interaction.reply({ content: `❌ No ${status} bets found for <@${userId}>.`, ephemeral: true });
       }
       const options = bets.map(b => ({
@@ -132,13 +141,16 @@ async function handleEditBetSelect(interaction) {
           .setPlaceholder('Select a bet to edit')
           .addOptions(options)
       );
+      replied = true;
       return interaction.reply({ content: `Select a bet to edit for <@${userId}>:`, components: [row], ephemeral: true });
     }
 
     // Step 3: If bet select, show modal
     const betId = interaction.values[0];
     const bet = await db.getBet(betId);
+    console.log('[editbet2] Bet loaded:', bet ? bet.id : null);
     if (!bet) {
+      replied = true;
       return await interaction.reply({ content: '❌ Bet not found.', ephemeral: true });
     }
     const modal = new ModalBuilder()
@@ -178,9 +190,17 @@ async function handleEditBetSelect(interaction) {
           .setRequired(false)
       )
     );
+    replied = true;
     await interaction.showModal(modal);
   } catch (err) {
-    await interaction.reply({ content: `❌ Error loading bet: ${err.message || err}`, ephemeral: true });
+    console.error('[editbet2] Error in handleEditBetSelect:', err);
+    if (!replied) {
+      try {
+        await interaction.reply({ content: `❌ Error loading bet: ${err.message || err}`, ephemeral: true });
+      } catch (e) {
+        console.error('[editbet2] Fallback error reply failed:', e);
+      }
+    }
   }
 }
 
