@@ -14,6 +14,32 @@ async function addTailedBet(betId, tailerDiscordId, tailed) {
 }
 
 /**
+ * Get a user's tail record for a specific bet
+ */
+async function getTailedBet(betId, tailerDiscordId) {
+  const { data, error } = await supabase
+    .from('tailed_bets')
+    .select('*')
+    .eq('bet_id', betId)
+    .eq('tailer_discord_id', tailerDiscordId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Remove a tailed bet entry (toggle off)
+ */
+async function removeTailedBet(betId, tailerDiscordId) {
+  const { error } = await supabase
+    .from('tailed_bets')
+    .delete()
+    .eq('bet_id', betId)
+    .eq('tailer_discord_id', tailerDiscordId);
+  if (error) throw error;
+}
+
+/**
  * Get tailed bet stats for a user
  */
 async function getTailedBetsForUser(discordId) {
@@ -72,6 +98,8 @@ async function getTailStats(discordId) {
 
 module.exports = {
   addTailedBet,
+  getTailedBet,
+  removeTailedBet,
   getTailedBetsForUser,
   getTailStats,
 };

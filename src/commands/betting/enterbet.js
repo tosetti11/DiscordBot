@@ -9,8 +9,27 @@ async function handleTailPoll(interaction) {
   const userId = interaction.user.id;
 
   try {
-    // Record the tail poll in the DB
-    await tailedBetsDb.addTailedBet(betId, userId, tailed);
+    // Block self-tailing: look up who owns this bet
+    const { data: bet, error: betErr } = await supabase
+      .from('bets')
+      .select('discord_id')
+      .eq('id', betId)
+      .single();
+    if (betErr) throw betErr;
+
+    if (bet.discord_id === userId) {
+      return interaction.reply({ content: '❌ You can\'t tail your own bet!', ephemeral: true });
+    }
+
+    // Check if user already has the same vote — toggle off if so
+    const existing = await tailedBetsDb.getTailedBet(betId, userId);
+    if (existing && existing.tailed === tailed) {
+      // Same button clicked again — remove the vote
+      await tailedBetsDb.removeTailedBet(betId, userId);
+    } else {
+      // New vote or switching vote
+      await tailedBetsDb.addTailedBet(betId, userId, tailed);
+    }
 
     // Fetch all tailers for this bet
     const { data: allTails, error } = await supabase
