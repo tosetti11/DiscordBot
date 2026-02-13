@@ -194,8 +194,121 @@ function getStatusColor(status) {
   }
 }
 
+/**
+ * Build a WHALE DICK bet embed — loud, bright, unmissable
+ */
+function buildWhaleBetEmbed(bet, username, avatarUrl) {
+  const statusEmoji = STATUS_EMOJI[bet.status] || '❓';
+  const sportName = SPORT_NAMES[bet.sport] || bet.sport;
+  const WHALE_COLOR = 0xFF00FF; // Hot magenta
+
+  const embed = new EmbedBuilder()
+    .setColor(WHALE_COLOR)
+    .setAuthor({
+      name: `🐋💰 ${username.toUpperCase()} JUST DROPPED A WHALE DICK 💰🐋`,
+      iconURL: avatarUrl,
+    })
+    .setTimestamp(new Date(bet.created_at));
+
+  const divider = '🐋🚨🐋🚨🐋🚨🐋🚨🐋🚨🐋🚨🐋🚨🐋🚨🐋';
+
+  if (bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0) {
+    embed.setTitle(`🐋🚨 WHALE DICK PARLAY (${bet.parlay_legs.length} LEGS) 🚨🐋`);
+
+    let description = `${divider}\n\n`;
+    bet.parlay_legs.forEach((leg, i) => {
+      const legSport = SPORT_NAMES[leg.sport] || leg.sport;
+      const legEmoji = STATUS_EMOJI[leg.status] || '🟡';
+      description += `🐋 **LEG ${i + 1}** ${legEmoji}\n`;
+
+      if (leg.bet_category === 'team_game') {
+        description += `${legSport}: ${leg.team_a} vs ${leg.team_b}\n`;
+        description += `Pick: **${leg.pick}**`;
+        if (leg.odds_american) description += ` (${formatOdds(leg.odds_american)})`;
+        description += '\n\n';
+      } else {
+        description += `${legSport}: ${leg.player_name}\n`;
+        description += `Pick: **${leg.pick}**`;
+        if (leg.odds_american) description += ` (${formatOdds(leg.odds_american)})`;
+        description += '\n\n';
+      }
+    });
+    description += divider;
+
+    embed.setDescription(description);
+  } else {
+    if (bet.bet_category === 'team_game') {
+      embed.setTitle(`🐋🚨 WHALE DICK BET 🚨🐋\n${sportName}: ${bet.team_a} vs ${bet.team_b}`);
+
+      const wagerLabel = WAGER_TYPES[bet.wager_type] || bet.wager_type;
+      let pickLine = bet.pick || '';
+      if (bet.wager_type === 'spread' && bet.spread_value !== null) {
+        pickLine = `${bet.pick} ${formatSpread(bet.spread_value)}`;
+      }
+
+      embed.setDescription(`${divider}\n\n**${wagerLabel}**: ${pickLine}\n\n${divider}`);
+    } else {
+      embed.setTitle(`🐋🚨 WHALE DICK BET 🚨🐋\n${sportName}: ${bet.player_name}`);
+      embed.setDescription(`${divider}\n\n**Prop**: ${bet.pick || bet.prop_description}\n\n${divider}`);
+    }
+  }
+
+  const fields = [];
+
+  if (bet.odds_american) {
+    fields.push({
+      name: '🐋 Odds',
+      value: `**${formatOdds(bet.odds_american)}** (${bet.odds_decimal})`,
+      inline: true,
+    });
+  }
+
+  fields.push({
+    name: '🐋 Units',
+    value: `**${bet.units}u**`,
+    inline: true,
+  });
+
+  if (bet.odds_american) {
+    const payout = calculatePayout(bet.odds_american, bet.units);
+    fields.push({
+      name: '🐋 To Win',
+      value: `**${payout}u**`,
+      inline: true,
+    });
+  }
+
+  fields.push({
+    name: '🐋 Status',
+    value: `${statusEmoji} **${bet.status.toUpperCase()}**`,
+    inline: true,
+  });
+
+  if (bet.bet_note) {
+    fields.push({
+      name: '🐋 Note',
+      value: bet.bet_note,
+      inline: false,
+    });
+  }
+
+  if (bet.result_note) {
+    fields.push({
+      name: '🐋 Result Note',
+      value: bet.result_note,
+      inline: false,
+    });
+  }
+
+  embed.addFields(fields);
+  embed.setFooter({ text: `🐋🐋🐋 WHALE DICK ALERT • Slip: ${bet.slip_number || bet.id.slice(0, 8)} 🐋🐋🐋` });
+
+  return embed;
+}
+
 module.exports = {
   buildBetEmbed,
+  buildWhaleBetEmbed,
   buildStatsEmbed,
   buildLeaderboardEmbed,
 };

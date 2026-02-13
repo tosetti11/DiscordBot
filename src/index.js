@@ -11,6 +11,7 @@ const viewbets = require('./commands/betting/viewbets');
 const deletebet = require('./commands/betting/deletebet');
 const editbet = require('./commands/betting/editbet');
 const advancedstats = require('./commands/betting/advancedstats');
+const whaledick = require('./commands/betting/whaledick');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 
@@ -24,7 +25,7 @@ const client = new Client({
 
 // Register commands in a collection
 client.commands = new Collection();
-const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, help, convertodds];
+const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, help, convertodds];
 for (const mod of commandModules) {
   client.commands.set(mod.command.name, mod);
 }

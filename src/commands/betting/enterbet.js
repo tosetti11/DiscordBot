@@ -81,7 +81,7 @@ const {
 const { PermissionFlagsBits } = require('discord.js');
 const { SPORTS } = require('../../config/constants');
 const { americanToDecimal, decimalToAmerican } = require('../../utils/odds');
-const { buildBetEmbed } = require('../../utils/embeds');
+const { buildBetEmbed, buildWhaleBetEmbed } = require('../../utils/embeds');
 const db = require('../../database/queries');
 
 // In-memory store for bet-building sessions (cleared on completion)
@@ -145,12 +145,14 @@ async function handleBetTypeSelect(interaction) {
   // Preserve targetUser from the initial session
   const existingSession = betSessions.get(userId);
   const targetUser = existingSession?.targetUser || null;
+  const isWhale = existingSession?.isWhale || false;
 
   betSessions.set(userId, {
     betType,
     legs: [],
     currentLeg: 0,
     targetUser,
+    isWhale,
   });
 
   if (betType === 'parlay') {
@@ -853,6 +855,7 @@ async function saveParlayBet(interaction, session) {
       odds_decimal: oddsDecimal,
       units,
       bet_note: betNote,
+      is_whale: session.isWhale || false,
       status: 'open',
     }, displayName);
 
@@ -868,11 +871,10 @@ async function saveParlayBet(interaction, session) {
     // Fetch the full bet with legs
     const fullBet = await db.getBet(bet.id);
 
-    const embed = buildBetEmbed(
-      fullBet,
-      displayName,
-      bettor.displayAvatarURL()
-    );
+    const isWhale = session.isWhale || false;
+    const embed = isWhale
+      ? buildWhaleBetEmbed(fullBet, displayName, bettor.displayAvatarURL())
+      : buildBetEmbed(fullBet, displayName, bettor.displayAvatarURL());
 
     // Add poll buttons
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
@@ -888,10 +890,11 @@ async function saveParlayBet(interaction, session) {
     );
 
     // Post to channel
+    const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
     const message = await channel.send({
       embeds: [embed],
       components: [pollRow],
-      content: 'Are You Tailing This Bet?'
+      content: isWhale ? whaleContent : 'Are You Tailing This Bet?'
     });
     await db.updateBetMessageId(bet.id, message.id);
 
@@ -936,17 +939,17 @@ async function saveSingleBet(interaction, legData, units, betNote) {
       ...legData,
       units,
       bet_note: betNote,
+      is_whale: session?.isWhale || false,
       status: 'open',
     };
     console.log('Attempting to create single bet with data:', betData);
 
     const bet = await db.createBet(betData, displayName);
 
-    const embed = buildBetEmbed(
-      bet,
-      displayName,
-      bettor.displayAvatarURL()
-    );
+    const isWhale = session?.isWhale || false;
+    const embed = isWhale
+      ? buildWhaleBetEmbed(bet, displayName, bettor.displayAvatarURL())
+      : buildBetEmbed(bet, displayName, bettor.displayAvatarURL());
 
     // Add poll buttons
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
@@ -962,10 +965,11 @@ async function saveSingleBet(interaction, legData, units, betNote) {
     );
 
     // Post to channel (visible to everyone)
+    const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
     const message = await channel.send({
       embeds: [embed],
       components: [pollRow],
-      content: 'Are You Tailing This Bet?'
+      content: isWhale ? whaleContent : 'Are You Tailing This Bet?'
     });
     await db.updateBetMessageId(bet.id, message.id);
 

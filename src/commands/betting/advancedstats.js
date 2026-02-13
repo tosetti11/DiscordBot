@@ -28,6 +28,7 @@ const command = new SlashCommandBuilder()
       .addChoices(
         { name: 'By Sport', value: 'sport' },
         { name: 'By Wager Type', value: 'wager' },
+        { name: 'Whale Dick', value: 'whale' },
         { name: 'Overview', value: 'overview' },
       )
   );
@@ -237,6 +238,17 @@ async function execute(interaction) {
       // ignore tail stats errors
     }
 
+    // Whale Dick stats
+    const whaleBets = bets.filter(b => b.is_whale === true);
+    if (whaleBets.length > 0) {
+      const whaleStats = calcStats(whaleBets);
+      embed.addFields({
+        name: '🐋 Whale Dick Bets',
+        value: `${whaleStats.total} bets | ${formatStatsLine(whaleStats)}`,
+        inline: false,
+      });
+    }
+
   } else if (breakdown === 'sport') {
     // ─── By Sport ───
     embed.setTitle(`🏟️ Stats by Sport — ${periodLabel}`);
@@ -311,6 +323,80 @@ async function execute(interaction) {
         value: `${stats.wins}W-${stats.losses}L-${stats.pushes}P | ${stats.winPct}% | ${net} | ROI: ${stats.roi}%`,
         inline: false,
       });
+    }
+
+  } else if (breakdown === 'whale') {
+    // ─── Whale Dick Breakdown ───
+    const whaleBets = bets.filter(b => b.is_whale === true);
+    const normalBets = bets.filter(b => !b.is_whale);
+
+    if (whaleBets.length === 0) {
+      embed.setTitle(`🐋 Whale Dick Stats — ${periodLabel}`);
+      embed.setDescription('No Whale Dick bets found in this period.');
+    } else {
+      const whaleAll = calcStats(whaleBets);
+      const whaleSingles = calcStats(whaleBets.filter(b => b.bet_type === 'single'));
+      const whaleParlays = calcStats(whaleBets.filter(b => b.bet_type === 'parlay'));
+      const normalAll = calcStats(normalBets);
+
+      embed.setTitle(`🐋 Whale Dick Stats — ${periodLabel}`);
+      embed.setColor(0xFF00FF); // Hot magenta
+      embed.addFields(
+        { name: '🐋 Total Whale Bets', value: `${whaleAll.total}`, inline: true },
+        { name: '🟡 Open', value: `${whaleAll.open}`, inline: true },
+        { name: '📈 Record', value: `${whaleAll.wins}W - ${whaleAll.losses}L - ${whaleAll.pushes}P`, inline: true },
+        { name: '🎯 Win %', value: `${whaleAll.winPct}%`, inline: true },
+        { name: '💰 Net Units', value: `${whaleAll.netUnits >= 0 ? '+' : ''}${whaleAll.netUnits}u`, inline: true },
+        { name: '📊 ROI', value: `${whaleAll.roi}%`, inline: true },
+        { name: '💵 Units Wagered', value: `${whaleAll.unitsWagered}u`, inline: true },
+      );
+
+      if (whaleSingles.total > 0) {
+        embed.addFields({
+          name: '🐋 Whale Singles',
+          value: `${whaleSingles.total} bets | ${formatStatsLine(whaleSingles)}`,
+          inline: false,
+        });
+      }
+      if (whaleParlays.total > 0) {
+        embed.addFields({
+          name: '🐋 Whale Parlays',
+          value: `${whaleParlays.total} bets | ${formatStatsLine(whaleParlays)}`,
+          inline: false,
+        });
+      }
+
+      // Whale by sport
+      const whaleSportGroups = {};
+      for (const bet of whaleBets) {
+        const sport = (bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0)
+          ? (bet.parlay_legs[0].sport || 'other')
+          : (bet.sport || 'other');
+        if (!whaleSportGroups[sport]) whaleSportGroups[sport] = [];
+        whaleSportGroups[sport].push(bet);
+      }
+      const sortedWhaleSports = Object.entries(whaleSportGroups)
+        .sort((a, b) => b[1].length - a[1].length);
+      for (const [sport, sportBets] of sortedWhaleSports) {
+        const stats = calcStats(sportBets);
+        const sportName = SPORT_NAMES[sport] || sport;
+        embed.addFields({
+          name: `🐋 ${sportName} (${stats.total})`,
+          value: `${formatStatsLine(stats)}`,
+          inline: false,
+        });
+      }
+
+      // Comparison vs normal bets
+      if (normalAll.total > 0) {
+        const whaleNet = `${whaleAll.netUnits >= 0 ? '+' : ''}${whaleAll.netUnits}u`;
+        const normalNet = `${normalAll.netUnits >= 0 ? '+' : ''}${normalAll.netUnits}u`;
+        embed.addFields({
+          name: '📊 Whale vs Normal',
+          value: `**Whale:** ${whaleAll.winPct}% win | ${whaleNet} | ROI ${whaleAll.roi}%\n**Normal:** ${normalAll.winPct}% win | ${normalNet} | ROI ${normalAll.roi}%`,
+          inline: false,
+        });
+      }
     }
   }
 
