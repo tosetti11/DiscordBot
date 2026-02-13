@@ -135,12 +135,13 @@ async function handleEditBetSelect(interaction) {
         value: b.id,
         description: `${b.status.toUpperCase()} | ${b.units}u | ${b.odds_american}`.substring(0, 100),
       }));
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('editbet2_select')
-          .setPlaceholder('Select a bet to edit')
-          .addOptions(options)
-      );
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('editbet2_select')
+        .setPlaceholder('Select a bet to edit')
+        .addOptions(options);
+      console.log('[editbet2] Creating select menu with customId:', selectMenu.data.custom_id);
+      const row = new ActionRowBuilder().addComponents(selectMenu);
+      console.log('[editbet2] Sending select menu reply for user:', userId);
       replied = true;
       return interaction.reply({ content: `Select a bet to edit for <@${userId}>:`, components: [row], ephemeral: true });
     }
