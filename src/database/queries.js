@@ -270,13 +270,15 @@ async function getBetBySlip(slipNumber, guildId) {
 /**
  * Get all bets in a guild (with optional filters)
  */
-async function getAllBetsInGuild(guildId, { status, discordId, sport, team, minUnits, maxUnits, limit = 25 } = {}) {
+async function getAllBetsInGuild(guildId, { status, statusIn, discordId, sport, team, minUnits, maxUnits, limit = 25 } = {}) {
   let query = supabase
     .from('bets')
     .select('*, parlay_legs(*)')
     .eq('guild_id', guildId);
 
-  if (status && status !== 'all') {
+  if (statusIn && Array.isArray(statusIn)) {
+    query = query.in('status', statusIn);
+  } else if (status && status !== 'all') {
     query = query.eq('status', status);
   }
   if (discordId) {
