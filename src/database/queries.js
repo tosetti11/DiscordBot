@@ -19,16 +19,23 @@ const { supabase } = require('../config/supabase');
  */
 async function generateSlipNumber(discordId, username) {
   const prefix = username.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'BET';
-
-  // Count existing bets for this user to determine next number
-  const { count, error } = await supabase
+  // Find the highest slip number for this user and increment
+  const { data, error } = await supabase
     .from('bets')
-    .select('*', { count: 'exact', head: true })
+    .select('slip_number')
     .eq('discord_id', discordId);
-
   if (error) throw error;
-
-  const nextNum = (count || 0) + 1;
+  let maxNum = 0;
+  if (data && data.length) {
+    for (const bet of data) {
+      const match = bet.slip_number && bet.slip_number.startsWith(prefix + '-') && bet.slip_number.match(/-(\d{3})$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+  }
+  const nextNum = maxNum + 1;
   const padded = String(nextNum).padStart(3, '0');
   return `${prefix}-${padded}`;
 }
@@ -77,16 +84,25 @@ async function getOrCreateUser(discordUser) {
  * Create a new bet (auto-generates slip number)
  */
 async function createBet(betData, username) {
-  const slipNumber = await generateSlipNumber(betData.discord_id, username);
-
-  const { data, error } = await supabase
-    .from('bets')
-    .insert({ ...betData, slip_number: slipNumber })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  let attempt = 0;
+  let slipNumber;
+  let lastError;
+  while (attempt < 5) {
+    slipNumber = await generateSlipNumber(betData.discord_id, username);
+    const { data, error } = await supabase
+      .from('bets')
+      .insert({ ...betData, slip_number: slipNumber })
+      .select()
+      .single();
+    if (!error) return data;
+    if (error.message && error.message.includes('duplicate key value')) {
+      attempt++;
+      continue;
+    }
+    lastError = error;
+    break;
+  }
+  throw lastError || new Error('Failed to generate unique slip number after 5 attempts');
 }
 
 /**
