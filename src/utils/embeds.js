@@ -2,6 +2,12 @@ const { EmbedBuilder } = require('discord.js');
 const { SPORT_NAMES, STATUS_EMOJI, WAGER_TYPES, COLORS } = require('../config/constants');
 const { formatOdds, formatSpread, calculatePayout } = require('./odds');
 
+/** Format a unit value to at most 2 decimal places for display */
+function fmtU(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? parseFloat(n.toFixed(2)) : v;
+}
+
 /**
  * Build a rich embed for a single bet
  */
@@ -74,7 +80,7 @@ function buildBetEmbed(bet, username, avatarUrl) {
 
   fields.push({
     name: 'Units',
-    value: `${bet.units}u`,
+    value: `${fmtU(bet.units)}u`,
     inline: true,
   });
 
@@ -133,8 +139,8 @@ function buildStatsEmbed(stats, username, avatarUrl, tailStats = null, whaleStat
       { name: 'Open', value: `${stats.open_bets}`, inline: true },
       { name: 'Record', value: `${stats.wins}W - ${stats.losses}L - ${stats.pushes}P`, inline: true },
       { name: 'Win %', value: `${stats.win_pct}%`, inline: true },
-      { name: 'Net Units', value: `${stats.net_units >= 0 ? '+' : ''}${stats.net_units}u`, inline: true },
-      { name: 'Units Won', value: `${stats.units_won}u`, inline: true },
+      { name: 'Net Units', value: `${stats.net_units >= 0 ? '+' : ''}${fmtU(stats.net_units)}u`, inline: true },
+      { name: 'Units Won', value: `${fmtU(stats.units_won)}u`, inline: true },
     );
   }
 
@@ -145,12 +151,12 @@ function buildStatsEmbed(stats, username, avatarUrl, tailStats = null, whaleStat
       { name: 'Open', value: `${tailStats.open_tails}`, inline: true },
       { name: 'Record', value: `${tailStats.tail_wins}W - ${tailStats.tail_losses}L - ${tailStats.tail_pushes}P`, inline: true },
       { name: 'Win %', value: `${tailStats.tail_win_pct}%`, inline: true },
-      { name: 'Net Units', value: `${tailStats.tail_net_units >= 0 ? '+' : ''}${tailStats.tail_net_units}u`, inline: true },
+      { name: 'Net Units', value: `${tailStats.tail_net_units >= 0 ? '+' : ''}${fmtU(tailStats.tail_net_units)}u`, inline: true },
     );
   }
 
   if (whaleStats) {
-    const whaleNet = `${whaleStats.net_units >= 0 ? '+' : ''}${whaleStats.net_units}u`;
+    const whaleNet = `${whaleStats.net_units >= 0 ? '+' : ''}${fmtU(whaleStats.net_units)}u`;
     embed.addFields(
       { name: '\u200B', value: '**🐋 Whale Dick Slips**', inline: false },
       { name: 'Whale Bets', value: `${whaleStats.total_bets}`, inline: true },
@@ -162,7 +168,7 @@ function buildStatsEmbed(stats, username, avatarUrl, tailStats = null, whaleStat
   }
 
   if (whaleTailStats) {
-    const whaleTailNet = `${whaleTailStats.tail_net_units >= 0 ? '+' : ''}${whaleTailStats.tail_net_units}u`;
+    const whaleTailNet = `${whaleTailStats.tail_net_units >= 0 ? '+' : ''}${fmtU(whaleTailStats.tail_net_units)}u`;
     embed.addFields(
       { name: '\u200B', value: '**🐋🔗 Whale Dick Tails**', inline: false },
       { name: 'Whale Tails', value: `${whaleTailStats.total_tails}`, inline: true },
@@ -198,7 +204,7 @@ function buildLeaderboardEmbed(leaderboard, guildName) {
   let description = '';
   leaderboard.forEach((user, i) => {
     const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**${i + 1}.**`;
-    const netUnits = `${user.net_units >= 0 ? '+' : ''}${user.net_units}u`;
+    const netUnits = `${user.net_units >= 0 ? '+' : ''}${fmtU(user.net_units)}u`;
     const record = `${user.wins}W-${user.losses}L-${user.pushes}P`;
     description += `${medal} **${user.discord_username}** — ${netUnits} (${record}, ${user.win_pct}%)\n`;
   });
@@ -289,7 +295,7 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
 
   fields.push({
     name: '🐋 Units',
-    value: `**${bet.units}u**`,
+    value: `**${fmtU(bet.units)}u**`,
     inline: true,
   });
 

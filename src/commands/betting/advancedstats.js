@@ -3,6 +3,12 @@ const { supabase } = require('../../config/supabase');
 const { SPORT_NAMES, WAGER_TYPES, COLORS } = require('../../config/constants');
 const tailedBetsDb = require('../../database/tailedBets');
 
+/** Format a unit value to at most 2 decimal places for display */
+function fmtU(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? parseFloat(n.toFixed(2)) : v;
+}
+
 const command = new SlashCommandBuilder()
   .setName('advancedstats')
   .setDescription('View detailed betting stats with filters')
@@ -121,7 +127,7 @@ function calcStats(bets) {
  * Format a stats block as a string
  */
 function formatStatsLine(stats) {
-  const net = `${stats.netUnits >= 0 ? '+' : ''}${stats.netUnits}u`;
+  const net = `${stats.netUnits >= 0 ? '+' : ''}${fmtU(stats.netUnits)}u`;
   return `${stats.wins}W-${stats.losses}L-${stats.pushes}P | ${stats.winPct}% | ${net} | ROI: ${stats.roi}%`;
 }
 
@@ -202,9 +208,9 @@ async function execute(interaction) {
       { name: '🟡 Open', value: `${overall.open}`, inline: true },
       { name: '📈 Record', value: `${overall.wins}W - ${overall.losses}L - ${overall.pushes}P`, inline: true },
       { name: '🎯 Win %', value: `${overall.winPct}%`, inline: true },
-      { name: '💰 Net Units', value: `${overall.netUnits >= 0 ? '+' : ''}${overall.netUnits}u`, inline: true },
+      { name: '💰 Net Units', value: `${overall.netUnits >= 0 ? '+' : ''}${fmtU(overall.netUnits)}u`, inline: true },
       { name: '📊 ROI', value: `${overall.roi}%`, inline: true },
-      { name: '💵 Units Wagered', value: `${overall.unitsWagered}u`, inline: true },
+      { name: '💵 Units Wagered', value: `${fmtU(overall.unitsWagered)}u`, inline: true },
     );
 
     // Singles vs Parlays breakdown
@@ -227,7 +233,7 @@ async function execute(interaction) {
     try {
       const tailStats = await tailedBetsDb.getTailStats(targetUser.id);
       if (tailStats && tailStats.total_tails > 0) {
-        const tailNet = `${tailStats.tail_net_units >= 0 ? '+' : ''}${tailStats.tail_net_units}u`;
+        const tailNet = `${tailStats.tail_net_units >= 0 ? '+' : ''}${fmtU(tailStats.tail_net_units)}u`;
         embed.addFields({
           name: '🔗 Tailing Stats',
           value: `${tailStats.total_tails} tailed | ${tailStats.tail_wins}W-${tailStats.tail_losses}L-${tailStats.tail_pushes}P | ${tailStats.tail_win_pct}% | ${tailNet}`,
@@ -276,7 +282,7 @@ async function execute(interaction) {
     for (const [sport, sportBets] of sortedSports) {
       const stats = calcStats(sportBets);
       const sportName = SPORT_NAMES[sport] || sport;
-      const net = `${stats.netUnits >= 0 ? '+' : ''}${stats.netUnits}u`;
+      const net = `${stats.netUnits >= 0 ? '+' : ''}${fmtU(stats.netUnits)}u`;
       embed.addFields({
         name: `${sportName} (${stats.total})`,
         value: `${stats.wins}W-${stats.losses}L-${stats.pushes}P | ${stats.winPct}% | ${net} | ROI: ${stats.roi}%`,
@@ -317,7 +323,7 @@ async function execute(interaction) {
     for (const [wager, wagerBets] of sortedWagers) {
       const stats = calcStats(wagerBets);
       const label = wagerLabels[wager] || wager;
-      const net = `${stats.netUnits >= 0 ? '+' : ''}${stats.netUnits}u`;
+      const net = `${stats.netUnits >= 0 ? '+' : ''}${fmtU(stats.netUnits)}u`;
       embed.addFields({
         name: `${label} (${stats.total})`,
         value: `${stats.wins}W-${stats.losses}L-${stats.pushes}P | ${stats.winPct}% | ${net} | ROI: ${stats.roi}%`,
@@ -346,9 +352,9 @@ async function execute(interaction) {
         { name: '🟡 Open', value: `${whaleAll.open}`, inline: true },
         { name: '📈 Record', value: `${whaleAll.wins}W - ${whaleAll.losses}L - ${whaleAll.pushes}P`, inline: true },
         { name: '🎯 Win %', value: `${whaleAll.winPct}%`, inline: true },
-        { name: '💰 Net Units', value: `${whaleAll.netUnits >= 0 ? '+' : ''}${whaleAll.netUnits}u`, inline: true },
+        { name: '💰 Net Units', value: `${whaleAll.netUnits >= 0 ? '+' : ''}${fmtU(whaleAll.netUnits)}u`, inline: true },
         { name: '📊 ROI', value: `${whaleAll.roi}%`, inline: true },
-        { name: '💵 Units Wagered', value: `${whaleAll.unitsWagered}u`, inline: true },
+        { name: '💵 Units Wagered', value: `${fmtU(whaleAll.unitsWagered)}u`, inline: true },
       );
 
       if (whaleSingles.total > 0) {
@@ -389,8 +395,8 @@ async function execute(interaction) {
 
       // Comparison vs normal bets
       if (normalAll.total > 0) {
-        const whaleNet = `${whaleAll.netUnits >= 0 ? '+' : ''}${whaleAll.netUnits}u`;
-        const normalNet = `${normalAll.netUnits >= 0 ? '+' : ''}${normalAll.netUnits}u`;
+        const whaleNet = `${whaleAll.netUnits >= 0 ? '+' : ''}${fmtU(whaleAll.netUnits)}u`;
+        const normalNet = `${normalAll.netUnits >= 0 ? '+' : ''}${fmtU(normalAll.netUnits)}u`;
         embed.addFields({
           name: '📊 Whale vs Normal',
           value: `**Whale:** ${whaleAll.winPct}% win | ${whaleNet} | ROI ${whaleAll.roi}%\n**Normal:** ${normalAll.winPct}% win | ${normalNet} | ROI ${normalAll.roi}%`,
