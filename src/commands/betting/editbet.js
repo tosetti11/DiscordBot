@@ -6,16 +6,10 @@ const { PermissionFlagsBits } = require('discord.js');
 const command = new SlashCommandBuilder()
     .setName('editbet2')
     .setDescription('(Admin) Edit an existing bet')
-    .addStringOption(option =>
-        option.setName('slip')
-            .setDescription('Slip number to edit (e.g. RIC-001)')
-            .setRequired(false)
-    )
     .addUserOption(option =>
-        option.setName('user')
-            .setDescription('(Admin) Search bets by user')
-            .setRequired(false)
-
+      option.setName('user')
+        .setDescription('(Admin) Select a user to edit their bets')
+        .setRequired(true)
     );
 
 async function execute(interaction) {
@@ -23,40 +17,23 @@ async function execute(interaction) {
     return interaction.reply({ content: '❌ Only admins can edit bets.', ephemeral: true });
   }
 
-  const slip = interaction.options.getString('slip');
   const user = interaction.options.getUser('user');
-  let bet;
-  if (slip) {
-    bet = await db.getBetBySlip(slip, interaction.guildId);
-    if (!bet) {
-      return interaction.reply({ content: `❌ No bet found with slip **${slip.toUpperCase()}**.`, ephemeral: true });
-    }
-  } else if (user) {
-    // Admin only: search bets by user
-    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ Only admins can search bets by user.', ephemeral: true });
-    }
-    const bets = await db.getUserBets(user.id, interaction.guildId, 10);
-    if (!bets.length) {
-      return interaction.reply({ content: `❌ No bets found for user <@${user.id}>.`, ephemeral: true });
-    }
-    // List bets and let admin pick one to edit
-    const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
-    const options = bets.map(b => ({
-      label: `${b.slip_number} | ${b.pick || b.bet_type}`,
-      value: b.id,
-      description: `${b.status.toUpperCase()} | ${b.units}u | ${b.odds_american}`.substring(0, 100),
-    }));
-    const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId('editbet2_select')
-        .setPlaceholder('Select a bet to edit')
-        .addOptions(options)
-    );
-    return interaction.reply({ content: `Select a bet to edit for <@${user.id}>:`, components: [row], ephemeral: true });
-  } else {
-    return interaction.reply({ content: '❌ You must provide a slip number or user to search.', ephemeral: true });
+  if (!user) {
+    return interaction.reply({ content: '❌ You must select a user.', ephemeral: true });
   }
+
+  // Step 1: Ask for open/closed status
+  const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+  const statusRow = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`editbet2_status_${user.id}`)
+      .setPlaceholder('Select bet status')
+      .addOptions([
+        { label: 'Open Bets', value: 'open', description: 'Edit open bets' },
+        { label: 'Closed Bets', value: 'closed', description: 'Edit closed bets' },
+      ])
+  );
+  return interaction.reply({ content: `Select bet status for <@${user.id}>:`, components: [statusRow], ephemeral: true });
 
   // Show modal to edit bet fields
   const modal = new ModalBuilder()
@@ -136,8 +113,30 @@ async function handleEditBetModal(interaction) {
 // Handle select menu for admin user search
 async function handleEditBetSelect(interaction) {
   try {
+    // Step 2: If status select, show bets for user/status
+    if (interaction.customId.startsWith('editbet2_status_')) {
+      const userId = interaction.customId.replace('editbet2_status_', '');
+      const status = interaction.values[0];
+      const bets = await db.getAllBetsInGuild(interaction.guildId, { status, discordId: userId, limit: 25 });
+      if (!bets.length) {
+        return interaction.reply({ content: `❌ No ${status} bets found for <@${userId}>.`, ephemeral: true });
+      }
+      const options = bets.map(b => ({
+        label: `${b.slip_number} | ${b.pick || b.bet_type}`,
+        value: b.id,
+        description: `${b.status.toUpperCase()} | ${b.units}u | ${b.odds_american}`.substring(0, 100),
+      }));
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('editbet2_select')
+          .setPlaceholder('Select a bet to edit')
+          .addOptions(options)
+      );
+      return interaction.reply({ content: `Select a bet to edit for <@${userId}>:`, components: [row], ephemeral: true });
+    }
+
+    // Step 3: If bet select, show modal
     const betId = interaction.values[0];
-    // Show modal for the selected bet
     const bet = await db.getBet(betId);
     if (!bet) {
       return await interaction.reply({ content: '❌ Bet not found.', ephemeral: true });
