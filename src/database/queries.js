@@ -225,6 +225,50 @@ async function getUserStats(discordId) {
 }
 
 /**
+ * Get whale-only stats for a user (computed from bets table)
+ */
+async function getWhaleStats(discordId) {
+  const { data, error } = await supabase
+    .from('bets')
+    .select('status, units, odds_american')
+    .eq('discord_id', discordId)
+    .eq('is_whale', true)
+    .neq('status', 'void');
+
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+
+  const closed = data.filter(b => ['win', 'loss', 'push'].includes(b.status));
+  const wins = closed.filter(b => b.status === 'win').length;
+  const losses = closed.filter(b => b.status === 'loss').length;
+  const pushes = closed.filter(b => b.status === 'push').length;
+  const open = data.filter(b => b.status === 'open').length;
+
+  let netUnits = 0;
+  for (const b of closed) {
+    if (b.status === 'win') {
+      netUnits += b.odds_american >= 0
+        ? b.units * (b.odds_american / 100)
+        : b.units * (100 / Math.abs(b.odds_american));
+    } else if (b.status === 'loss') {
+      netUnits -= b.units;
+    }
+  }
+
+  const winPct = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 1000) / 10 : 0;
+
+  return {
+    total_bets: data.length,
+    open_bets: open,
+    wins,
+    losses,
+    pushes,
+    win_pct: winPct,
+    net_units: Math.round(netUnits * 100) / 100,
+  };
+}
+
+/**
  * Get leaderboard (top users by net units)
  */
 async function getLeaderboard(guildId, limit = 10) {
@@ -341,6 +385,7 @@ module.exports = {
   updateParlayLegStatus,
   updateBetMessageId,
   getUserStats,
+  getWhaleStats,
   getLeaderboard,
   getBetBySlip,
   getAllBetsInGuild,

@@ -16,8 +16,12 @@ async function execute(interaction) {
 
   const targetUser = interaction.options.getUser('user') || interaction.user;
 
-  const stats = await db.getUserStats(targetUser.id);
-  const tailStats = await tailedBetsDb.getTailStats(targetUser.id);
+  const [stats, tailStats, whaleStats, whaleTailStats] = await Promise.all([
+    db.getUserStats(targetUser.id),
+    tailedBetsDb.getTailStats(targetUser.id),
+    db.getWhaleStats(targetUser.id),
+    tailedBetsDb.getWhaleTailStats(targetUser.id),
+  ]);
 
   // Get display name from guild member
   let targetDisplayName;
@@ -38,7 +42,9 @@ async function execute(interaction) {
     stats,
     targetDisplayName,
     targetUser.displayAvatarURL(),
-    tailStats
+    tailStats,
+    whaleStats,
+    whaleTailStats
   );
 
   await interaction.editReply({ embeds: [embed] });

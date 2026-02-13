@@ -118,7 +118,7 @@ function buildBetEmbed(bet, username, avatarUrl) {
 /**
  * Build stats embed for a user
  */
-function buildStatsEmbed(stats, username, avatarUrl, tailStats = null) {
+function buildStatsEmbed(stats, username, avatarUrl, tailStats = null, whaleStats = null, whaleTailStats = null) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.primary)
     .setAuthor({
@@ -146,6 +146,30 @@ function buildStatsEmbed(stats, username, avatarUrl, tailStats = null) {
       { name: 'Record', value: `${tailStats.tail_wins}W - ${tailStats.tail_losses}L - ${tailStats.tail_pushes}P`, inline: true },
       { name: 'Win %', value: `${tailStats.tail_win_pct}%`, inline: true },
       { name: 'Net Units', value: `${tailStats.tail_net_units >= 0 ? '+' : ''}${tailStats.tail_net_units}u`, inline: true },
+    );
+  }
+
+  if (whaleStats) {
+    const whaleNet = `${whaleStats.net_units >= 0 ? '+' : ''}${whaleStats.net_units}u`;
+    embed.addFields(
+      { name: '\u200B', value: '**🐋 Whale Dick Slips**', inline: false },
+      { name: 'Whale Bets', value: `${whaleStats.total_bets}`, inline: true },
+      { name: 'Open', value: `${whaleStats.open_bets}`, inline: true },
+      { name: 'Record', value: `${whaleStats.wins}W - ${whaleStats.losses}L - ${whaleStats.pushes}P`, inline: true },
+      { name: 'Win %', value: `${whaleStats.win_pct}%`, inline: true },
+      { name: 'Net Units', value: whaleNet, inline: true },
+    );
+  }
+
+  if (whaleTailStats) {
+    const whaleTailNet = `${whaleTailStats.tail_net_units >= 0 ? '+' : ''}${whaleTailStats.tail_net_units}u`;
+    embed.addFields(
+      { name: '\u200B', value: '**🐋🔗 Whale Dick Tails**', inline: false },
+      { name: 'Whale Tails', value: `${whaleTailStats.total_tails}`, inline: true },
+      { name: 'Open', value: `${whaleTailStats.open_tails}`, inline: true },
+      { name: 'Record', value: `${whaleTailStats.tail_wins}W - ${whaleTailStats.tail_losses}L - ${whaleTailStats.tail_pushes}P`, inline: true },
+      { name: 'Win %', value: `${whaleTailStats.tail_win_pct}%`, inline: true },
+      { name: 'Net Units', value: whaleTailNet, inline: true },
     );
   }
 
