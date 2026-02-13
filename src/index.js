@@ -44,6 +44,8 @@ client.once(Events.ClientReady, (c) => {
 // ─── Slash Command Handler ───
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
+    console.log(`[InteractionCreate] type=${interaction.type} customId=${interaction.customId || 'N/A'} commandName=${interaction.commandName || 'N/A'} user=${interaction.user?.username}`);
+
     // Slash commands
     if (interaction.isChatInputCommand()) {
       const cmd = client.commands.get(interaction.commandName);
