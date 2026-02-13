@@ -1,7 +1,6 @@
-const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../database/queries');
 const { buildBetEmbed } = require('../../utils/embeds');
-const { PermissionFlagsBits } = require('discord.js');
 
 const command = new SlashCommandBuilder()
     .setName('editbet2')
@@ -23,7 +22,6 @@ async function execute(interaction) {
   }
 
   // Step 1: Ask for open/closed status
-  const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
   const statusRow = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(`editbet2_status_${user.id}`)
