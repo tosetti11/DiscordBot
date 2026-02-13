@@ -96,6 +96,22 @@ CREATE POLICY "Service role full access" ON users FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON bets FOR ALL USING (true);
 CREATE POLICY "Service role full access" ON parlay_legs FOR ALL USING (true);
 
+-- Tailed bets table (tracks who tailed/faded a bet)
+CREATE TABLE IF NOT EXISTS tailed_bets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  bet_id UUID REFERENCES bets(id) ON DELETE CASCADE,
+  tailer_discord_id TEXT NOT NULL,
+  tailed BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(bet_id, tailer_discord_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tailed_bets_bet_id ON tailed_bets(bet_id);
+CREATE INDEX IF NOT EXISTS idx_tailed_bets_tailer ON tailed_bets(tailer_discord_id);
+
+ALTER TABLE tailed_bets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role full access" ON tailed_bets FOR ALL USING (true);
+
 -- Function to auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

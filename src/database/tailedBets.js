@@ -25,7 +25,53 @@ async function getTailedBetsForUser(discordId) {
   return data || [];
 }
 
+/**
+ * Get tail stats for a user (win/loss/push/net from tailed bets)
+ */
+async function getTailStats(discordId) {
+  const { data, error } = await supabase
+    .from('tailed_bets')
+    .select('*, bets!inner(status, units, odds_american)')
+    .eq('tailer_discord_id', discordId)
+    .eq('tailed', true);
+
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+
+  const closed = data.filter(t => ['win', 'loss', 'push'].includes(t.bets.status));
+  const wins = closed.filter(t => t.bets.status === 'win').length;
+  const losses = closed.filter(t => t.bets.status === 'loss').length;
+  const pushes = closed.filter(t => t.bets.status === 'push').length;
+  const total = data.length;
+  const open = data.filter(t => t.bets.status === 'open').length;
+
+  let netUnits = 0;
+  for (const t of closed) {
+    const b = t.bets;
+    if (b.status === 'win') {
+      netUnits += b.odds_american >= 0
+        ? b.units * (b.odds_american / 100)
+        : b.units * (100 / Math.abs(b.odds_american));
+    } else if (b.status === 'loss') {
+      netUnits -= b.units;
+    }
+  }
+
+  const winPct = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 1000) / 10 : 0;
+
+  return {
+    total_tails: total,
+    open_tails: open,
+    tail_wins: wins,
+    tail_losses: losses,
+    tail_pushes: pushes,
+    tail_win_pct: winPct,
+    tail_net_units: Math.round(netUnits * 100) / 100,
+  };
+}
+
 module.exports = {
   addTailedBet,
   getTailedBetsForUser,
+  getTailStats,
 };

@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const db = require('../../database/queries');
+const tailedBetsDb = require('../../database/tailedBets');
 const { buildStatsEmbed } = require('../../utils/embeds');
 
 const command = new SlashCommandBuilder()
@@ -16,6 +17,7 @@ async function execute(interaction) {
   const targetUser = interaction.options.getUser('user') || interaction.user;
 
   const stats = await db.getUserStats(targetUser.id);
+  const tailStats = await tailedBetsDb.getTailStats(targetUser.id);
 
   // Get display name from guild member
   let targetDisplayName;
@@ -26,7 +28,7 @@ async function execute(interaction) {
     targetDisplayName = targetUser.displayName;
   }
 
-  if (!stats || stats.total_bets === 0) {
+  if ((!stats || stats.total_bets === 0) && !tailStats) {
     return interaction.editReply({
       content: `📭 ${targetUser.id === interaction.user.id ? 'You have' : `${targetDisplayName} has`} no bets recorded yet.`,
     });
@@ -35,7 +37,8 @@ async function execute(interaction) {
   const embed = buildStatsEmbed(
     stats,
     targetDisplayName,
-    targetUser.displayAvatarURL()
+    targetUser.displayAvatarURL(),
+    tailStats
   );
 
   await interaction.editReply({ embeds: [embed] });

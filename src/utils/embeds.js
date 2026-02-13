@@ -118,22 +118,38 @@ function buildBetEmbed(bet, username, avatarUrl) {
 /**
  * Build stats embed for a user
  */
-function buildStatsEmbed(stats, username, avatarUrl) {
+function buildStatsEmbed(stats, username, avatarUrl, tailStats = null) {
   const embed = new EmbedBuilder()
     .setColor(COLORS.primary)
     .setAuthor({
       name: `${username}'s Betting Stats`,
       iconURL: avatarUrl,
     })
-    .setTitle('📊 Performance Overview')
-    .addFields(
+    .setTitle('📊 Performance Overview');
+
+  if (stats && stats.total_bets > 0) {
+    embed.addFields(
       { name: 'Total Bets', value: `${stats.total_bets}`, inline: true },
       { name: 'Open', value: `${stats.open_bets}`, inline: true },
       { name: 'Record', value: `${stats.wins}W - ${stats.losses}L - ${stats.pushes}P`, inline: true },
       { name: 'Win %', value: `${stats.win_pct}%`, inline: true },
       { name: 'Net Units', value: `${stats.net_units >= 0 ? '+' : ''}${stats.net_units}u`, inline: true },
       { name: 'Units Won', value: `${stats.units_won}u`, inline: true },
-    )
+    );
+  }
+
+  if (tailStats) {
+    embed.addFields(
+      { name: '\u200B', value: '**🔗 Tailing Stats**', inline: false },
+      { name: 'Tails', value: `${tailStats.total_tails}`, inline: true },
+      { name: 'Open', value: `${tailStats.open_tails}`, inline: true },
+      { name: 'Record', value: `${tailStats.tail_wins}W - ${tailStats.tail_losses}L - ${tailStats.tail_pushes}P`, inline: true },
+      { name: 'Win %', value: `${tailStats.tail_win_pct}%`, inline: true },
+      { name: 'Net Units', value: `${tailStats.tail_net_units >= 0 ? '+' : ''}${tailStats.tail_net_units}u`, inline: true },
+    );
+  }
+
+  embed
     .setFooter({ text: 'GK | Sports Betting Tracker' })
     .setTimestamp();
 

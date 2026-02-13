@@ -1,5 +1,6 @@
 // --- Tail poll interaction handler ---
 const tailedBetsDb = require('../../database/tailedBets');
+const { supabase } = require('../../config/supabase');
 
 async function handleTailPoll(interaction) {
   const [prefix, answer, betId] = interaction.customId.split('_');
@@ -7,36 +8,46 @@ async function handleTailPoll(interaction) {
   const tailed = answer === 'yes';
   const userId = interaction.user.id;
 
-  // Record the tail poll in the DB
-  await tailedBetsDb.addTailedBet(betId, userId, tailed);
+  try {
+    // Record the tail poll in the DB
+    await tailedBetsDb.addTailedBet(betId, userId, tailed);
 
-  // Fetch all tailers for this bet
-  const allTails = await interaction.client.database.supabase
-    .from('tailed_bets')
-    .select('*')
-    .eq('bet_id', betId);
-  const yesUsers = (allTails.data || []).filter(t => t.tailed).map(t => `<@${t.tailer_discord_id}>`);
-  const noUsers = (allTails.data || []).filter(t => !t.tailed).map(t => `<@${t.tailer_discord_id}>`);
+    // Fetch all tailers for this bet
+    const { data: allTails, error } = await supabase
+      .from('tailed_bets')
+      .select('*')
+      .eq('bet_id', betId);
+    if (error) throw error;
 
-  // Update the poll message with the new stats
-  let pollContent = 'Are You Tailing This Bet?\n';
-  pollContent += `**Yes (${yesUsers.length}):** ${yesUsers.length ? yesUsers.join(', ') : 'None'}\n`;
-  pollContent += `**No (${noUsers.length}):** ${noUsers.length ? noUsers.join(', ') : 'None'}`;
+    const yesUsers = (allTails || []).filter(t => t.tailed).map(t => `<@${t.tailer_discord_id}>`);
+    const noCount = (allTails || []).filter(t => !t.tailed).length;
 
-  // Keep the buttons
-  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-  const pollRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`tailbet_yes_${betId}`)
-      .setLabel('Yes')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`tailbet_no_${betId}`)
-      .setLabel('No')
-      .setStyle(ButtonStyle.Danger)
-  );
+    // Update the poll message with the new stats
+    let pollContent = '**Are You Tailing This Bet?**\n\n';
+    pollContent += `👍 **Tailing (${yesUsers.length}):** ${yesUsers.length ? yesUsers.join(', ') : 'None'}\n`;
+    pollContent += `👎 **Fading (${noCount})**`;
 
-  await interaction.update({ content: pollContent, components: [pollRow] });
+    // Keep the buttons
+    const pollRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`tailbet_yes_${betId}`)
+        .setLabel(`✅ Tail (${yesUsers.length})`)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`tailbet_no_${betId}`)
+        .setLabel(`❌ Fade (${noCount})`)
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    await interaction.update({ content: pollContent, components: [pollRow] });
+  } catch (err) {
+    console.error('[TailPoll] Error:', err);
+    try {
+      await interaction.reply({ content: '❌ Error recording your vote. Please try again.', ephemeral: true });
+    } catch (e) {
+      // interaction may have already been responded to
+    }
+  }
 }
 const {
   SlashCommandBuilder,

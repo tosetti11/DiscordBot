@@ -172,6 +172,9 @@ async function handleButton(interaction) {
   if (id === 'enterbet_cancel') {
     return enterbet.handleBetCancel(interaction);
   }
+  if (id.startsWith('tailbet_')) {
+    return enterbet.handleTailPoll(interaction);
+  }
 }
 
 // ─── Modal Submit Router ───
