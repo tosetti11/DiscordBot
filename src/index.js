@@ -9,6 +9,7 @@ const mystats = require('./commands/betting/mystats');
 const leaderboard = require('./commands/betting/leaderboard');
 const viewbets = require('./commands/betting/viewbets');
 const deletebet = require('./commands/betting/deletebet');
+const editbet = require('./commands/betting/editbet');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 
@@ -22,7 +23,7 @@ const client = new Client({
 
 // Register commands in a collection
 client.commands = new Collection();
-const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, help, convertodds];
+const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, help, convertodds];
 for (const mod of commandModules) {
   client.commands.set(mod.command.name, mod);
 }
@@ -135,7 +136,7 @@ async function handleSelectMenu(interaction) {
   }
   if (id === 'editbet2_select' || id.startsWith('editbet2_status_')) {
     console.log('[SelectMenu] Routing to editbet.handleEditBetSelect');
-    return require('./commands/betting/editbet').handleEditBetSelect(interaction);
+    return editbet.handleEditBetSelect(interaction);
   }
   // Log unhandled select menu
   console.warn('[SelectMenu] Unhandled select menu:', id);
@@ -190,7 +191,7 @@ async function handleModalSubmit(interaction) {
     return deletebet.handleDeleteConfirmModal(interaction);
   }
   if (id.startsWith('editbet2_modal_')) {
-    return require('./commands/betting/editbet').handleEditBetModal(interaction);
+    return editbet.handleEditBetModal(interaction);
   }
 }
 
