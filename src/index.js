@@ -91,33 +91,56 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // ─── Select Menu Router ───
 async function handleSelectMenu(interaction) {
   const id = interaction.customId;
+  console.log('[SelectMenu] Received interaction:', {
+    customId: id,
+    values: interaction.values,
+    user: interaction.user?.id,
+    guild: interaction.guildId,
+    channel: interaction.channelId
+  });
 
   if (id === 'enterbet_type') {
+    console.log('[SelectMenu] Routing to handleBetTypeSelect');
     return enterbet.handleBetTypeSelect(interaction);
   }
   if (id === 'enterbet_parlay_count') {
+    console.log('[SelectMenu] Routing to handleParlayCountSelect');
     return enterbet.handleParlayCountSelect(interaction);
   }
   if (id === 'enterbet_category') {
+    console.log('[SelectMenu] Routing to handleCategorySelect');
     return enterbet.handleCategorySelect(interaction);
   }
   if (id === 'enterbet_sport') {
+    console.log('[SelectMenu] Routing to handleSportSelect');
     return enterbet.handleSportSelect(interaction);
   }
   if (id === 'enterbet_wager_type') {
+    console.log('[SelectMenu] Routing to handleWagerTypeSelect');
     return enterbet.handleWagerTypeSelect(interaction);
   }
   if (id === 'closebet_select') {
+    console.log('[SelectMenu] Routing to closebet.handleBetSelect');
     return closebet.handleBetSelect(interaction);
   }
   if (id === 'closebet_leg_select') {
+    console.log('[SelectMenu] Routing to closebet.handleLegSelect');
     return closebet.handleLegSelect(interaction);
   }
   if (id === 'deletebet_select') {
+    console.log('[SelectMenu] Routing to deletebet.handleDeleteSelect');
     return deletebet.handleDeleteSelect(interaction);
   }
-  if (id === 'editbet2_select') {
+  if (id === 'editbet2_select' || id.startsWith('editbet2_status_')) {
+    console.log('[SelectMenu] Routing to editbet.handleEditBetSelect');
     return require('./commands/betting/editbet').handleEditBetSelect(interaction);
+  }
+  // Log unhandled select menu
+  console.warn('[SelectMenu] Unhandled select menu:', id);
+  try {
+    await interaction.reply({ content: '❌ This select menu is not handled by the bot.', ephemeral: true });
+  } catch (e) {
+    console.error('[SelectMenu] Failed to reply to unhandled select menu:', e);
   }
 }
 
