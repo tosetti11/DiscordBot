@@ -897,7 +897,7 @@ async function saveSingleBet(interaction, legData, units, betNote) {
     // Resolve channel (may be null on ephemeral button interactions)
     const channel = interaction.channel || await interaction.client.channels.fetch(interaction.channelId);
 
-    const bet = await db.createBet({
+    const betData = {
       user_id: user.id,
       discord_id: bettor.id,
       guild_id: interaction.guildId,
@@ -907,7 +907,10 @@ async function saveSingleBet(interaction, legData, units, betNote) {
       units,
       bet_note: betNote,
       status: 'open',
-    }, displayName);
+    };
+    console.log('Attempting to create single bet with data:', betData);
+
+    const bet = await db.createBet(betData, displayName);
 
     const embed = buildBetEmbed(
       bet,
@@ -945,9 +948,18 @@ async function saveSingleBet(interaction, legData, units, betNote) {
     betSessions.delete(interaction.user.id);
   } catch (err) {
     console.error('Error saving bet:', err);
+    if (err && err.message) {
+      console.error('Supabase error message:', err.message);
+    }
+    if (err && err.details) {
+      console.error('Supabase error details:', err.details);
+    }
+    if (err && err.hint) {
+      console.error('Supabase error hint:', err.hint);
+    }
     const msg = err.code === 50001
       ? '❌ Bot lacks permission to post in this channel. Give the bot **Send Messages** access, then try again.'
-      : '❌ Error saving bet. Please try again.';
+      : `❌ Error saving bet. Please try again.\n${err.message ? err.message : ''}`;
     await interaction.update({ content: msg, components: [] });
   }
 }
