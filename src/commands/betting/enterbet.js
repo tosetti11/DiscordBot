@@ -280,13 +280,43 @@ async function handleSportSelect(interaction) {
   }
 }
 
-// Handle wager type selection -> open modal
+// Handle wager type selection -> open modal (or over/under menu for totals)
 async function handleWagerTypeSelect(interaction) {
   const userId = interaction.user.id;
   const session = betSessions.get(userId);
   if (!session) return interaction.update({ content: 'Session expired. Use `/enterbet` again.', components: [] });
 
   session.currentWagerType = interaction.values[0];
+  betSessions.set(userId, session);
+
+  // For total bets, ask Over or Under first
+  if (session.currentWagerType === 'total') {
+    const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('enterbet_over_under')
+        .setPlaceholder('Over or Under?')
+        .addOptions([
+          { label: 'Over', value: 'Over', emoji: '⬆️' },
+          { label: 'Under', value: 'Under', emoji: '⬇️' },
+        ])
+    );
+    return interaction.update({
+      content: `🔢 Over or Under?${legLabel}`,
+      components: [row],
+    });
+  }
+
+  await showTeamGameModal(interaction, session);
+}
+
+// Handle over/under selection -> open team modal
+async function handleOverUnderSelect(interaction) {
+  const userId = interaction.user.id;
+  const session = betSessions.get(userId);
+  if (!session) return interaction.update({ content: 'Session expired. Use `/enterbet` again.', components: [] });
+
+  session.overUnder = interaction.values[0]; // 'Over' or 'Under'
   betSessions.set(userId, session);
 
   await showTeamGameModal(interaction, session);
@@ -352,7 +382,7 @@ async function showTeamGameModal(interaction, session) {
   } else if (wagerType === 'total') {
     const totalInput = new TextInputBuilder()
       .setCustomId('line_value')
-      .setLabel('Over/Under line')
+      .setLabel(`${session.overUnder || 'Over/Under'} — Total Line`)
       .setPlaceholder('e.g. 220.5, 48.5')
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
@@ -512,7 +542,9 @@ async function handleTeamModalSubmit(interaction) {
   } else if (wagerType === 'spread') {
     pick = `${teamA} ${spreadValue > 0 ? '+' : ''}${spreadValue}`;
   } else {
-    pick = `${spreadValue > 0 ? 'Over' : 'Under'} ${Math.abs(spreadValue)}`;
+    // total — use the over/under choice from session
+    const direction = session.overUnder || (spreadValue > 0 ? 'Over' : 'Under');
+    pick = `${direction} ${Math.abs(spreadValue)}`;
   }
 
   const legData = {
@@ -1006,6 +1038,7 @@ module.exports = {
   handleCategorySelect,
   handleSportSelect,
   handleWagerTypeSelect,
+  handleOverUnderSelect,
   handleTeamModalSubmit,
   handlePropModalSubmit,
   handleParlayFinalButton,
