@@ -15,6 +15,7 @@ const advancedstats = require('./commands/betting/advancedstats');
 const whaledick = require('./commands/betting/whaledick');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
+const reminder = require('./commands/general/reminder');
 
 
 const commandObjs = [
@@ -30,6 +31,7 @@ const commandObjs = [
   whaledick.command,
   help.command,
   convertodds.command,
+  reminder.command,
 ];
 console.log('Registering the following commands:');
 for (const c of commandObjs) {

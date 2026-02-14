@@ -14,6 +14,8 @@ const advancedstats = require('./commands/betting/advancedstats');
 const whaledick = require('./commands/betting/whaledick');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
+const reminder = require('./commands/general/reminder');
+const remindersDb = require('./database/reminders');
 
 // Create Discord client
 const client = new Client({
@@ -25,7 +27,7 @@ const client = new Client({
 
 // Register commands in a collection
 client.commands = new Collection();
-const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, help, convertodds];
+const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, help, convertodds, reminder];
 for (const mod of commandModules) {
   client.commands.set(mod.command.name, mod);
 }
@@ -42,6 +44,20 @@ client.once(Events.ClientReady, (c) => {
     activities: [{ name: '/enterbet to place a bet', type: 3 }], // "Watching"
     status: 'online',
   });
+
+  // ─── Reminder Scheduler ───
+  // Check for due reminders every 30 seconds
+  setInterval(async () => {
+    try {
+      const due = await remindersDb.getDueReminders();
+      for (const r of due) {
+        await reminder.fireReminder(client, r);
+      }
+    } catch (err) {
+      console.error('[Reminder Scheduler] Error:', err.message);
+    }
+  }, 30_000);
+  console.log('   ⏰ Reminder scheduler started (30s interval)');
 });
 
 // ─── Slash Command Handler ───

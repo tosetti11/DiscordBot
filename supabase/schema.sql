@@ -165,3 +165,23 @@ SELECT
 FROM users u
 LEFT JOIN bets b ON u.id = b.user_id
 GROUP BY u.id, u.discord_id, u.discord_username;
+
+-- Reminders table (scheduled messages)
+CREATE TABLE IF NOT EXISTS reminders (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  creator_discord_id TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'custom',
+  message TEXT NOT NULL,
+  scheduled_at TIMESTAMPTZ NOT NULL,
+  repeat TEXT NOT NULL DEFAULT 'none' CHECK (repeat IN ('none', 'daily', 'weekly')),
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  last_fired_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for efficient scheduler queries
+CREATE INDEX IF NOT EXISTS idx_reminders_active_scheduled
+  ON reminders (scheduled_at)
+  WHERE is_active = true;
