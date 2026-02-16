@@ -25,6 +25,8 @@ const SPORTS = [
 ];
 
 let currentUser = null;
+let guildPerms = {}; // { isAdmin, canWhale, roles } per guild
+let guildEmojis = []; // server emojis for current guild
 
 // ── Format datetime-local value into readable string ──
 function formatDateTimePretty(datetimeStr) {
@@ -109,6 +111,21 @@ function setupEventListeners() {
   guildSelect.addEventListener('change', async () => {
     channelSelect.innerHTML = '<option value="" disabled selected>Loading...</option>';
     channelSelect.disabled = true;
+
+    // Fetch roles for this guild
+    try {
+      const rolesRes = await fetch(`/api/guilds/${guildSelect.value}/roles`);
+      guildPerms = await rolesRes.json();
+    } catch (e) {
+      guildPerms = { isAdmin: false, canWhale: false, roles: [] };
+    }
+
+    // Show/hide whale toggle based on role
+    const whaleToggle = document.querySelector('.whale-toggle-label')?.closest('.form-row');
+    if (whaleToggle) {
+      whaleToggle.style.display = guildPerms.canWhale ? '' : 'none';
+      if (!guildPerms.canWhale) document.getElementById('is-whale').checked = false;
+    }
 
     try {
       const res = await fetch(`/api/guilds/${guildSelect.value}/channels`);
@@ -1237,6 +1254,9 @@ const REMINDER_TYPES = {
 };
 
 let remindersInitialized = false;
+let reminderGuildPerms = {};
+let reminderEmojis = [];
+let editingReminderId = null;
 
 function initRemindersPage() {
   if (remindersInitialized) return;
@@ -1251,10 +1271,36 @@ function initRemindersPage() {
     sel.appendChild(opt);
   });
 
-  if (currentUser.guilds.length > 0) {
-    sel.value = currentUser.guilds[0].id;
+  sel.addEventListener('change', async () => {
+    // Fetch roles for this guild
+    try {
+      const rolesRes = await fetch(`/api/guilds/${sel.value}/roles`);
+      reminderGuildPerms = await rolesRes.json();
+    } catch (e) {
+      reminderGuildPerms = { isAdmin: false };
+    }
+
+    // Show/hide create form and action buttons based on admin role
+    const createCard = document.querySelector('.reminder-create-card');
+    if (createCard) {
+      createCard.style.display = reminderGuildPerms.isAdmin ? '' : 'none';
+    }
+
+    // Load emojis for emoji picker
+    try {
+      const emojiRes = await fetch(`/api/guilds/${sel.value}/emojis`);
+      reminderEmojis = await emojiRes.json();
+    } catch (e) {
+      reminderEmojis = [];
+    }
+
     loadReminderChannels();
     loadReminders();
+  });
+
+  if (currentUser.guilds.length > 0) {
+    sel.value = currentUser.guilds[0].id;
+    sel.dispatchEvent(new Event('change'));
   }
 
   // Calendar picker for reminder time
@@ -1315,14 +1361,22 @@ async function loadReminders() {
     container.innerHTML = '';
     reminders.forEach(rem => {
       const typeInfo = REMINDER_TYPES[rem.type] || REMINDER_TYPES.custom;
-      const scheduledDate = rem.scheduled_at ? new Date(rem.scheduled_at) : null;
+      const scheduledDate = rem.scheduledAt ? new Date(rem.scheduledAt) : null;
       const timeStr = scheduledDate ? scheduledDate.toLocaleString(undefined, {
         weekday: 'short', month: 'short', day: 'numeric',
         hour: 'numeric', minute: '2-digit'
       }) : '—';
 
+      const repeatLabel = rem.repeat && rem.repeat !== 'none' ? `<span class="repeat-badge">${rem.repeat}</span>` : '';
+      const adminActions = reminderGuildPerms.isAdmin
+        ? `<button class="btn-edit-reminder" onclick="openEditReminder('${rem.id}')" title="Edit">✏️</button>
+           <button class="btn-cancel-reminder" onclick="cancelReminder('${rem.id}')">Cancel</button>`
+        : '';
+
       const card = document.createElement('div');
       card.className = 'reminder-card';
+      card.dataset.reminderId = rem.id;
+      card.dataset.reminderData = JSON.stringify(rem);
       card.innerHTML = `
         <span class="reminder-icon">${typeInfo.emoji}</span>
         <div class="reminder-info">
@@ -1330,11 +1384,13 @@ async function loadReminders() {
           <div class="reminder-msg">${rem.message || ''}</div>
           <div class="reminder-meta">
             <span>📅 ${timeStr}</span>
-            <span>#${rem.channel_name || rem.channel_id || '—'}</span>
-            ${rem.repeat_interval && rem.repeat_interval !== 'none' ? `<span class="repeat-badge">${rem.repeat_interval}</span>` : ''}
+            <span>#${rem.channelName || rem.channelId || '—'}</span>
+            ${repeatLabel}
           </div>
         </div>
-        <button class="btn-cancel-reminder" onclick="cancelReminder('${rem.id}')">Cancel</button>
+        <div class="reminder-actions">
+          ${adminActions}
+        </div>
       `;
       container.appendChild(card);
     });
@@ -1464,6 +1520,132 @@ async function cancelReminder(reminderId) {
   } catch (e) {
     alert('Failed to cancel reminder');
   }
+}
+
+// ─── Edit Reminder ─────────
+function openEditReminder(reminderId) {
+  const card = document.querySelector(`.reminder-card[data-reminder-id="${reminderId}"]`);
+  if (!card) return;
+
+  const rem = JSON.parse(card.dataset.reminderData);
+  editingReminderId = reminderId;
+
+  document.getElementById('edit-reminder-type').value = rem.type || 'custom';
+  document.getElementById('edit-reminder-message').value = rem.message || '';
+  document.getElementById('edit-reminder-repeat').value = rem.repeat || 'none';
+
+  // Populate channel dropdown
+  const chSel = document.getElementById('edit-reminder-channel');
+  const mainChSel = document.getElementById('reminder-channel');
+  chSel.innerHTML = mainChSel.innerHTML;
+  chSel.value = rem.channelId || '';
+
+  // Set time
+  const editTimeInput = document.getElementById('edit-reminder-time');
+  if (rem.scheduledAt) {
+    editTimeInput.value = formatDateTimePretty(rem.scheduledAt);
+    editTimeInput.dataset.isoValue = new Date(rem.scheduledAt).toISOString();
+  } else {
+    editTimeInput.value = '';
+    delete editTimeInput.dataset.isoValue;
+  }
+
+  document.getElementById('edit-reminder-modal').classList.remove('hidden');
+}
+
+function closeEditReminderModal() {
+  document.getElementById('edit-reminder-modal').classList.add('hidden');
+  editingReminderId = null;
+}
+
+function openEditReminderCalendar() {
+  const picker = document.getElementById('edit-reminder-datetime');
+  picker.addEventListener('change', function handler() {
+    if (picker.value) {
+      document.getElementById('edit-reminder-time').value = formatDateTimePretty(picker.value);
+      document.getElementById('edit-reminder-time').dataset.isoValue = picker.value;
+    }
+    picker.removeEventListener('change', handler);
+  });
+  picker.showPicker();
+}
+
+async function submitEditReminder(e) {
+  e.preventDefault();
+  if (!editingReminderId) return;
+
+  const guildId = document.getElementById('reminder-guild').value;
+  const type = document.getElementById('edit-reminder-type').value;
+  const message = document.getElementById('edit-reminder-message').value.trim();
+  const channelId = document.getElementById('edit-reminder-channel').value;
+  const repeat = document.getElementById('edit-reminder-repeat').value;
+
+  const timeInput = document.getElementById('edit-reminder-time');
+  let scheduledAt = null;
+  if (timeInput.dataset.isoValue) {
+    scheduledAt = new Date(timeInput.dataset.isoValue).toISOString();
+  }
+
+  const body = {};
+  if (type) body.type = type;
+  if (message) body.message = message;
+  if (channelId) body.channelId = channelId;
+  if (scheduledAt) body.scheduledAt = scheduledAt;
+  if (repeat) body.repeat = repeat;
+
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/reminders/${editingReminderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert('Error: ' + data.error);
+      return;
+    }
+    closeEditReminderModal();
+    loadReminders();
+  } catch (e) {
+    alert('Failed to edit reminder');
+  }
+}
+
+// ─── Emoji Picker ─────────
+function toggleEmojiPicker(targetInputId) {
+  const existing = document.getElementById('emoji-picker-popup');
+  if (existing) { existing.remove(); return; }
+
+  if (!reminderEmojis || reminderEmojis.length === 0) {
+    alert('No custom emojis found on this server.');
+    return;
+  }
+
+  const targetInput = document.getElementById(targetInputId);
+  const popup = document.createElement('div');
+  popup.id = 'emoji-picker-popup';
+  popup.className = 'emoji-picker-popup';
+
+  let html = '<div class="emoji-picker-header"><span>Server Emojis</span><button onclick="document.getElementById(\'emoji-picker-popup\')?.remove()">&times;</button></div>';
+  html += '<div class="emoji-picker-grid">';
+  reminderEmojis.forEach(em => {
+    html += `<button type="button" class="emoji-pick-btn" title=":${em.name}:" onclick="insertEmoji('${targetInputId}', '${em.formatted.replace(/'/g, "\\'")}')">
+      <img src="${em.url}" alt="${em.name}" width="24" height="24">
+    </button>`;
+  });
+  html += '</div>';
+  popup.innerHTML = html;
+
+  targetInput.parentElement.style.position = 'relative';
+  targetInput.parentElement.appendChild(popup);
+}
+
+function insertEmoji(targetInputId, emoji) {
+  const input = document.getElementById(targetInputId);
+  const pos = input.selectionStart || input.value.length;
+  input.value = input.value.substring(0, pos) + emoji + input.value.substring(pos);
+  input.focus();
+  document.getElementById('emoji-picker-popup')?.remove();
 }
 
 // ═══════════════════════════════════════════════

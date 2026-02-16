@@ -95,10 +95,36 @@ async function deleteReminder(id, guildId) {
   return data;
 }
 
+/**
+ * Update a reminder's message, type, time, channel, or repeat
+ */
+async function updateReminder(id, guildId, fields) {
+  const updates = {};
+  if (fields.message !== undefined) updates.message = fields.message;
+  if (fields.type !== undefined) updates.type = fields.type;
+  if (fields.scheduledAt !== undefined) updates.scheduled_at = fields.scheduledAt;
+  if (fields.channelId !== undefined) updates.channel_id = fields.channelId;
+  if (fields.repeat !== undefined) updates.repeat = fields.repeat;
+
+  if (Object.keys(updates).length === 0) return null;
+
+  const { data, error } = await supabase
+    .from('reminders')
+    .update(updates)
+    .eq('id', id)
+    .eq('guild_id', guildId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 module.exports = {
   createReminder,
   getDueReminders,
   markReminderFired,
   getActiveReminders,
   deleteReminder,
+  updateReminder,
 };

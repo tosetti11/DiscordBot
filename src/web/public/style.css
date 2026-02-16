@@ -1494,6 +1494,113 @@ textarea {
   background: rgba(255, 77, 77, 0.15);
 }
 
+.btn-edit-reminder {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.btn-edit-reminder:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.reminder-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Textarea with emoji button */
+.textarea-with-emoji {
+  position: relative;
+}
+
+.btn-emoji-picker {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  z-index: 2;
+}
+
+.btn-emoji-picker:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Emoji picker popup */
+.emoji-picker-popup {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  width: 280px;
+  max-height: 260px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.emoji-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.emoji-picker-header button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.emoji-picker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.emoji-pick-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emoji-pick-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
 /* ════════════════════════════════════════════════════════════
    TOOLS PAGE
    ════════════════════════════════════════════════════════════ */

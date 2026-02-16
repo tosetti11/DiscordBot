@@ -24,8 +24,57 @@ const DISCORD_REDIRECT_URI = `${BASE_URL}/auth/callback`;
 
 let discordClient = null; // Will be set from index.js
 
+const WHALE_ROLES = ['sharp', 'admin', 'the king'];
+const ADMIN_ROLES = ['admin', 'the king'];
+
 function setDiscordClient(client) {
   discordClient = client;
+}
+
+/**
+ * Get a member's role names (lowercase) in a guild
+ */
+async function getMemberRoles(guildId, discordId) {
+  try {
+    const guild = discordClient?.guilds.cache.get(guildId);
+    if (!guild) return [];
+    const member = await guild.members.fetch(discordId);
+    return member.roles.cache.map(r => r.name.toLowerCase());
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Check if a member has admin-level perms (Admin role, The King role, or server Administrator)
+ */
+async function isAdminInGuild(guildId, discordId) {
+  try {
+    const guild = discordClient?.guilds.cache.get(guildId);
+    if (!guild) return false;
+    const member = await guild.members.fetch(discordId);
+    if (member.permissions.has('Administrator')) return true;
+    const roleNames = member.roles.cache.map(r => r.name.toLowerCase());
+    return ADMIN_ROLES.some(r => roleNames.includes(r));
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Check if a member can place whale bets
+ */
+async function canPlaceWhale(guildId, discordId) {
+  try {
+    const guild = discordClient?.guilds.cache.get(guildId);
+    if (!guild) return false;
+    const member = await guild.members.fetch(discordId);
+    if (member.permissions.has('Administrator')) return true;
+    const roleNames = member.roles.cache.map(r => r.name.toLowerCase());
+    return WHALE_ROLES.some(r => roleNames.includes(r));
+  } catch (e) {
+    return false;
+  }
 }
 
 function createWebServer() {
@@ -161,6 +210,60 @@ function createWebServer() {
     } catch (err) {
       console.error('[API] Channels error:', err);
       res.status(500).json({ error: 'Failed to fetch channels' });
+    }
+  });
+
+  // Get user's roles/permissions in a guild
+  app.get('/api/guilds/:guildId/roles', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      const guild = discordClient?.guilds.cache.get(guildId);
+      if (!guild) return res.json({ roles: [], isAdmin: false, canWhale: false });
+
+      try {
+        const member = await guild.members.fetch(req.user.discordId);
+        const roleNames = member.roles.cache
+          .filter(r => r.name !== '@everyone')
+          .map(r => r.name);
+        const roleNamesLower = roleNames.map(r => r.toLowerCase());
+        const hasAdmin = member.permissions.has('Administrator') || ADMIN_ROLES.some(r => roleNamesLower.includes(r));
+        const hasWhale = member.permissions.has('Administrator') || WHALE_ROLES.some(r => roleNamesLower.includes(r));
+
+        res.json({ roles: roleNames, isAdmin: hasAdmin, canWhale: hasWhale });
+      } catch (e) {
+        res.json({ roles: [], isAdmin: false, canWhale: false });
+      }
+    } catch (err) {
+      console.error('[API] Roles error:', err);
+      res.status(500).json({ error: 'Failed to fetch roles' });
+    }
+  });
+
+  // Get server emojis
+  app.get('/api/guilds/:guildId/emojis', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      const guild = discordClient?.guilds.cache.get(guildId);
+      if (!guild) return res.json([]);
+
+      const emojis = guild.emojis.cache.map(e => ({
+        id: e.id,
+        name: e.name,
+        animated: e.animated,
+        url: e.imageURL({ size: 32 }),
+        formatted: e.animated ? `<a:${e.name}:${e.id}>` : `<:${e.name}:${e.id}>`,
+      }));
+
+      res.json(emojis);
+    } catch (err) {
+      console.error('[API] Emojis error:', err);
+      res.status(500).json({ error: 'Failed to fetch emojis' });
     }
   });
 
@@ -699,6 +802,11 @@ function createWebServer() {
   app.post('/api/guilds/:guildId/reminders', authMiddleware, async (req, res) => {
     try {
       const { guildId } = req.params;
+
+      // Admin-only check
+      const admin = await isAdminInGuild(guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Only admins can create reminders' });
+
       const { type, message, scheduledAt, channelId, repeat } = req.body;
 
       if (!type || !message || !scheduledAt || !channelId) {
@@ -731,6 +839,10 @@ function createWebServer() {
     try {
       const { guildId, reminderId } = req.params;
 
+      // Admin-only check
+      const admin = await isAdminInGuild(guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Only admins can cancel reminders' });
+
       // Support partial ID match
       const reminders = await remindersDb.getActiveReminders(guildId, 100);
       const match = reminders.find(r => r.id === reminderId || r.id.startsWith(reminderId));
@@ -742,6 +854,38 @@ function createWebServer() {
     } catch (err) {
       console.error('[API] Delete reminder error:', err);
       res.status(500).json({ error: 'Failed to delete reminder' });
+    }
+  });
+
+  // Edit a reminder
+  app.patch('/api/guilds/:guildId/reminders/:reminderId', authMiddleware, async (req, res) => {
+    try {
+      const { guildId, reminderId } = req.params;
+
+      // Admin-only check
+      const admin = await isAdminInGuild(guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Only admins can edit reminders' });
+
+      const { type, message, scheduledAt, channelId, repeat } = req.body;
+
+      const fields = {};
+      if (type) fields.type = type;
+      if (message) fields.message = message;
+      if (scheduledAt) {
+        const schedDate = new Date(scheduledAt);
+        if (isNaN(schedDate.getTime())) return res.status(400).json({ error: 'Invalid schedule time' });
+        fields.scheduledAt = schedDate.toISOString();
+      }
+      if (channelId) fields.channelId = channelId;
+      if (repeat) fields.repeat = repeat;
+
+      const updated = await remindersDb.updateReminder(reminderId, guildId, fields);
+      if (!updated) return res.status(400).json({ error: 'No changes provided' });
+
+      res.json({ success: true, reminder: updated });
+    } catch (err) {
+      console.error('[API] Edit reminder error:', err);
+      res.status(500).json({ error: 'Failed to edit reminder' });
     }
   });
 
@@ -780,6 +924,14 @@ function createWebServer() {
 
       if (!guildId || !channelId || !betType || !sport) {
         return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Whale role check
+      if (isWhale) {
+        const whaleAllowed = await canPlaceWhale(guildId, req.user.discordId);
+        if (!whaleAllowed) {
+          return res.status(403).json({ error: 'Only Sharp, Admin, or The King roles can place whale bets' });
+        }
       }
 
       const oddsDecimal = oddsAmerican ? americanToDecimal(parseInt(oddsAmerican)) : null;

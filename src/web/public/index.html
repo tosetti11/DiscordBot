@@ -592,7 +592,10 @@
               </div>
               <div class="form-group">
                 <label for="reminder-message">Message</label>
-                <textarea id="reminder-message" class="form-input form-textarea" rows="3" placeholder="What should the reminder say?" required></textarea>
+                <div class="textarea-with-emoji">
+                  <textarea id="reminder-message" class="form-input form-textarea" rows="3" placeholder="What should the reminder say?" required></textarea>
+                  <button type="button" class="btn-emoji-picker" onclick="toggleEmojiPicker('reminder-message')" title="Insert server emoji">😀</button>
+                </div>
               </div>
               <div class="form-group">
                 <label for="reminder-time">When</label>
@@ -625,6 +628,61 @@
               <p class="empty-state">Select a server to view reminders.</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Edit Reminder Modal -->
+      <div id="edit-reminder-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3>✏️ Edit Reminder</h3>
+            <button class="modal-close" onclick="closeEditReminderModal()">&times;</button>
+          </div>
+          <form id="edit-reminder-form" onsubmit="submitEditReminder(event)">
+            <div class="form-group">
+              <label for="edit-reminder-type">Type</label>
+              <select id="edit-reminder-type" class="form-select">
+                <option value="game">🏟️ Game Reminder</option>
+                <option value="whale">🐋 Whale Dick Alert</option>
+                <option value="lock">🔒 Lock of the Day</option>
+                <option value="window">⏰ Betting Window</option>
+                <option value="recap">📊 Daily Recap</option>
+                <option value="promo">🎉 Promo / Announcement</option>
+                <option value="custom">📝 Custom</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-reminder-channel">Channel</label>
+              <select id="edit-reminder-channel" class="form-select"></select>
+            </div>
+            <div class="form-group">
+              <label for="edit-reminder-message">Message</label>
+              <div class="textarea-with-emoji">
+                <textarea id="edit-reminder-message" class="form-input form-textarea" rows="3" required></textarea>
+                <button type="button" class="btn-emoji-picker" onclick="toggleEmojiPicker('edit-reminder-message')" title="Insert server emoji">😀</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="edit-reminder-time">When</label>
+              <div class="datetime-row">
+                <input type="text" id="edit-reminder-time" class="form-input" placeholder="Pick a time" readonly>
+                <input type="datetime-local" id="edit-reminder-datetime" class="hidden-datetime">
+                <button type="button" class="btn-calendar" onclick="openEditReminderCalendar()">📅</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="edit-reminder-repeat">Repeat</label>
+              <select id="edit-reminder-repeat" class="form-select">
+                <option value="none">One-time</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn btn-secondary" onclick="closeEditReminderModal()">Cancel</button>
+              <button type="submit" class="btn btn-accent">Save Changes</button>
+            </div>
+          </form>
         </div>
       </div>
     </main>
