@@ -599,14 +599,13 @@ function createWebServer() {
         .select('*, bets!inner(*, parlay_legs(*))')
         .eq('tailer_discord_id', req.user.discordId)
         .eq('tailed', true)
-        .eq('bets.guild_id', guildId)
-        .order('created_at', { ascending: false });
+        .eq('bets.guild_id', guildId);
 
       if (tailErr) throw tailErr;
       if (!tailRows || tailRows.length === 0) return res.json([]);
 
-      // Extract the bet objects
-      let bets = tailRows.map(t => t.bets);
+      // Extract the bet objects, sorted newest first
+      let bets = tailRows.map(t => t.bets).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
       // Filter by status if requested
       if (status && status !== 'all') {
