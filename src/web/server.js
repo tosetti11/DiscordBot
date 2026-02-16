@@ -8,6 +8,9 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const crypto = require('crypto');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { supabase } = require('../config/supabase');
 const db = require('../database/queries');
 const tailedBetsDb = require('../database/tailedBets');
@@ -16,7 +19,11 @@ const { SPORT_NAMES, WAGER_TYPES, STATUS_EMOJI } = require('../config/constants'
 const { buildBetEmbed, buildWhaleBetEmbed } = require('../utils/embeds');
 const remindersDb = require('../database/reminders');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'thegamblingking-jwt-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set. Exiting.');
+  process.exit(1);
+}
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
@@ -87,8 +94,48 @@ async function canPlaceWhale(guildId, discordId) {
 function createWebServer() {
   const app = express();
 
-  app.use(express.json());
+  app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
+
+  // ─── Security Headers (helmet) ───
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "https://cdn.discordapp.com", "data:"],
+        connectSrc: ["'self'"],
+      },
+    },
+  }));
+
+  // ─── Rate Limiting ───
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 60, // 60 requests per minute per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later' },
+  });
+  const postLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10, // 10 writes per minute per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please slow down' },
+  });
+  const authLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 10, // 10 login attempts per 5 min
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many login attempts, please try again later' },
+  });
+  app.use('/api/', apiLimiter);
+  app.use('/auth/', authLimiter);
+
   app.use(express.static(path.join(__dirname, 'public')));
 
   // ─── Auth Middleware ───
@@ -97,7 +144,7 @@ function createWebServer() {
     if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
       req.user = decoded;
       next();
     } catch (e) {
@@ -110,19 +157,29 @@ function createWebServer() {
 
   // Redirect to Discord OAuth2
   app.get('/auth/login', (req, res) => {
+    const state = crypto.randomBytes(16).toString('hex');
+    res.cookie('oauth_state', state, { httpOnly: true, maxAge: 300000, sameSite: 'lax', secure: BASE_URL.startsWith('https') });
     const params = new URLSearchParams({
       client_id: DISCORD_CLIENT_ID,
       redirect_uri: DISCORD_REDIRECT_URI,
       response_type: 'code',
       scope: 'identify guilds',
+      state,
     });
     res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
   });
 
   // OAuth2 callback
   app.get('/auth/callback', async (req, res) => {
-    const { code } = req.query;
+    const { code, state } = req.query;
     if (!code) return res.redirect('/?error=no_code');
+
+    // Verify OAuth state to prevent CSRF
+    const savedState = req.cookies.oauth_state;
+    res.clearCookie('oauth_state');
+    if (!state || !savedState || state !== savedState) {
+      return res.redirect('/?error=invalid_state');
+    }
 
     try {
       // Exchange code for token
@@ -176,6 +233,7 @@ function createWebServer() {
         httpOnly: true,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production' || BASE_URL.startsWith('https'),
       });
 
       res.redirect('/');
@@ -354,7 +412,13 @@ function createWebServer() {
     try {
       const { guildId } = req.params;
       const { period = 'all', userId } = req.query;
-      const targetDiscordId = userId || req.user.discordId;
+      // If userId is specified and it's not the current user, require admin
+      let targetDiscordId = req.user.discordId;
+      if (userId && userId !== req.user.discordId) {
+        const admin = await isAdminInGuild(guildId, req.user.discordId);
+        if (!admin) return res.status(403).json({ error: 'Only admins can view other users\' stats' });
+        targetDiscordId = userId;
+      }
 
       // Build query
       let query = supabase
@@ -934,7 +998,7 @@ function createWebServer() {
     }
   });
 
-  app.post('/api/guilds/:guildId/reminders', authMiddleware, async (req, res) => {
+  app.post('/api/guilds/:guildId/reminders', authMiddleware, postLimiter, async (req, res) => {
     try {
       const { guildId } = req.params;
 
@@ -978,9 +1042,9 @@ function createWebServer() {
       const admin = await isAdminInGuild(guildId, req.user.discordId);
       if (!admin) return res.status(403).json({ error: 'Only admins can cancel reminders' });
 
-      // Support partial ID match
+      // Exact ID match only (no partial matching to prevent unintended deletions)
       const reminders = await remindersDb.getActiveReminders(guildId, 100);
-      const match = reminders.find(r => r.id === reminderId || r.id.startsWith(reminderId));
+      const match = reminders.find(r => r.id === reminderId);
 
       if (!match) return res.status(404).json({ error: 'Reminder not found' });
 
@@ -1045,7 +1109,7 @@ function createWebServer() {
   });
 
   // Submit a bet
-  app.post('/api/bets', authMiddleware, async (req, res) => {
+  app.post('/api/bets', authMiddleware, postLimiter, async (req, res) => {
     try {
       const {
         guildId, channelId, betType, sport, betCategory, wagerType,
@@ -1060,6 +1124,32 @@ function createWebServer() {
 
       if (!guildId || !channelId || !betType || !sport) {
         return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // ─── Server-side input validation ───
+      const MAX_LEN = 500;
+      const truncate = (s, max = MAX_LEN) => (typeof s === 'string' ? s.slice(0, max) : s);
+      const safePick = truncate(pick);
+      const safeBetNote = truncate(betNote);
+      const safeTeamA = truncate(teamA, 200);
+      const safeTeamB = truncate(teamB, 200);
+      const safePlayerName = truncate(playerName, 200);
+      const safePropDesc = truncate(propDescription);
+      const safeFuturesMarket = truncate(futuresMarket, 200);
+      const safeFuturesSelection = truncate(futuresSelection, 200);
+
+      // Validate numeric inputs
+      const parsedUnits = parseFloat(units);
+      const parsedOdds = parseInt(oddsAmerican);
+      if (isNaN(parsedUnits) || parsedUnits <= 0 || parsedUnits > 10000) {
+        return res.status(400).json({ error: 'Units must be between 0 and 10,000' });
+      }
+      if (isNaN(parsedOdds) || parsedOdds < -100000 || parsedOdds > 100000 || (parsedOdds > -100 && parsedOdds < 100 && parsedOdds !== 0)) {
+        return res.status(400).json({ error: 'Invalid odds value' });
+      }
+
+      if (legs && legs.length > 25) {
+        return res.status(400).json({ error: 'Maximum 25 parlay legs allowed' });
       }
 
       // Whale role check
@@ -1094,7 +1184,7 @@ function createWebServer() {
         }
       }
 
-      const oddsDecimal = oddsAmerican ? americanToDecimal(parseInt(oddsAmerican)) : null;
+      const oddsDecimal = parsedOdds ? americanToDecimal(parsedOdds) : null;
 
       // Get or create user in DB
       const discordUser = {
@@ -1122,31 +1212,31 @@ function createWebServer() {
           guild_id: guildId,
           channel_id: channelId,
           bet_type: 'parlay',
-          odds_american: parseInt(oddsAmerican),
+          odds_american: parsedOdds,
           odds_decimal: oddsDecimal,
-          units: parseFloat(units),
-          bet_note: betNote || null,
+          units: parsedUnits,
+          bet_note: safeBetNote || null,
           is_whale: isWhale || false,
           is_retro: false,
           status: 'open',
         }, displayName);
 
         const legRecords = legs.map((leg, i) => {
-          let legPick = leg.pick;
+          let legPick = truncate(leg.pick);
           if (leg.betCategory === 'futures') {
-            legPick = `${leg.futuresMarket}: ${leg.futuresSelection}`;
+            legPick = `${truncate(leg.futuresMarket, 200)}: ${truncate(leg.futuresSelection, 200)}`;
           } else if (leg.betCategory === 'team_game') {
             if (leg.wagerType === 'moneyline') {
-              legPick = `${leg.teamA} ML`;
+              legPick = `${truncate(leg.teamA, 200)} ML`;
             } else if (leg.wagerType === 'spread') {
               const sv = parseFloat(leg.spreadValue);
-              legPick = `${leg.teamA} ${sv > 0 ? '+' : ''}${sv}`;
+              legPick = `${truncate(leg.teamA, 200)} ${sv > 0 ? '+' : ''}${sv}`;
             } else if (leg.wagerType === 'total') {
               const sv = parseFloat(leg.spreadValue);
               legPick = `${leg.overUnder || 'Over'} ${Math.abs(sv)}`;
             }
           } else {
-            legPick = leg.propDescription || leg.pick;
+            legPick = truncate(leg.propDescription) || truncate(leg.pick);
           }
 
           return {
@@ -1154,10 +1244,10 @@ function createWebServer() {
             leg_number: i + 1,
             sport: leg.sport,
             bet_category: leg.betCategory,
-            team_a: leg.teamA || null,
-            team_b: leg.teamB || null,
-            player_name: leg.playerName || null,
-            prop_description: leg.propDescription || null,
+            team_a: truncate(leg.teamA, 200) || null,
+            team_b: truncate(leg.teamB, 200) || null,
+            player_name: truncate(leg.playerName, 200) || null,
+            prop_description: truncate(leg.propDescription) || null,
             pick: legPick,
             wager_type: leg.wagerType,
             spread_value: leg.spreadValue ? parseFloat(leg.spreadValue) : null,
@@ -1196,21 +1286,21 @@ function createWebServer() {
 
       } else {
         // ── Single bet ──
-        let finalPick = pick;
+        let finalPick = safePick;
         if (betCategory === 'futures') {
-          finalPick = `${futuresMarket}: ${futuresSelection}`;
+          finalPick = `${safeFuturesMarket}: ${safeFuturesSelection}`;
         } else if (betCategory === 'team_game') {
           if (wagerType === 'moneyline') {
-            finalPick = `${teamA} ML`;
+            finalPick = `${safeTeamA} ML`;
           } else if (wagerType === 'spread') {
             const sv = parseFloat(spreadValue);
-            finalPick = `${teamA} ${sv > 0 ? '+' : ''}${sv}`;
+            finalPick = `${safeTeamA} ${sv > 0 ? '+' : ''}${sv}`;
           } else if (wagerType === 'total') {
             const sv = parseFloat(spreadValue);
             finalPick = `${overUnder || 'Over'} ${Math.abs(sv)}`;
           }
         } else {
-          finalPick = propDescription || pick;
+          finalPick = safePropDesc || safePick;
         }
 
         const betData = {
@@ -1221,17 +1311,17 @@ function createWebServer() {
           bet_type: 'single',
           sport,
           bet_category: betCategory,
-          team_a: teamA || null,
-          team_b: teamB || null,
-          player_name: playerName || null,
-          prop_description: propDescription || null,
+          team_a: safeTeamA || null,
+          team_b: safeTeamB || null,
+          player_name: safePlayerName || null,
+          prop_description: safePropDesc || null,
           pick: finalPick,
           wager_type: wagerType,
           spread_value: spreadValue ? parseFloat(spreadValue) : null,
-          odds_american: parseInt(oddsAmerican),
+          odds_american: parsedOdds,
           odds_decimal: oddsDecimal,
-          units: parseFloat(units),
-          bet_note: betNote || null,
+          units: parsedUnits,
+          bet_note: safeBetNote || null,
           event_start_time: eventStartTime || null,
           is_whale: isWhale || false,
           is_retro: false,
@@ -1265,7 +1355,7 @@ function createWebServer() {
       }
     } catch (err) {
       console.error('[API] Submit bet error:', err);
-      res.status(500).json({ error: err.message || 'Failed to save bet' });
+      res.status(500).json({ error: 'Failed to save bet' });
     }
   });
 

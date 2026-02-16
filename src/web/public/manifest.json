@@ -1,0 +1,24 @@
+{
+  "name": "TheGamblingKing - Sports Betting Tracker",
+  "short_name": "GamblingKing",
+  "description": "Track sports bets, view leaderboards, and compete with your Discord community.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#f5c518",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/TheGamblingKing.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/TheGamblingKing.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

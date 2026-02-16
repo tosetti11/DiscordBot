@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TheGamblingKing | Bet Slip</title>
   <link rel="icon" type="image/jpeg" href="/TheGamblingKing.jpg">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#f5c518">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GamblingKing">
+  <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
   <link rel="stylesheet" href="/style.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -36,6 +42,7 @@
           <a href="#" class="nav-link" data-page="stats" onclick="switchPage('stats')">📊 Stats</a>
           <a href="#" class="nav-link" data-page="reminders" onclick="switchPage('reminders')">⏰ Reminders</a>
           <a href="#" class="nav-link" data-page="tools" onclick="switchPage('tools')">🔧 Tools</a>
+          <a href="#" class="nav-link" data-page="install" onclick="switchPage('install')">📱 App</a>
         </nav>
       </div>
       <div class="header-right">
@@ -780,6 +787,123 @@
                   <li>🔄 Push — Refunded</li>
                 </ul>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Install App Page -->
+    <main id="install-page" class="main-content hidden">
+      <div class="install-container">
+        <div class="install-header">
+          <img src="/TheGamblingKing.jpg" alt="TheGamblingKing" class="install-logo">
+          <h2>📱 Get the App</h2>
+          <p class="slip-subtitle">Add TheGamblingKing to your phone's home screen for instant access</p>
+        </div>
+
+        <!-- Install Button (shown when browser supports it) -->
+        <div id="install-prompt-section" class="install-prompt-section hidden">
+          <button id="install-btn" class="btn btn-accent btn-install" onclick="triggerInstall()">
+            ⬇️ Install TheGamblingKing
+          </button>
+          <p class="install-note">Your browser supports direct installation!</p>
+        </div>
+
+        <div class="install-platforms">
+          <!-- iPhone / iOS -->
+          <div class="install-card">
+            <h3 class="card-title">🍎 iPhone / iPad (Safari)</h3>
+            <ol class="install-steps">
+              <li>
+                <span class="step-number">1</span>
+                <div class="step-content">
+                  <strong>Open in Safari</strong>
+                  <p>Navigate to <code>thegamblingkingapp.com</code> in Safari (not Chrome or other browsers)</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number">2</span>
+                <div class="step-content">
+                  <strong>Tap the Share button</strong>
+                  <p>Tap the <span class="icon-badge">⬆️</span> share icon at the bottom of the screen</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number">3</span>
+                <div class="step-content">
+                  <strong>Scroll down & tap "Add to Home Screen"</strong>
+                  <p>Look for the <span class="icon-badge">➕</span> Add to Home Screen option in the share sheet</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number">4</span>
+                <div class="step-content">
+                  <strong>Tap "Add"</strong>
+                  <p>Confirm the name and tap Add in the top right corner</p>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <!-- Android -->
+          <div class="install-card">
+            <h3 class="card-title">🤖 Android (Chrome)</h3>
+            <ol class="install-steps">
+              <li>
+                <span class="step-number">1</span>
+                <div class="step-content">
+                  <strong>Open in Chrome</strong>
+                  <p>Navigate to <code>thegamblingkingapp.com</code> in Google Chrome</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number">2</span>
+                <div class="step-content">
+                  <strong>Tap the menu</strong>
+                  <p>Tap the <span class="icon-badge">⋮</span> three-dot menu in the top right corner</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number">3</span>
+                <div class="step-content">
+                  <strong>Tap "Install app" or "Add to Home screen"</strong>
+                  <p>Select the install option from the menu</p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number">4</span>
+                <div class="step-content">
+                  <strong>Tap "Install"</strong>
+                  <p>Confirm the installation in the popup dialog</p>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="install-benefits">
+          <h3>Why Install?</h3>
+          <div class="benefits-grid">
+            <div class="benefit-item">
+              <span class="benefit-icon">⚡</span>
+              <strong>Instant Access</strong>
+              <p>Launch directly from your home screen — no browser needed</p>
+            </div>
+            <div class="benefit-item">
+              <span class="benefit-icon">📱</span>
+              <strong>Full Screen</strong>
+              <p>Runs in full-screen mode like a native app</p>
+            </div>
+            <div class="benefit-item">
+              <span class="benefit-icon">🚀</span>
+              <strong>Faster Loading</strong>
+              <p>Cached assets load instantly after first visit</p>
+            </div>
+            <div class="benefit-item">
+              <span class="benefit-icon">🎯</span>
+              <strong>One Tap Bets</strong>
+              <p>Quick access to submit and track your bets</p>
             </div>
           </div>
         </div>

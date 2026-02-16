@@ -332,8 +332,11 @@ async function getAllBetsInGuild(guildId, { status, statusIn, discordId, sport, 
     query = query.eq('sport', sport);
   }
   if (team) {
-    // Search team_a, team_b, player_name, pick, or bet_note (case-insensitive via ilike)
-    query = query.or(`team_a.ilike.%${team}%,team_b.ilike.%${team}%,player_name.ilike.%${team}%,pick.ilike.%${team}%,bet_note.ilike.%${team}%`);
+    // Sanitize search input — strip PostgREST special chars to prevent filter injection
+    const safeTeam = team.replace(/[%,\.()]/g, '');
+    if (safeTeam.length > 0) {
+      query = query.or(`team_a.ilike.%${safeTeam}%,team_b.ilike.%${safeTeam}%,player_name.ilike.%${safeTeam}%,pick.ilike.%${safeTeam}%,bet_note.ilike.%${safeTeam}%`);
+    }
   }
   if (minUnits !== undefined && minUnits !== null) {
     query = query.gte('units', minUnits);

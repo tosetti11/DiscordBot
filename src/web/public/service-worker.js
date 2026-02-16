@@ -1,0 +1,49 @@
+const CACHE_NAME = 'gk-cache-v1';
+const ASSETS_TO_CACHE = [
+  '/',
+  '/style.css',
+  '/app.js',
+  '/TheGamblingKing.jpg',
+  '/manifest.json'
+];
+
+// Install — cache core assets
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
+  );
+  self.skipWaiting();
+});
+
+// Activate — clean old caches
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+// Fetch — network first, fallback to cache (skip API/auth requests)
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+
+  // Don't cache API calls or auth routes
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        // Cache successful responses
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
+  );
+});

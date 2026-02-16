@@ -8,7 +8,12 @@
     "dev": "nodemon src/index.js",
     "deploy-commands": "node src/deploy-commands.js"
   },
-  "keywords": ["discord", "betting", "tracker", "sports"],
+  "keywords": [
+    "discord",
+    "betting",
+    "tracker",
+    "sports"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -17,6 +22,8 @@
     "discord.js": "^14.14.1",
     "dotenv": "^16.3.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3"
   },
   "devDependencies": {

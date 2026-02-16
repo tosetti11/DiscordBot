@@ -2,6 +2,47 @@
    TheGamblingKing Bet Slip — Frontend JavaScript
    ═══════════════════════════════════════════════ */
 
+// ── HTML Sanitizer — prevents XSS from user-controlled data ──
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ── PWA: Register Service Worker ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js')
+    .then(reg => console.log('SW registered:', reg.scope))
+    .catch(err => console.log('SW registration failed:', err));
+}
+
+// ── PWA: Capture install prompt ──
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show the install button if user is on the install page
+  const section = document.getElementById('install-prompt-section');
+  if (section) section.classList.remove('hidden');
+});
+
+function triggerInstall() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.then(result => {
+    if (result.outcome === 'accepted') {
+      console.log('PWA installed');
+      const section = document.getElementById('install-prompt-section');
+      if (section) section.classList.add('hidden');
+    }
+    deferredInstallPrompt = null;
+  });
+}
+
 const SPORTS = [
   { name: 'NFL', value: 'nfl' },
   { name: 'NBA', value: 'nba' },
@@ -686,6 +727,7 @@ function switchPage(page) {
     bets: document.getElementById('bets-page'),
     reminders: document.getElementById('reminders-page'),
     tools: document.getElementById('tools-page'),
+    install: document.getElementById('install-page'),
   };
 
   // Hide all, show selected
@@ -951,7 +993,7 @@ function renderStats(data) {
     const tr = document.createElement('tr');
     const netClass = day.net >= 0 ? 'pnl-positive' : 'pnl-negative';
     tr.innerHTML = `
-      <td>${day.date}</td>
+      <td>${esc(day.date)}</td>
       <td>${day.bets}</td>
       <td>${day.wins}</td>
       <td>${day.losses}</td>
@@ -971,8 +1013,8 @@ function renderStats(data) {
       <div class="recent-bet-info">
         <span class="recent-bet-status">${statusEmoji[bet.status] || '⚪'}</span>
         <div>
-          <div class="recent-bet-pick">${bet.pick || '—'}${bet.betType === 'parlay' ? ` (${bet.legs}L parlay)` : ''}</div>
-          <div class="recent-bet-sport">${bet.sport} • ${bet.slipNumber}</div>
+          <div class="recent-bet-pick">${esc(bet.pick) || '—'}${bet.betType === 'parlay' ? ` (${bet.legs}L parlay)` : ''}</div>
+          <div class="recent-bet-sport">${esc(bet.sport)} • ${esc(bet.slipNumber)}</div>
         </div>
       </div>
       ${bet.isWhale ? '<span class="recent-bet-whale">🐋</span>' : ''}
@@ -1042,7 +1084,7 @@ async function loadLeaderboard() {
       const net = entry.net_units || 0;
       div.innerHTML = `
         <span class="lb-rank">${medals[i] || (i + 1)}</span>
-        <span class="lb-name">${entry.discord_username || 'Unknown'}</span>
+        <span class="lb-name">${esc(entry.discord_username) || 'Unknown'}</span>
         <span class="lb-record">${entry.wins || 0}W-${entry.losses || 0}L-${entry.pushes || 0}P | ${entry.win_pct || 0}%</span>
         <span class="lb-net ${net >= 0 ? 'positive' : 'negative'}">${fmtNet(net)}</span>
       `;
@@ -1193,7 +1235,7 @@ function renderTailedBetCard(bet) {
   const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString() : '';
   const isParlay = bet.betType === 'parlay';
 
-  let pickText = bet.pick || (isParlay ? 'Parlay' : '—');
+  let pickText = esc(bet.pick) || (isParlay ? 'Parlay' : '—');
   let whaleHtml = bet.isWhale ? '<span class="bet-whale-badge">🐋</span>' : '';
 
   // Parlay legs (read-only)
@@ -1202,11 +1244,11 @@ function renderTailedBetCard(bet) {
     legsHtml = '<div class="bet-legs">' +
       bet.legs.map((leg, i) => {
         const legStatus = STATUS_EMOJI[leg.status] || '⬜';
-        const legSport = leg.sportName || leg.sport || '';
+        const legSport = esc(leg.sportName || leg.sport || '');
         return `<div class="bet-leg">
           <span class="bet-leg-status">${legStatus}</span>
           <span class="bet-leg-num">Leg ${i + 1}</span>
-          <span class="bet-leg-pick">${leg.pick || '—'}</span>
+          <span class="bet-leg-pick">${esc(leg.pick) || '—'}</span>
           <span class="bet-leg-sport">${legSport}</span>
         </div>`;
       }).join('') +
@@ -1220,22 +1262,22 @@ function renderTailedBetCard(bet) {
   div.innerHTML = `
     <span class="bet-status-icon">${statusEmoji}</span>
     <div class="bet-info">
-      <div class="bet-owner-row"><span class="bet-tailed-badge">🔗 Tailing ${bet.displayName || 'Unknown'}</span></div>
+      <div class="bet-owner-row"><span class="bet-tailed-badge">🔗 Tailing ${esc(bet.displayName) || 'Unknown'}</span></div>
       <div class="bet-pick-row">
         <span class="bet-pick-text">${pickText}</span>
         ${whaleHtml}
       </div>
       <div class="bet-meta">
-        <span>🏟️ ${sportName}</span>
-        <span>🎯 ${wagerLabel}</span>
-        <span>📅 ${date}</span>
+        <span>🏟️ ${esc(sportName)}</span>
+        <span>🎯 ${esc(wagerLabel)}</span>
+        <span>📅 ${esc(date)}</span>
         ${slipDisplay}
       </div>
       ${legsHtml}
     </div>
     <div class="bet-odds-col">
-      <div class="bet-odds">${oddsDisplay >= 0 ? '+' : ''}${oddsDisplay}</div>
-      <div class="bet-units">${unitsDisplay}u</div>
+      <div class="bet-odds">${oddsDisplay >= 0 ? '+' : ''}${esc(oddsDisplay)}</div>
+      <div class="bet-units">${esc(unitsDisplay)}u</div>
     </div>
   `;
 
@@ -1297,10 +1339,10 @@ function renderBetCard(bet, showOwner = false) {
   const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString() : '';
   const isParlay = bet.betType === 'parlay';
 
-  let pickText = bet.pick || (isParlay ? 'Parlay' : '—');
+  let pickText = esc(bet.pick) || (isParlay ? 'Parlay' : '—');
   let whaleHtml = bet.isWhale ? '<span class="bet-whale-badge">🐋</span>' : '';
   let retroHtml = bet.isRetro ? '<span class="bet-retro-badge">RETRO</span>' : '';
-  let ownerHtml = showOwner && bet.displayName ? `<span class="bet-owner-badge">👤 ${bet.displayName}</span>` : '';
+  let ownerHtml = showOwner && bet.displayName ? `<span class="bet-owner-badge">👤 ${esc(bet.displayName)}</span>` : '';
 
   // Can this user manage this bet? Own bets always, admin can manage others'
   const isOwnBet = bet.discordId === currentUser?.discordId;
@@ -1334,7 +1376,7 @@ function renderBetCard(bet, showOwner = false) {
     legsHtml = '<div class="bet-legs">' +
       bet.legs.map((leg, i) => {
         const legStatus = STATUS_EMOJI[leg.status] || '⬜';
-        const legSport = leg.sportName || leg.sport || '';
+        const legSport = esc(leg.sportName || leg.sport || '');
         const legActions = (leg.status === 'open' && canManage)
           ? `<span class="leg-actions">
                <button class="leg-btn leg-win" onclick="closeLeg('${bet.id}','${leg.id}','win')" title="Win">✅</button>
@@ -1346,7 +1388,7 @@ function renderBetCard(bet, showOwner = false) {
         return `<div class="bet-leg">
           <span class="bet-leg-status">${legStatus}</span>
           <span class="bet-leg-num">Leg ${i + 1}</span>
-          <span class="bet-leg-pick">${leg.pick || '—'}</span>
+          <span class="bet-leg-pick">${esc(leg.pick) || '—'}</span>
           <span class="bet-leg-sport">${legSport}</span>
           ${legActions}
         </div>`;
@@ -1367,16 +1409,16 @@ function renderBetCard(bet, showOwner = false) {
         ${whaleHtml}${retroHtml}
       </div>
       <div class="bet-meta">
-        <span>🏟️ ${sportName}</span>
-        <span>🎯 ${wagerLabel}</span>
-        <span>📅 ${date}</span>
+        <span>🏟️ ${esc(sportName)}</span>
+        <span>🎯 ${esc(wagerLabel)}</span>
+        <span>📅 ${esc(date)}</span>
         ${slipDisplay}
       </div>
       ${legsHtml}
     </div>
     <div class="bet-odds-col">
-      <div class="bet-odds-val">${oddsDisplay}</div>
-      <div class="bet-units-val">${unitsDisplay}u</div>
+      <div class="bet-odds-val">${esc(oddsDisplay)}</div>
+      <div class="bet-units-val">${esc(unitsDisplay)}u</div>
     </div>
     ${actionsHtml}
   `;
@@ -1665,11 +1707,11 @@ async function loadReminders() {
       card.innerHTML = `
         <span class="reminder-icon">${typeInfo.emoji}</span>
         <div class="reminder-info">
-          <div class="reminder-type-label">${typeInfo.label}</div>
-          <div class="reminder-msg">${rem.message || ''}</div>
+          <div class="reminder-type-label">${esc(typeInfo.label)}</div>
+          <div class="reminder-msg">${esc(rem.message) || ''}</div>
           <div class="reminder-meta">
-            <span>📅 ${timeStr}</span>
-            <span>#${rem.channelName || rem.channelId || '—'}</span>
+            <span>📅 ${esc(timeStr)}</span>
+            <span>#${esc(rem.channelName || rem.channelId || '—')}</span>
             ${repeatLabel}
           </div>
         </div>
@@ -1914,8 +1956,8 @@ function toggleEmojiPicker(targetInputId) {
   let html = '<div class="emoji-picker-header"><span>Server Emojis</span><button onclick="document.getElementById(\'emoji-picker-popup\')?.remove()">&times;</button></div>';
   html += '<div class="emoji-picker-grid">';
   reminderEmojis.forEach(em => {
-    html += `<button type="button" class="emoji-pick-btn" title=":${em.name}:" onclick="insertEmoji('${targetInputId}', '${em.formatted.replace(/'/g, "\\'")}')">
-      <img src="${em.url}" alt="${em.name}" width="24" height="24">
+    html += `<button type="button" class="emoji-pick-btn" title=":${esc(em.name)}:" onclick="insertEmoji('${targetInputId}', '${em.formatted.replace(/'/g, "\\'")}')">
+      <img src="${esc(em.url)}" alt="${esc(em.name)}" width="24" height="24">
     </button>`;
   });
   html += '</div>';
