@@ -468,6 +468,10 @@
         <div class="bets-header">
           <h2>📋 Bets</h2>
           <p class="slip-subtitle">View, close, edit, or delete bets</p>
+          <div class="bets-toggle">
+            <button class="bets-toggle-btn active" data-tab="my" onclick="switchBetsTab('my')">My Bets</button>
+            <button class="bets-toggle-btn" data-tab="tailed" onclick="switchBetsTab('tailed')">🔗 Tailed</button>
+          </div>
         </div>
 
         <!-- Filters -->
@@ -511,7 +515,7 @@
             </select>
             <input type="text" id="bets-search" class="form-input filter-search" placeholder="Search pick or note...">
           </div>
-          <button class="btn btn-accent" onclick="loadBets()">🔍 Search</button>
+          <button class="btn btn-accent" onclick="currentBetsTab === 'tailed' ? loadTailedBets() : loadBets()">🔍 Search</button>
         </div>
 
         <!-- Bet List -->

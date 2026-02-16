@@ -465,9 +465,9 @@ function createWebServer() {
       const allUnits = bets.map(b => Number(b.units));
       const avgUnits = allUnits.length > 0 ? Math.round((allUnits.reduce((a, b) => a + b, 0) / allUnits.length) * 100) / 100 : 0;
 
-      // Tail stats
+      // Tail stats (guild-scoped)
       let tailStats = null;
-      try { tailStats = await tailedBetsDb.getTailStats(targetDiscordId); } catch (e) {}
+      try { tailStats = await tailedBetsDb.getTailStatsInGuild(targetDiscordId, guildId); } catch (e) {}
 
       // Recent bets (last 10)
       const recentBets = bets.slice(0, 10).map(b => ({
@@ -584,6 +584,56 @@ function createWebServer() {
   });
 
   // ─── My Bets API ───
+
+  // Get bets user is tailing in a guild
+  app.get('/api/guilds/:guildId/tailed-bets', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { status } = req.query;
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      // Get all tailed_bets rows for this user in this guild
+      const { data: tailRows, error: tailErr } = await supabase
+        .from('tailed_bets')
+        .select('*, bets!inner(*, parlay_legs(*))')
+        .eq('tailer_discord_id', req.user.discordId)
+        .eq('tailed', true)
+        .eq('bets.guild_id', guildId)
+        .order('created_at', { ascending: false });
+
+      if (tailErr) throw tailErr;
+      if (!tailRows || tailRows.length === 0) return res.json([]);
+
+      // Extract the bet objects
+      let bets = tailRows.map(t => t.bets);
+
+      // Filter by status if requested
+      if (status && status !== 'all') {
+        bets = bets.filter(b => b.status === status);
+      }
+
+      // Resolve display names for bet owners
+      const guild = discordClient?.guilds.cache.get(guildId);
+      const nameCache = {};
+      for (const bet of bets) {
+        if (!nameCache[bet.discord_id]) {
+          try {
+            if (guild) {
+              const member = await guild.members.fetch(bet.discord_id);
+              nameCache[bet.discord_id] = member.displayName;
+            }
+          } catch (e) {}
+          if (!nameCache[bet.discord_id]) nameCache[bet.discord_id] = bet.discord_id;
+        }
+      }
+
+      res.json(bets.map(b => formatBetForApi(b, nameCache[b.discord_id])));
+    } catch (err) {
+      console.error('[API] Tailed bets error:', err);
+      res.status(500).json({ error: 'Failed to fetch tailed bets' });
+    }
+  });
 
   // Get bets for a user (filterable) — admins can view all or specific users
   app.get('/api/guilds/:guildId/bets', authMiddleware, async (req, res) => {

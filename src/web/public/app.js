@@ -1054,6 +1054,28 @@ const STATUS_EMOJI = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void
 
 let betsInitialized = false;
 let betsGuildPerms = {};
+let currentBetsTab = 'my';
+
+function switchBetsTab(tab) {
+  currentBetsTab = tab;
+  document.querySelectorAll('.bets-toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+
+  // Show/hide filters that only apply to "My Bets"
+  const filtersOnly = document.querySelectorAll('#bets-user, #bets-sport, #bets-search');
+  filtersOnly.forEach(el => {
+    if (tab === 'tailed') el.classList.add('hidden');
+    else if (el.id === 'bets-user' && betsGuildPerms.isAdmin) el.classList.remove('hidden');
+    else if (el.id !== 'bets-user') el.classList.remove('hidden');
+  });
+
+  if (tab === 'tailed') {
+    loadTailedBets();
+  } else {
+    loadBets();
+  }
+}
 
 function initBetsPage() {
   if (betsInitialized) return;
@@ -1101,13 +1123,105 @@ function initBetsPage() {
       userSel.value = '';
     }
 
-    loadBets();
+    if (currentBetsTab === 'tailed') {
+      loadTailedBets();
+    } else {
+      loadBets();
+    }
   });
 
   if (currentUser.guilds.length > 0) {
     sel.value = currentUser.guilds[0].id;
     sel.dispatchEvent(new Event('change'));
   }
+}
+
+async function loadTailedBets() {
+  const guildId = document.getElementById('bets-guild').value;
+  if (!guildId) return;
+
+  const status = document.getElementById('bets-status').value;
+  const container = document.getElementById('bets-list');
+  container.innerHTML = '<p class="empty-state">Loading...</p>';
+
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/tailed-bets?${params}`);
+    const bets = await res.json();
+
+    if (!bets || bets.length === 0) {
+      container.innerHTML = '<p class="empty-state">You haven\'t tailed any bets in this server yet.</p>';
+      return;
+    }
+
+    container.innerHTML = '';
+    bets.forEach(bet => {
+      container.appendChild(renderTailedBetCard(bet));
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="empty-state" style="color:var(--text-danger)">Failed to load tailed bets.</p>';
+  }
+}
+
+function renderTailedBetCard(bet) {
+  const div = document.createElement('div');
+  div.className = `bet-card tailed-card status-${bet.status || 'open'}`;
+
+  const statusEmoji = STATUS_EMOJI[bet.status] || '🟡';
+  const sportName = bet.sportName || SPORT_NAMES[bet.sport] || bet.sport || '';
+  const wagerLabel = bet.wagerType ? (bet.wagerType.charAt(0).toUpperCase() + bet.wagerType.slice(1)) : '';
+  const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString() : '';
+  const isParlay = bet.betType === 'parlay';
+
+  let pickText = bet.pick || (isParlay ? 'Parlay' : '—');
+  let whaleHtml = bet.isWhale ? '<span class="bet-whale-badge">🐋</span>' : '';
+
+  // Parlay legs (read-only)
+  let legsHtml = '';
+  if (isParlay && bet.legs && bet.legs.length > 0) {
+    legsHtml = '<div class="bet-legs">' +
+      bet.legs.map((leg, i) => {
+        const legStatus = STATUS_EMOJI[leg.status] || '⬜';
+        const legSport = leg.sportName || leg.sport || '';
+        return `<div class="bet-leg">
+          <span class="bet-leg-status">${legStatus}</span>
+          <span class="bet-leg-num">Leg ${i + 1}</span>
+          <span class="bet-leg-pick">${leg.pick || '—'}</span>
+          <span class="bet-leg-sport">${legSport}</span>
+        </div>`;
+      }).join('') +
+    '</div>';
+  }
+
+  const oddsDisplay = bet.oddsAmerican || '—';
+  const unitsDisplay = bet.units || '—';
+  const slipDisplay = bet.slipNumber ? `<span>#${bet.slipNumber}</span>` : '';
+
+  div.innerHTML = `
+    <span class="bet-status-icon">${statusEmoji}</span>
+    <div class="bet-info">
+      <div class="bet-owner-row"><span class="bet-tailed-badge">🔗 Tailing ${bet.displayName || 'Unknown'}</span></div>
+      <div class="bet-pick-row">
+        <span class="bet-pick-text">${pickText}</span>
+        ${whaleHtml}
+      </div>
+      <div class="bet-meta">
+        <span>🏟️ ${sportName}</span>
+        <span>🎯 ${wagerLabel}</span>
+        <span>📅 ${date}</span>
+        ${slipDisplay}
+      </div>
+      ${legsHtml}
+    </div>
+    <div class="bet-odds-col">
+      <div class="bet-odds">${oddsDisplay >= 0 ? '+' : ''}${oddsDisplay}</div>
+      <div class="bet-units">${unitsDisplay}u</div>
+    </div>
+  `;
+
+  return div;
 }
 
 async function loadBets() {

@@ -1074,6 +1074,36 @@ textarea {
   font-weight: 800;
 }
 
+.bets-toggle {
+  display: inline-flex;
+  background: var(--bg-primary);
+  border-radius: 500px;
+  padding: 3px;
+  margin-top: 12px;
+  gap: 2px;
+}
+
+.bets-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 20px;
+  border-radius: 500px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.bets-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.bets-toggle-btn.active {
+  background: var(--accent);
+  color: #000;
+}
+
 .bets-controls {
   display: flex;
   align-items: flex-end;
@@ -1182,6 +1212,19 @@ textarea {
   background: rgba(29, 185, 84, 0.1);
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+.bet-tailed-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64b5f6;
+  background: rgba(100, 181, 246, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.tailed-card {
+  opacity: 0.95;
 }
 
 .bet-meta {
