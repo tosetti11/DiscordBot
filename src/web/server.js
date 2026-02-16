@@ -97,6 +97,9 @@ function createWebServer() {
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 
+  // Trust nginx reverse proxy (needed for rate limiting behind proxy)
+  app.set('trust proxy', 1);
+
   // ─── Security Headers (helmet) ───
   app.use(helmet({
     contentSecurityPolicy: {
