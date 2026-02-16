@@ -133,13 +133,15 @@ function setupEventListeners() {
     channelSelect.innerHTML = '<option value="" disabled selected>Loading...</option>';
     channelSelect.disabled = true;
 
-    // Fetch roles for this guild
-    try {
-      const rolesRes = await fetch(`/api/guilds/${guildSelect.value}/roles`);
-      guildPerms = await rolesRes.json();
-    } catch (e) {
-      guildPerms = { isAdmin: false, canWhale: false, roles: [] };
-    }
+    const guildId = guildSelect.value;
+
+    // Fetch roles and channels in parallel for speed
+    const [rolesData, channelsData] = await Promise.all([
+      fetch(`/api/guilds/${guildId}/roles`).then(r => r.json()).catch(() => ({ isAdmin: false, canWhale: false, roles: [] })),
+      fetch(`/api/guilds/${guildId}/channels`).then(r => r.json()).catch(() => []),
+    ]);
+
+    guildPerms = rolesData;
 
     // Show/hide whale toggle based on role
     const whaleToggle = document.querySelector('.whale-toggle-label')?.closest('.form-row');
@@ -153,10 +155,8 @@ function setupEventListeners() {
     if (behalfRow) {
       if (guildPerms.isAdmin) {
         behalfRow.classList.remove('hidden');
-        // Fetch guild members for the picker
-        try {
-          const membersRes = await fetch(`/api/guilds/${guildSelect.value}/members`);
-          const members = await membersRes.json();
+        // Fetch guild members in background (non-blocking)
+        fetch(`/api/guilds/${guildId}/members`).then(r => r.json()).then(members => {
           const behalfSelect = document.getElementById('behalf-select');
           behalfSelect.innerHTML = '<option value="">Myself</option>';
           members.forEach(m => {
@@ -165,21 +165,18 @@ function setupEventListeners() {
             opt.textContent = m.displayName;
             behalfSelect.appendChild(opt);
           });
-        } catch (e) {}
+        }).catch(() => {});
       } else {
         behalfRow.classList.add('hidden');
       }
     }
 
-    try {
-      const res = await fetch(`/api/guilds/${guildSelect.value}/channels`);
-      const channels = await res.json();
-
+    // Populate channels
+    if (channelsData.length > 0) {
       channelSelect.innerHTML = '<option value="" disabled selected>Select channel</option>';
       
-      // Group by category
       const grouped = {};
-      channels.forEach(c => {
+      channelsData.forEach(c => {
         const cat = c.category || 'General';
         if (!grouped[cat]) grouped[cat] = [];
         grouped[cat].push(c);
@@ -198,9 +195,8 @@ function setupEventListeners() {
       });
 
       channelSelect.disabled = false;
-    } catch (e) {
+    } else {
       channelSelect.innerHTML = '<option value="" disabled selected>Error loading channels</option>';
-      showToast('Failed to load channels');
     }
   });
 

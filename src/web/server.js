@@ -32,13 +32,20 @@ function setDiscordClient(client) {
 }
 
 /**
+ * Get a guild member, using cache first to avoid API calls
+ */
+async function fetchMember(guild, discordId) {
+  return guild.members.cache.get(discordId) || await guild.members.fetch(discordId);
+}
+
+/**
  * Get a member's role names (lowercase) in a guild
  */
 async function getMemberRoles(guildId, discordId) {
   try {
     const guild = discordClient?.guilds.cache.get(guildId);
     if (!guild) return [];
-    const member = await guild.members.fetch(discordId);
+    const member = await fetchMember(guild, discordId);
     return member.roles.cache.map(r => r.name.toLowerCase());
   } catch (e) {
     return [];
@@ -52,7 +59,7 @@ async function isAdminInGuild(guildId, discordId) {
   try {
     const guild = discordClient?.guilds.cache.get(guildId);
     if (!guild) return false;
-    const member = await guild.members.fetch(discordId);
+    const member = await fetchMember(guild, discordId);
     if (member.permissions.has('Administrator')) return true;
     const roleNames = member.roles.cache.map(r => r.name.toLowerCase());
     return ADMIN_ROLES.some(r => roleNames.includes(r));
@@ -68,7 +75,7 @@ async function canPlaceWhale(guildId, discordId) {
   try {
     const guild = discordClient?.guilds.cache.get(guildId);
     if (!guild) return false;
-    const member = await guild.members.fetch(discordId);
+    const member = await fetchMember(guild, discordId);
     if (member.permissions.has('Administrator')) return true;
     const roleNames = member.roles.cache.map(r => r.name.toLowerCase());
     return WHALE_ROLES.some(r => roleNames.includes(r));
@@ -224,7 +231,7 @@ function createWebServer() {
       if (!guild) return res.json({ roles: [], isAdmin: false, canWhale: false });
 
       try {
-        const member = await guild.members.fetch(req.user.discordId);
+        const member = await fetchMember(guild, req.user.discordId);
         const roleNames = member.roles.cache
           .filter(r => r.name !== '@everyone')
           .map(r => r.name);
@@ -255,7 +262,8 @@ function createWebServer() {
       const guild = discordClient?.guilds.cache.get(guildId);
       if (!guild) return res.json([]);
 
-      const members = await guild.members.fetch();
+      // Use cache (populated by GuildMembers intent) instead of fetching all from API
+      const members = guild.members.cache;
       const memberList = members
         .filter(m => !m.user.bot)
         .map(m => ({
@@ -524,7 +532,7 @@ function createWebServer() {
       if (guild) {
         for (const entry of leaderboard) {
           try {
-            const member = await guild.members.fetch(entry.discord_id);
+            const member = await fetchMember(guild, entry.discord_id);
             entry.discord_username = member.displayName;
           } catch (e) {}
         }
@@ -568,7 +576,7 @@ function createWebServer() {
         let name = id;
         try {
           if (guild) {
-            const member = await guild.members.fetch(id);
+            const member = await fetchMember(guild, id);
             name = member.displayName;
           }
         } catch (e) {}
@@ -619,7 +627,7 @@ function createWebServer() {
         if (!nameCache[bet.discord_id]) {
           try {
             if (guild) {
-              const member = await guild.members.fetch(bet.discord_id);
+              const member = await fetchMember(guild, bet.discord_id);
               nameCache[bet.discord_id] = member.displayName;
             }
           } catch (e) {}
@@ -676,7 +684,7 @@ function createWebServer() {
         if (!nameCache[bet.discord_id]) {
           try {
             if (guild) {
-              const member = await guild.members.fetch(bet.discord_id);
+              const member = await fetchMember(guild, bet.discord_id);
               nameCache[bet.discord_id] = member.displayName;
             }
           } catch (e) {}
@@ -1078,7 +1086,7 @@ function createWebServer() {
         const guild = discordClient?.guilds.cache.get(guildId);
         if (guild) {
           try {
-            const member = await guild.members.fetch(onBehalfOf);
+            const member = await fetchMember(guild, onBehalfOf);
             targetUsername = member.user.username;
             targetAvatar = member.user.displayAvatarURL({ size: 128 });
             targetDisplayName = member.displayName || member.user.username;
@@ -1101,7 +1109,7 @@ function createWebServer() {
       let displayName = targetDisplayName;
       if (guild && !onBehalfOf) {
         try {
-          const member = await guild.members.fetch(targetDiscordId);
+          const member = await fetchMember(guild, targetDiscordId);
           displayName = member.displayName || displayName;
         } catch (e) { /* use default */ }
       }
