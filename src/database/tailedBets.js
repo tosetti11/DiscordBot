@@ -149,4 +149,6 @@ module.exports = {
   getTailedBetsForUser,
   getTailStats,
   getWhaleTailStats,
+  getTailersInGuild,
+  getTailStatsInGuild,
 };

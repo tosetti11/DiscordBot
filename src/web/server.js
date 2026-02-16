@@ -361,7 +361,21 @@ function createWebServer() {
 
       const { data: bets, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
-      if (!bets || bets.length === 0) return res.json({ empty: true });
+
+      // If user has no bets, check if they have tail stats
+      if (!bets || bets.length === 0) {
+        let tailStats = null;
+        try { tailStats = await tailedBetsDb.getTailStatsInGuild(targetDiscordId, guildId); } catch (e) {}
+        if (tailStats) {
+          // Return tail-only stats
+          return res.json({
+            tailOnly: true,
+            overview: { total: 0, open: 0, wins: 0, losses: 0, pushes: 0, winPct: 0, netUnits: 0, unitsWagered: 0, roi: 0 },
+            tailStats,
+          });
+        }
+        return res.json({ empty: true });
+      }
 
       // Overview
       const overall = calcStats(bets);
@@ -537,7 +551,16 @@ function createWebServer() {
         .eq('guild_id', guildId);
 
       if (error) throw error;
-      const uniqueIds = [...new Set((data || []).map(b => b.discord_id))];
+      const betUserIds = [...new Set((data || []).map(b => b.discord_id))];
+
+      // Also get tailers in this guild (users who tailed but may not have placed bets)
+      let tailerIds = [];
+      try {
+        tailerIds = await tailedBetsDb.getTailersInGuild(guildId);
+      } catch (e) {}
+
+      // Merge unique IDs
+      const uniqueIds = [...new Set([...betUserIds, ...tailerIds])];
 
       const guild = discordClient?.guilds.cache.get(guildId);
       const users = [];

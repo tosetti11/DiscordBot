@@ -765,6 +765,13 @@ async function loadStats() {
       return;
     }
 
+    if (data.tailOnly) {
+      // User only has tail stats, no placed bets
+      document.getElementById('stats-content').classList.remove('hidden');
+      renderTailOnlyStats(data);
+      return;
+    }
+
     document.getElementById('stats-content').classList.remove('hidden');
     renderStats(data);
   } catch (err) {
@@ -780,6 +787,63 @@ function fmtU(v) {
 
 function fmtNet(v) {
   return `${v >= 0 ? '+' : ''}${fmtU(v)}u`;
+}
+
+function renderTailOnlyStats(data) {
+  const t = data.tailStats;
+
+  // Set KPIs to tail data
+  document.getElementById('kpi-record').textContent = `${t.tail_wins}W-${t.tail_losses}L-${t.tail_pushes}P`;
+  setKPI('kpi-winpct', `${t.tail_win_pct}%`);
+  setKPI('kpi-net', fmtNet(t.tail_net_units), t.tail_net_units);
+  setKPI('kpi-roi', '—');
+  document.getElementById('kpi-total').textContent = t.total_tails;
+  document.getElementById('kpi-open').textContent = t.open_tails;
+
+  // Highlights — show tail context
+  const streakEl = document.getElementById('hl-streak');
+  streakEl.textContent = '—';
+  streakEl.className = 'highlight-value';
+  document.getElementById('hl-avg-odds').textContent = '—';
+  document.getElementById('hl-avg-units').textContent = '—';
+  document.getElementById('hl-wagered').textContent = '—';
+
+  // Best / Worst
+  const bestEl = document.getElementById('hl-best');
+  const worstEl = document.getElementById('hl-worst');
+  bestEl.textContent = '—';
+  bestEl.className = 'highlight-value';
+  document.getElementById('hl-best-detail').textContent = '';
+  worstEl.textContent = '—';
+  worstEl.className = 'highlight-value';
+  document.getElementById('hl-worst-detail').textContent = '';
+
+  // Show tail section prominently
+  const tailSec = document.getElementById('tail-section');
+  tailSec.classList.remove('hidden');
+  document.getElementById('tail-breakdown').innerHTML = `
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">This user has only tailed bets — no bets placed directly.</p>
+    <div class="breakdown-row">
+      <span class="breakdown-name">🔗 Tails (${t.total_tails})</span>
+      <div class="breakdown-bar-wrap">
+        <div class="breakdown-bar ${t.tail_win_pct >= 50 ? 'green' : 'red'}" style="width:${t.tail_win_pct}%"></div>
+      </div>
+      <span class="breakdown-stats">
+        ${t.tail_wins}W-${t.tail_losses}L-${t.tail_pushes}P | ${t.tail_win_pct}% |
+        <span class="breakdown-net ${t.tail_net_units >= 0 ? 'positive' : 'negative'}">${fmtNet(t.tail_net_units)}</span>
+      </span>
+    </div>
+  `;
+
+  // Hide sections that don't apply
+  renderBreakdown('bet-type-breakdown', [], 0);
+  renderBreakdown('sport-breakdown', [], 0);
+  renderBreakdown('wager-breakdown', [], 0);
+  document.getElementById('whale-section').classList.add('hidden');
+
+  // Clear P&L and recent
+  document.getElementById('pnl-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No bets placed</td></tr>';
+  document.getElementById('recent-bets').innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted);">No bets placed — tail record only</div>';
 }
 
 function renderStats(data) {
