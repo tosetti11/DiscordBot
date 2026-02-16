@@ -88,6 +88,9 @@ function showApp() {
     guildSelect.appendChild(opt);
   });
 
+  // Auto-select if only one guild
+  autoSelectGuild(guildSelect);
+
   // Populate sports
   const sportSelect = document.getElementById('sport-select');
   SPORTS.forEach(s => {
@@ -99,6 +102,22 @@ function showApp() {
 
   // Event listeners
   setupEventListeners();
+}
+
+// Auto-select and hide guild selector when user only has one guild
+function autoSelectGuild(selectEl) {
+  if (currentUser.guilds.length === 1) {
+    selectEl.value = currentUser.guilds[0].id;
+    // Hide just this select element (and its label if in a form-group)
+    const formGroup = selectEl.closest('.form-group');
+    if (formGroup) {
+      formGroup.style.display = 'none';
+    } else {
+      selectEl.style.display = 'none';
+    }
+    // Fire change event so dependent data loads
+    setTimeout(() => selectEl.dispatchEvent(new Event('change')), 0);
+  }
 }
 
 function setupEventListeners() {
@@ -705,15 +724,7 @@ function initStatsPage() {
     statsGuild.appendChild(opt);
   });
 
-  // Auto-select first guild
-  if (currentUser.guilds.length > 0) {
-    statsGuild.value = currentUser.guilds[0].id;
-    loadStatsUsers(currentUser.guilds[0].id);
-    loadStats();
-    loadLeaderboard();
-  }
-
-  // Events
+  // Events (register before autoSelectGuild so change event fires correctly)
   statsGuild.addEventListener('change', () => {
     loadStatsUsers(statsGuild.value);
     loadStats();
@@ -722,6 +733,14 @@ function initStatsPage() {
 
   document.getElementById('stats-period').addEventListener('change', loadStats);
   document.getElementById('stats-user').addEventListener('change', loadStats);
+
+  // Auto-select and hide if single guild, otherwise select first
+  if (currentUser.guilds.length === 1) {
+    autoSelectGuild(statsGuild);
+  } else if (currentUser.guilds.length > 1) {
+    statsGuild.value = currentUser.guilds[0].id;
+    statsGuild.dispatchEvent(new Event('change'));
+  }
 }
 
 async function loadStatsUsers(guildId) {
@@ -1130,7 +1149,10 @@ function initBetsPage() {
     }
   });
 
-  if (currentUser.guilds.length > 0) {
+  // Auto-select: single guild hides picker, multi-guild selects first
+  if (currentUser.guilds.length === 1) {
+    autoSelectGuild(sel);
+  } else if (currentUser.guilds.length > 1) {
     sel.value = currentUser.guilds[0].id;
     sel.dispatchEvent(new Event('change'));
   }
@@ -1562,7 +1584,10 @@ function initRemindersPage() {
     loadReminders();
   });
 
-  if (currentUser.guilds.length > 0) {
+  // Auto-select: single guild hides picker, multi-guild selects first
+  if (currentUser.guilds.length === 1) {
+    autoSelectGuild(sel);
+  } else if (currentUser.guilds.length > 1) {
     sel.value = currentUser.guilds[0].id;
     sel.dispatchEvent(new Event('change'));
   }
