@@ -51,6 +51,9 @@ async function execute(interaction) {
       label = `Parlay (${bet.parlay_legs?.length || '?'} legs)`;
     } else if (bet.bet_category === 'team_game') {
       label = `${bet.team_a} vs ${bet.team_b}`;
+    } else if (bet.bet_category === 'futures') {
+      const parts = bet.pick ? bet.pick.split(': ') : [bet.pick];
+      label = parts.length > 1 ? `🏆 ${parts[0]} — ${parts.slice(1).join(': ')}` : `🏆 ${bet.pick}`;
     } else {
       label = `${bet.player_name} - ${bet.pick}`;
     }
@@ -122,6 +125,12 @@ function buildDashboardContent(session) {
     if (leg.bet_category === 'team_game') {
       content += `   ${sport}: ${leg.team_a} vs ${leg.team_b}\n`;
       content += `   Pick: **${leg.pick}**\n`;
+    } else if (leg.bet_category === 'futures') {
+      const parts = leg.pick ? leg.pick.split(': ') : [leg.pick];
+      const market = parts.length > 1 ? parts[0] : 'Futures';
+      const selection = parts.length > 1 ? parts.slice(1).join(': ') : leg.pick;
+      content += `   ${sport}: 🏆 ${market}\n`;
+      content += `   Pick: **${selection}**\n`;
     } else {
       content += `   ${sport}: ${leg.player_name}\n`;
       content += `   Pick: **${leg.pick}**\n`;
@@ -209,6 +218,12 @@ async function handleLegSelect(interaction) {
   if (leg.bet_category === 'team_game') {
     desc += `${sport}: ${leg.team_a} vs ${leg.team_b}\n`;
     desc += `Pick: **${leg.pick}**`;
+  } else if (leg.bet_category === 'futures') {
+    const parts = leg.pick ? leg.pick.split(': ') : [leg.pick];
+    const market = parts.length > 1 ? parts[0] : 'Futures';
+    const selection = parts.length > 1 ? parts.slice(1).join(': ') : leg.pick;
+    desc += `${sport}: 🏆 ${market}\n`;
+    desc += `Pick: **${selection}**`;
   } else {
     desc += `${sport}: ${leg.player_name}\n`;
     desc += `Pick: **${leg.pick}**`;

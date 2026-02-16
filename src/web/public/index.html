@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FadeKing | Bet Slip</title>
+  <link rel="stylesheet" href="/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="login-screen" class="screen">
+    <div class="login-card">
+      <div class="login-logo">👑</div>
+      <h1>FadeKing</h1>
+      <p class="login-subtitle">Sports Betting Tracker</p>
+      <a href="/auth/login" class="btn btn-discord">
+        <svg width="20" height="15" viewBox="0 0 71 55" fill="currentColor"><path d="M60.1 4.9A58.5 58.5 0 0045.4.2a.2.2 0 00-.2.1 40.8 40.8 0 00-1.8 3.7 54 54 0 00-16.2 0A37.4 37.4 0 0025.4.3a.2.2 0 00-.2-.1A58.4 58.4 0 0010.5 5 59.6 59.6 0 00.4 45.1a.3.3 0 00.1.2 58.7 58.7 0 0017.7 9 .2.2 0 00.3-.1 42 42 0 003.6-5.9.2.2 0 00-.1-.3 38.7 38.7 0 01-5.5-2.6.2.2 0 01 0-.4l1.1-.9a.2.2 0 01.2 0 41.8 41.8 0 0035.6 0 .2.2 0 01.2 0l1.1.9a.2.2 0 010 .4 36.4 36.4 0 01-5.5 2.6.2.2 0 00-.1.3 47.2 47.2 0 003.6 5.9.2.2 0 00.3.1 58.5 58.5 0 0017.7-9 .3.3 0 00.1-.2c1.5-15.5-2.5-29-10.5-40.2zM23.7 37c-3.5 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.2 6.3 7-2.8 7-6.3 7zm23.2 0c-3.5 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.2 6.3 7-2.8 7-6.3 7z"/></svg>
+        Sign in with Discord
+      </a>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app-screen" class="screen hidden">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="header-logo">👑</span>
+        <span class="header-title">FadeKing</span>
+        <nav class="header-nav">
+          <a href="#" class="nav-link active" data-page="slip" onclick="switchPage('slip')">🎟️ Slip</a>
+          <a href="#" class="nav-link" data-page="bets" onclick="switchPage('bets')">📋 Bets</a>
+          <a href="#" class="nav-link" data-page="stats" onclick="switchPage('stats')">📊 Stats</a>
+          <a href="#" class="nav-link" data-page="reminders" onclick="switchPage('reminders')">⏰ Reminders</a>
+          <a href="#" class="nav-link" data-page="tools" onclick="switchPage('tools')">🔧 Tools</a>
+        </nav>
+      </div>
+      <div class="header-right">
+        <div class="user-info">
+          <img id="user-avatar" class="user-avatar" src="" alt="">
+          <span id="user-name" class="user-name"></span>
+        </div>
+        <a href="/auth/logout" class="btn-logout">Logout</a>
+      </div>
+    </header>
+
+    <!-- Bet Slip Form -->
+    <main id="slip-page" class="main-content">
+      <div class="slip-container">
+        <div class="slip-header">
+          <h2>🎟️ New Bet Slip</h2>
+          <p class="slip-subtitle">Fill out your bet details below</p>
+        </div>
+
+        <form id="bet-form" autocomplete="off">
+          <!-- Row: Server + Channel -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="guild-select">Server</label>
+              <select id="guild-select" required>
+                <option value="" disabled selected>Select server</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="channel-select">Channel</label>
+              <select id="channel-select" required disabled>
+                <option value="" disabled selected>Select channel</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Row: Bet Type + Sport -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="bet-type">Bet Type</label>
+              <select id="bet-type" required>
+                <option value="single" selected>Single Bet</option>
+                <option value="parlay">Parlay</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="sport-select">Sport</label>
+              <select id="sport-select" required>
+                <option value="" disabled selected>Select sport</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Parlay legs count (hidden by default) -->
+          <div id="parlay-count-row" class="form-row hidden">
+            <div class="form-group">
+              <label for="parlay-legs-count">Number of Legs</label>
+              <select id="parlay-legs-count">
+                <option value="2">2 Legs</option>
+                <option value="3">3 Legs</option>
+                <option value="4">4 Legs</option>
+                <option value="5">5 Legs</option>
+                <option value="6">6 Legs</option>
+                <option value="7">7 Legs</option>
+                <option value="8">8 Legs</option>
+                <option value="9">9 Legs</option>
+                <option value="10">10 Legs</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Single bet fields -->
+          <div id="single-fields">
+            <!-- Bet Category -->
+            <div class="form-row">
+              <div class="form-group">
+                <label for="bet-category">Category</label>
+                <select id="bet-category" required>
+                  <option value="" disabled selected>Select category</option>
+                  <option value="team_game">🏟️ Team Game</option>
+                  <option value="player_prop">🏀 Player Prop</option>
+                  <option value="futures">🏆 Futures</option>
+                </select>
+              </div>
+              <div class="form-group" id="wager-type-group">
+                <label for="wager-type">Wager Type</label>
+                <select id="wager-type" required>
+                  <option value="" disabled selected>Select wager</option>
+                  <option value="moneyline">💰 Moneyline</option>
+                  <option value="spread">📊 Spread</option>
+                  <option value="total">🔢 Over/Under</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Over/Under selector -->
+            <div id="over-under-row" class="form-row hidden">
+              <div class="form-group">
+                <label>Direction</label>
+                <div class="toggle-group">
+                  <button type="button" class="toggle-btn active" data-value="Over">⬆️ Over</button>
+                  <button type="button" class="toggle-btn" data-value="Under">⬇️ Under</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Team Game fields -->
+            <div id="team-fields" class="dynamic-fields hidden">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="team-a">Team A (your pick)</label>
+                  <input type="text" id="team-a" placeholder="e.g. Duke" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="team-b">Team B (opponent)</label>
+                  <input type="text" id="team-b" placeholder="e.g. UNC" maxlength="100">
+                </div>
+              </div>
+              <div id="spread-line-row" class="form-row hidden">
+                <div class="form-group">
+                  <label for="spread-value" id="spread-label">Spread</label>
+                  <input type="text" id="spread-value" placeholder="e.g. -1.5, +3" maxlength="10">
+                </div>
+              </div>
+            </div>
+
+            <!-- Player Prop fields -->
+            <div id="prop-fields" class="dynamic-fields hidden">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="player-name">Player Name</label>
+                  <input type="text" id="player-name" placeholder="e.g. LeBron James" maxlength="100">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group full-width">
+                  <label for="prop-desc">Prop Description</label>
+                  <input type="text" id="prop-desc" placeholder="e.g. Over 25.5 Points" maxlength="200">
+                </div>
+              </div>
+            </div>
+
+            <!-- Futures fields -->
+            <div id="futures-fields" class="dynamic-fields hidden">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="futures-market">Market</label>
+                  <input type="text" id="futures-market" placeholder="e.g. Super Bowl LIX Winner" maxlength="200">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="futures-selection">Selection / Pick</label>
+                  <input type="text" id="futures-selection" placeholder="e.g. Chiefs, Jokic" maxlength="100">
+                </div>
+              </div>
+            </div>
+
+            <!-- Odds + Units -->
+            <div class="form-row">
+              <div class="form-group">
+                <label for="odds">Odds (American)</label>
+                <input type="text" id="odds" placeholder="e.g. -110, +150" maxlength="20" required>
+              </div>
+              <div class="form-group">
+                <label for="units">Units</label>
+                <input type="text" id="units" placeholder="e.g. 1, 2, 5" maxlength="10" required>
+              </div>
+            </div>
+
+            <!-- Game Time -->
+            <div class="form-row">
+              <div class="form-group">
+                <label for="event-time">Game Start Time <span class="optional">(optional)</span></label>
+                <div class="datetime-input-wrap">
+                  <input type="text" id="event-time" placeholder="e.g. Sun 1:00 PM ET" maxlength="50">
+                  <input type="datetime-local" id="event-time-picker" class="datetime-picker-hidden">
+                  <button type="button" class="btn-calendar" onclick="document.getElementById('event-time-picker').showPicker()" title="Pick date & time">📅</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Note -->
+            <div class="form-row">
+              <div class="form-group full-width">
+                <label for="bet-note">Note <span class="optional">(optional)</span></label>
+                <textarea id="bet-note" placeholder="e.g. Sharp line movement, tail with caution" maxlength="500" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Parlay legs container -->
+          <div id="parlay-legs-container" class="hidden"></div>
+
+          <!-- Parlay total odds + units (shown for parlays) -->
+          <div id="parlay-totals" class="hidden">
+            <div class="section-divider">
+              <span>Parlay Totals</span>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="parlay-odds">Total Parlay Odds</label>
+                <input type="text" id="parlay-odds" placeholder="e.g. +650" maxlength="20">
+              </div>
+              <div class="form-group">
+                <label for="parlay-units">Units</label>
+                <input type="text" id="parlay-units" placeholder="e.g. 1, 2, 5" maxlength="10">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group full-width">
+                <label for="parlay-note">Note <span class="optional">(optional)</span></label>
+                <textarea id="parlay-note" placeholder="e.g. Feeling lucky" maxlength="500" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Whale toggle -->
+          <div class="form-row">
+            <div class="form-group">
+              <label class="whale-toggle-label">
+                <input type="checkbox" id="is-whale">
+                <span class="whale-toggle-text">🐋 Whale Dick Bet</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <button type="submit" class="btn btn-submit" id="submit-btn">
+            <span class="btn-text">Place Bet 🎰</span>
+            <span class="btn-loading hidden">Placing...</span>
+          </button>
+        </form>
+
+        <!-- Success message -->
+        <div id="success-msg" class="success-card hidden">
+          <div class="success-icon">✅</div>
+          <h3>Bet Placed!</h3>
+          <p id="success-detail"></p>
+          <button class="btn btn-new" onclick="resetForm()">Place Another Bet</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Stats Dashboard -->
+    <main id="stats-page" class="main-content hidden">
+      <div class="stats-container">
+        <div class="stats-header">
+          <h2>📊 Statistics Dashboard</h2>
+          <p class="slip-subtitle">Dive deep into your betting performance</p>
+        </div>
+
+        <!-- Controls -->
+        <div class="stats-controls">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="stats-guild">Server</label>
+              <select id="stats-guild">
+                <option value="" disabled selected>Select server</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="stats-user">User</label>
+              <select id="stats-user">
+                <option value="" selected>Me</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="stats-period">Period</label>
+              <select id="stats-period">
+                <option value="all" selected>All Time</option>
+                <option value="last24h">Last 24 Hours</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="stats-loading" class="stats-loading hidden">
+          <div class="loading-spinner"></div>
+          <p>Loading stats...</p>
+        </div>
+
+        <!-- Empty state -->
+        <div id="stats-empty" class="stats-empty hidden">
+          <div class="empty-icon">📭</div>
+          <p>No bets found for this selection.</p>
+        </div>
+
+        <!-- Stats Content -->
+        <div id="stats-content" class="hidden">
+          <!-- KPI Cards Row -->
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label">Record</div>
+              <div class="kpi-value" id="kpi-record">—</div>
+            </div>
+            <div class="kpi-card accent">
+              <div class="kpi-label">Win %</div>
+              <div class="kpi-value" id="kpi-winpct">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Net Units</div>
+              <div class="kpi-value" id="kpi-net">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">ROI</div>
+              <div class="kpi-value" id="kpi-roi">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Total Bets</div>
+              <div class="kpi-value" id="kpi-total">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Open</div>
+              <div class="kpi-value" id="kpi-open">—</div>
+            </div>
+          </div>
+
+          <!-- Streak + Highlights Row -->
+          <div class="highlights-row">
+            <div class="highlight-card" id="streak-card">
+              <div class="highlight-label">Current Streak</div>
+              <div class="highlight-value" id="hl-streak">—</div>
+            </div>
+            <div class="highlight-card" id="avg-odds-card">
+              <div class="highlight-label">Avg Odds</div>
+              <div class="highlight-value" id="hl-avg-odds">—</div>
+            </div>
+            <div class="highlight-card" id="avg-units-card">
+              <div class="highlight-label">Avg Units</div>
+              <div class="highlight-value" id="hl-avg-units">—</div>
+            </div>
+            <div class="highlight-card" id="wagered-card">
+              <div class="highlight-label">Units Wagered</div>
+              <div class="highlight-value" id="hl-wagered">—</div>
+            </div>
+          </div>
+
+          <!-- Best / Worst -->
+          <div class="highlights-row">
+            <div class="highlight-card best">
+              <div class="highlight-label">💰 Best Bet</div>
+              <div class="highlight-value" id="hl-best">—</div>
+              <div class="highlight-sub" id="hl-best-detail"></div>
+            </div>
+            <div class="highlight-card worst">
+              <div class="highlight-label">💸 Worst Bet</div>
+              <div class="highlight-value" id="hl-worst">—</div>
+              <div class="highlight-sub" id="hl-worst-detail"></div>
+            </div>
+          </div>
+
+          <!-- Singles vs Parlays -->
+          <div class="stats-section">
+            <h3 class="section-title">🎰 Bet Type Breakdown</h3>
+            <div class="breakdown-grid" id="bet-type-breakdown"></div>
+          </div>
+
+          <!-- By Sport -->
+          <div class="stats-section">
+            <h3 class="section-title">🏟️ By Sport</h3>
+            <div class="breakdown-grid" id="sport-breakdown"></div>
+          </div>
+
+          <!-- By Wager Type -->
+          <div class="stats-section">
+            <h3 class="section-title">🎯 By Wager Type</h3>
+            <div class="breakdown-grid" id="wager-breakdown"></div>
+          </div>
+
+          <!-- Whale Stats -->
+          <div class="stats-section" id="whale-section">
+            <h3 class="section-title">🐋 Whale Dick Stats</h3>
+            <div class="breakdown-grid" id="whale-breakdown"></div>
+          </div>
+
+          <!-- Tail Stats -->
+          <div class="stats-section" id="tail-section">
+            <h3 class="section-title">🔗 Tailing Stats</h3>
+            <div class="breakdown-grid" id="tail-breakdown"></div>
+          </div>
+
+          <!-- Daily P&L Chart (text-based) -->
+          <div class="stats-section">
+            <h3 class="section-title">📈 Daily P&L</h3>
+            <div class="pnl-table-wrap">
+              <table class="pnl-table" id="pnl-table">
+                <thead>
+                  <tr><th>Date</th><th>Bets</th><th>W</th><th>L</th><th>Net</th></tr>
+                </thead>
+                <tbody id="pnl-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Recent Bets -->
+          <div class="stats-section">
+            <h3 class="section-title">🕐 Recent Bets</h3>
+            <div class="recent-bets-list" id="recent-bets"></div>
+          </div>
+
+          <!-- Leaderboard -->
+          <div class="stats-section">
+            <h3 class="section-title">🏆 Leaderboard</h3>
+            <div class="leaderboard-list" id="leaderboard-list"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- My Bets Page -->
+    <main id="bets-page" class="main-content hidden">
+      <div class="bets-container">
+        <div class="bets-header">
+          <h2>📋 My Bets</h2>
+          <p class="slip-subtitle">View, close, edit, or delete your bets</p>
+        </div>
+
+        <!-- Filters -->
+        <div class="bets-controls">
+          <div class="bets-filters">
+            <select id="bets-guild" class="form-select filter-select">
+              <option value="">Server</option>
+            </select>
+            <select id="bets-status" class="form-select filter-select">
+              <option value="">All Statuses</option>
+              <option value="open">🟡 Open</option>
+              <option value="win">✅ Win</option>
+              <option value="loss">❌ Loss</option>
+              <option value="push">🔄 Push</option>
+            </select>
+            <select id="bets-sport" class="form-select filter-select">
+              <option value="">All Sports</option>
+              <option value="nfl">NFL</option>
+              <option value="nba">NBA</option>
+              <option value="mlb">MLB</option>
+              <option value="nhl">NHL</option>
+              <option value="ncaa_football">NCAA Football</option>
+              <option value="ncaa_mbb">NCAA MBB</option>
+              <option value="ncaa_wbb">NCAA WBB</option>
+              <option value="mls">MLS</option>
+              <option value="epl">Premier League</option>
+              <option value="la_liga">La Liga</option>
+              <option value="ucl">Champions League</option>
+              <option value="ufc">UFC / MMA</option>
+              <option value="boxing">Boxing</option>
+              <option value="tennis">Tennis</option>
+              <option value="golf">Golf</option>
+              <option value="nascar">NASCAR</option>
+              <option value="wnba">WNBA</option>
+              <option value="esports">Esports</option>
+              <option value="other">Other</option>
+            </select>
+            <input type="text" id="bets-search" class="form-input filter-search" placeholder="Search pick or note...">
+          </div>
+          <button class="btn btn-accent" onclick="loadBets()">🔍 Search</button>
+        </div>
+
+        <!-- Bet List -->
+        <div id="bets-list" class="bets-list">
+          <p class="empty-state">Select a server and click Search to view bets.</p>
+        </div>
+      </div>
+
+      <!-- Edit Bet Modal -->
+      <div id="edit-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3>✏️ Edit Bet</h3>
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+          </div>
+          <form id="edit-form" onsubmit="submitEditBet(event)">
+            <input type="hidden" id="edit-bet-id">
+            <div class="form-group">
+              <label for="edit-odds">Odds</label>
+              <input type="text" id="edit-odds" class="form-input" placeholder="e.g. -110">
+            </div>
+            <div class="form-group">
+              <label for="edit-units">Units</label>
+              <input type="text" id="edit-units" class="form-input" placeholder="e.g. 2">
+            </div>
+            <div class="form-group">
+              <label for="edit-pick">Pick</label>
+              <input type="text" id="edit-pick" class="form-input" placeholder="e.g. Chiefs -3">
+            </div>
+            <div class="form-group">
+              <label for="edit-note">Note</label>
+              <input type="text" id="edit-note" class="form-input" placeholder="Optional note">
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+              <button type="submit" class="btn btn-accent">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Confirm Modal -->
+      <div id="confirm-modal" class="modal-overlay hidden">
+        <div class="modal-card modal-sm">
+          <div class="modal-header">
+            <h3 id="confirm-title">Confirm</h3>
+          </div>
+          <p id="confirm-message" class="confirm-msg"></p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+            <button id="confirm-action-btn" class="btn btn-danger">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Reminders Page -->
+    <main id="reminders-page" class="main-content hidden">
+      <div class="reminders-container">
+        <div class="reminders-header">
+          <h2>⏰ Reminders</h2>
+          <p class="slip-subtitle">Create, view, and cancel scheduled reminders</p>
+        </div>
+
+        <div class="reminders-layout">
+          <!-- Create Form -->
+          <div class="reminder-create-card">
+            <h3 class="card-title">📝 Create Reminder</h3>
+            <form id="reminder-form" onsubmit="submitReminder(event)">
+              <div class="form-group">
+                <label for="reminder-guild">Server</label>
+                <select id="reminder-guild" class="form-select" onchange="loadReminderChannels()" required>
+                  <option value="">Select server...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="reminder-channel">Channel</label>
+                <select id="reminder-channel" class="form-select" required>
+                  <option value="">Select channel...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="reminder-type">Type</label>
+                <select id="reminder-type" class="form-select" required>
+                  <option value="">Select type...</option>
+                  <option value="game">🏟️ Game Reminder</option>
+                  <option value="whale">🐋 Whale Dick Alert</option>
+                  <option value="lock">🔒 Lock of the Day</option>
+                  <option value="window">⏰ Betting Window</option>
+                  <option value="recap">📊 Daily Recap</option>
+                  <option value="promo">🎉 Promo / Announcement</option>
+                  <option value="custom">📝 Custom</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="reminder-message">Message</label>
+                <textarea id="reminder-message" class="form-input form-textarea" rows="3" placeholder="What should the reminder say?" required></textarea>
+              </div>
+              <div class="form-group">
+                <label for="reminder-time">When</label>
+                <div class="datetime-row">
+                  <input type="text" id="reminder-time" class="form-input" placeholder='e.g. "in 2h", "tomorrow 9pm"' required readonly>
+                  <input type="datetime-local" id="reminder-datetime" class="hidden-datetime">
+                  <button type="button" class="btn-calendar" onclick="openReminderCalendar()">📅</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="reminder-repeat">Repeat</label>
+                <select id="reminder-repeat" class="form-select">
+                  <option value="none">One-time</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-accent btn-block">Create Reminder</button>
+            </form>
+            <div id="reminder-success" class="success-inline hidden">✅ Reminder created!</div>
+          </div>
+
+          <!-- Active Reminders List -->
+          <div class="reminder-list-card">
+            <div class="reminder-list-header">
+              <h3 class="card-title">📋 Active Reminders</h3>
+              <button class="btn btn-sm btn-secondary" onclick="loadReminders()">🔄 Refresh</button>
+            </div>
+            <div id="reminders-list" class="reminders-list">
+              <p class="empty-state">Select a server to view reminders.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Tools Page (Odds Converter + Help) -->
+    <main id="tools-page" class="main-content hidden">
+      <div class="tools-container">
+        <div class="tools-header">
+          <h2>🔧 Tools</h2>
+          <p class="slip-subtitle">Handy betting utilities</p>
+        </div>
+
+        <div class="tools-layout">
+          <!-- Odds Converter -->
+          <div class="tool-card">
+            <h3 class="card-title">🔄 Odds Converter</h3>
+            <form id="odds-form" onsubmit="convertOdds(event)">
+              <div class="form-group">
+                <label for="odds-format">Format</label>
+                <select id="odds-format" class="form-select">
+                  <option value="american">American → Decimal</option>
+                  <option value="decimal">Decimal → American</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="odds-input">Odds</label>
+                <input type="text" id="odds-input" class="form-input" placeholder="e.g. -110 or 1.91" required>
+              </div>
+              <button type="submit" class="btn btn-accent btn-block">Convert</button>
+            </form>
+            <div id="odds-result" class="odds-result hidden">
+              <div class="odds-result-row">
+                <span class="odds-label">American</span>
+                <span id="result-american" class="odds-value"></span>
+              </div>
+              <div class="odds-result-row">
+                <span class="odds-label">Decimal</span>
+                <span id="result-decimal" class="odds-value"></span>
+              </div>
+              <div class="odds-result-row">
+                <span class="odds-label">Implied Probability</span>
+                <span id="result-probability" class="odds-value"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Reference -->
+          <div class="tool-card">
+            <h3 class="card-title">📚 Quick Reference</h3>
+            <div class="reference-grid">
+              <div class="ref-section">
+                <h4>Wager Types</h4>
+                <ul class="ref-list">
+                  <li><strong>Moneyline</strong> — Pick the winner</li>
+                  <li><strong>Spread</strong> — Point spread bet</li>
+                  <li><strong>Over/Under</strong> — Total points</li>
+                  <li><strong>Player Prop</strong> — Individual player stats</li>
+                  <li><strong>Futures</strong> — Long-term outcome</li>
+                </ul>
+              </div>
+              <div class="ref-section">
+                <h4>Bet Types</h4>
+                <ul class="ref-list">
+                  <li><strong>Straight</strong> — Single bet</li>
+                  <li><strong>Parlay</strong> — Multiple legs combined</li>
+                  <li><strong>🐋 Whale Dick</strong> — High-confidence whale play</li>
+                </ul>
+              </div>
+              <div class="ref-section">
+                <h4>Status Icons</h4>
+                <ul class="ref-list">
+                  <li>🟡 Open — Pending result</li>
+                  <li>✅ Win — Bet won</li>
+                  <li>❌ Loss — Bet lost</li>
+                  <li>🔄 Push — Refunded</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

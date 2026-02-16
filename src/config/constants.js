@@ -60,6 +60,7 @@ module.exports = {
     spread: 'Spread',
     total: 'Over/Under',
     prop: 'Player Prop',
+    futures: 'Futures',
   },
 
   // Colors for embeds

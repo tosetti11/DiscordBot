@@ -146,6 +146,7 @@ async function handleBetTypeSelect(interaction) {
   const existingSession = betSessions.get(userId);
   const targetUser = existingSession?.targetUser || null;
   const isWhale = existingSession?.isWhale || false;
+  const isRetro = existingSession?.isRetro || false;
 
   betSessions.set(userId, {
     betType,
@@ -153,6 +154,7 @@ async function handleBetTypeSelect(interaction) {
     currentLeg: 0,
     targetUser,
     isWhale,
+    isRetro,
   });
 
   if (betType === 'parlay') {
@@ -203,6 +205,7 @@ async function askBetCategory(interaction, context) {
       .addOptions([
         { label: 'Team Game', value: 'team_game', description: 'Moneyline, spread, or total', emoji: '🏟️' },
         { label: 'Player Prop', value: 'player_prop', description: 'Over/under on a player stat', emoji: '🏀' },
+        { label: 'Futures', value: 'futures', description: 'Championship, MVP, season wins', emoji: '🏆' },
       ])
   );
 
@@ -256,6 +259,9 @@ async function handleSportSelect(interaction) {
   if (session.currentCategory === 'player_prop') {
     // Player props skip wager type — go straight to modal
     await showPlayerPropModal(interaction, session);
+  } else if (session.currentCategory === 'futures') {
+    // Futures skip wager type — go straight to modal
+    await showFuturesModal(interaction, session);
   } else {
     // Team game — ask wager type
     const prefix = session.betType === 'parlay'
@@ -390,26 +396,20 @@ async function showTeamGameModal(interaction, session) {
     fields.push(new ActionRowBuilder().addComponents(totalInput));
   }
 
-  // Add odds field only for single bets — parlays get total odds at the end
-  if (session.betType !== 'parlay') {
+  if (session.betType === 'parlay') {
+    // Parlay legs: add event start time (no odds/units per leg — plenty of room)
+    const startTimeInput = new TextInputBuilder()
+      .setCustomId('event_start_time')
+      .setLabel('Game Start Time (optional)')
+      .setPlaceholder('e.g. Sun 1:00 PM ET, 7:30 PM EST')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setMaxLength(50);
+    fields.push(new ActionRowBuilder().addComponents(startTimeInput));
+  } else {
+    // Single bets: add odds + units (game time & note collected in step 2 modal)
     fields.push(new ActionRowBuilder().addComponents(oddsInput));
-  }
-
-  // Only show units/note for single bets — parlays set odds/units on the whole slip
-  if (session.betType !== 'parlay') {
     fields.push(new ActionRowBuilder().addComponents(unitsInput));
-
-    // Add note field if there's room (moneyline = 4 fields so far, spread/total = 5)
-    if (wagerType === 'moneyline') {
-      const noteInput = new TextInputBuilder()
-        .setCustomId('bet_note')
-        .setLabel('Note (optional)')
-        .setPlaceholder('e.g. Lock of the day')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-        .setMaxLength(200);
-      fields.push(new ActionRowBuilder().addComponents(noteInput));
-    }
   }
 
   modal.addComponents(...fields);
@@ -457,29 +457,193 @@ async function showPlayerPropModal(interaction, session) {
     .setRequired(true)
     .setMaxLength(10);
 
-  const noteInput = new TextInputBuilder()
-    .setCustomId('bet_note')
-    .setLabel('Note (optional)')
-    .setPlaceholder('e.g. Bron is averaging 28 ppg')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(false)
-    .setMaxLength(200);
-
   const propFields = [
     new ActionRowBuilder().addComponents(playerInput),
     new ActionRowBuilder().addComponents(propInput),
   ];
 
-  // Only show odds/units/note for single bets — parlays get total odds at the end
-  if (session.betType !== 'parlay') {
+  if (session.betType === 'parlay') {
+    // Parlay legs: add event start time (no odds/units per leg)
+    const startTimeInput = new TextInputBuilder()
+      .setCustomId('event_start_time')
+      .setLabel('Game Start Time (optional)')
+      .setPlaceholder('e.g. Sun 1:00 PM ET, 7:30 PM EST')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false)
+      .setMaxLength(50);
+    propFields.push(new ActionRowBuilder().addComponents(startTimeInput));
+  } else {
+    // Single bets: add odds + units (game time & note collected in step 2 modal)
     propFields.push(new ActionRowBuilder().addComponents(oddsInput));
     propFields.push(new ActionRowBuilder().addComponents(unitsInput));
-    propFields.push(new ActionRowBuilder().addComponents(noteInput));
   }
 
   modal.addComponents(...propFields);
 
   await interaction.showModal(modal);
+}
+
+// Modal for futures bets (market-style like sportsbooks)
+async function showFuturesModal(interaction, session) {
+  const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
+
+  const modal = new ModalBuilder()
+    .setCustomId('enterbet_futures_modal')
+    .setTitle(`Futures Bet${legLabel}`);
+
+  const marketInput = new TextInputBuilder()
+    .setCustomId('futures_market')
+    .setLabel('Market')
+    .setPlaceholder('e.g. Super Bowl LIX Winner, 2025 NBA MVP')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(200);
+
+  const selectionInput = new TextInputBuilder()
+    .setCustomId('futures_selection')
+    .setLabel('Selection / Pick')
+    .setPlaceholder('e.g. Chiefs, Jokic, Oilers')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100);
+
+  const oddsInput = new TextInputBuilder()
+    .setCustomId('odds')
+    .setLabel('Odds (American, e.g. +500)')
+    .setPlaceholder('+500')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(20);
+
+  const unitsInput = new TextInputBuilder()
+    .setCustomId('units')
+    .setLabel('Units')
+    .setPlaceholder('e.g. 1, 2, 5')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(10);
+
+  const noteInput = new TextInputBuilder()
+    .setCustomId('bet_note')
+    .setLabel('Note (optional)')
+    .setPlaceholder('e.g. Great value at this price')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setMaxLength(200);
+
+  const futuresFields = [
+    new ActionRowBuilder().addComponents(marketInput),
+    new ActionRowBuilder().addComponents(selectionInput),
+  ];
+
+  if (session.betType !== 'parlay') {
+    // Single futures: Market, Selection, Odds, Units, Note (5 fields — no two-step needed)
+    futuresFields.push(new ActionRowBuilder().addComponents(oddsInput));
+    futuresFields.push(new ActionRowBuilder().addComponents(unitsInput));
+    futuresFields.push(new ActionRowBuilder().addComponents(noteInput));
+  } else {
+    // Parlay leg: just Market + Selection (odds/units set on whole slip)
+    // No need for event start time on futures — the market name implies timing
+  }
+
+  modal.addComponents(...futuresFields);
+  await interaction.showModal(modal);
+}
+
+// Handle futures modal submit
+async function handleFuturesModalSubmit(interaction) {
+  const userId = interaction.user.id;
+  const session = betSessions.get(userId);
+  if (!session) return interaction.reply({ content: 'Session expired. Use `/enterbet` again.', ephemeral: true });
+
+  const futuresMarket = interaction.fields.getTextInputValue('futures_market').trim();
+  const futuresSelection = interaction.fields.getTextInputValue('futures_selection').trim();
+  const isParlay = session.betType === 'parlay';
+
+  let oddsAmerican = null;
+  let oddsDecimal = null;
+  let units = null;
+  let betNote = null;
+
+  if (!isParlay) {
+    const oddsRaw = interaction.fields.getTextInputValue('odds').trim();
+    oddsAmerican = parseInt(oddsRaw);
+    if (isNaN(oddsAmerican)) {
+      return interaction.reply({ content: '❌ Invalid odds. Enter American odds (e.g. +500)', ephemeral: true });
+    }
+    oddsDecimal = americanToDecimal(oddsAmerican);
+
+    const unitsRaw = interaction.fields.getTextInputValue('units').trim();
+    units = parseFloat(unitsRaw);
+    if (isNaN(units) || units <= 0) {
+      return interaction.reply({ content: '❌ Invalid units. Enter a positive number.', ephemeral: true });
+    }
+
+    try { betNote = interaction.fields.getTextInputValue('bet_note')?.trim() || null; } catch (e) { /* no field */ }
+  }
+
+  // Build pick string: "Market → Selection"
+  const pick = `${futuresMarket}: ${futuresSelection}`;
+
+  const legData = {
+    sport: session.currentSport,
+    bet_category: 'futures',
+    futures_market: futuresMarket,
+    futures_selection: futuresSelection,
+    pick,
+    wager_type: 'futures',
+    odds_american: oddsAmerican,
+    odds_decimal: oddsDecimal,
+    event_start_time: null, // Futures don't need event_start_time — market name implies timing
+  };
+
+  if (isParlay) {
+    session.legs.push(legData);
+    session.currentLeg++;
+    betSessions.set(userId, session);
+
+    if (session.currentLeg <= session.totalLegs) {
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('enterbet_category')
+          .setPlaceholder('Select bet category')
+          .addOptions([
+            { label: 'Team Game', value: 'team_game', description: 'Moneyline, spread, or total', emoji: '🏟️' },
+            { label: 'Player Prop', value: 'player_prop', description: 'Over/under on a player stat', emoji: '🏀' },
+            { label: 'Futures', value: 'futures', description: 'Championship, MVP, season wins', emoji: '🏆' },
+          ])
+      );
+
+      return interaction.reply({
+        content: `✅ Leg ${session.currentLeg - 1} added! Now enter **Leg ${session.currentLeg}** of ${session.totalLegs}:`,
+        components: [row],
+        ephemeral: true,
+      });
+    }
+
+    // All legs entered
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('enterbet_parlay_final_btn')
+        .setLabel('Enter Parlay Details (Odds & Units)')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📋')
+    );
+
+    return interaction.reply({
+      content: `✅ All **${session.totalLegs} legs** entered! Click below to enter your total parlay odds and units.`,
+      components: [row],
+      ephemeral: true,
+    });
+  }
+
+  // Single futures bet - show confirmation
+  session.pendingLegData = legData;
+  session.pendingUnits = units;
+  session.pendingBetNote = betNote;
+  betSessions.set(userId, session);
+
+  await showBetConfirmation(interaction, session, legData, units, betNote);
 }
 
 // Handle team game modal submit
@@ -529,11 +693,12 @@ async function handleTeamModalSubmit(interaction) {
     }
   }
 
-  // Note is optional (only available for single moneyline where there's room for 5th field)
+  // Note is NOT in this modal anymore — collected in step 2 details modal
   let betNote = null;
-  if (!isParlay) {
-    try { betNote = interaction.fields.getTextInputValue('bet_note')?.trim() || null; } catch (e) { /* no note field */ }
-  }
+
+  // Read event start time (available in parlay leg modals only)
+  let eventStartTime = null;
+  try { eventStartTime = interaction.fields.getTextInputValue('event_start_time')?.trim() || null; } catch (e) { /* no field for single bets */ }
 
   // Build pick string
   let pick;
@@ -557,6 +722,7 @@ async function handleTeamModalSubmit(interaction) {
     spread_value: spreadValue,
     odds_american: oddsAmerican,
     odds_decimal: oddsDecimal,
+    event_start_time: eventStartTime,
   };
 
   if (session.betType === 'parlay') {
@@ -573,6 +739,7 @@ async function handleTeamModalSubmit(interaction) {
           .addOptions([
             { label: 'Team Game', value: 'team_game', description: 'Moneyline, spread, or total', emoji: '🏟️' },
             { label: 'Player Prop', value: 'player_prop', description: 'Over/under on a player stat', emoji: '🏀' },
+            { label: 'Futures', value: 'futures', description: 'Championship, MVP, season wins', emoji: '🏆' },
           ])
       );
 
@@ -600,13 +767,117 @@ async function handleTeamModalSubmit(interaction) {
     });
   }
 
-  // Single bet - show confirmation
+  // Single bet - show "Continue" button for step 2 (game time + note)
   session.pendingLegData = legData;
   session.pendingUnits = units;
-  session.pendingBetNote = betNote;
+  session.pendingBetNote = null; // Will be set in details modal
   betSessions.set(userId, session);
 
-  await showBetConfirmation(interaction, session, legData, units, betNote);
+  await showDetailsPrompt(interaction, session, legData, units);
+}
+
+// Show prompt with button to open step 2 details modal (game time + note)
+async function showDetailsPrompt(interaction, session, legData, units) {
+  const { SPORT_NAMES } = require('../../config/constants');
+  const { formatOdds } = require('../../utils/odds');
+
+  const sportName = SPORT_NAMES[legData.sport] || legData.sport;
+  let summary;
+
+  if (legData.bet_category === 'futures') {
+    summary = `**${sportName}**: 🏆 ${legData.futures_market || 'Futures'}\n**Pick**: ${legData.futures_selection || legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
+  } else if (legData.bet_category === 'team_game') {
+    summary = `**${sportName}**: ${legData.team_a} vs ${legData.team_b}\n**Pick**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
+  } else {
+    summary = `**${sportName}**: ${legData.player_name}\n**Prop**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
+  }
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('enterbet_details_btn')
+      .setLabel('📝 Continue — Add Game Time & Note')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('enterbet_skip_details')
+      .setLabel('⏩ Skip & Confirm')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('enterbet_cancel')
+      .setLabel('❌ Cancel')
+      .setStyle(ButtonStyle.Danger),
+  );
+
+  await interaction.reply({
+    content: `✅ **Bet details saved!**\n\n${summary}\n\nAdd game time & note, or skip to confirm:`,
+    components: [row],
+    ephemeral: true,
+  });
+}
+
+// Handle "Continue" button → show details modal (game time + note)
+async function handleDetailsButton(interaction) {
+  const userId = interaction.user.id;
+  const session = betSessions.get(userId);
+  if (!session) return interaction.reply({ content: 'Session expired. Use `/enterbet` again.', ephemeral: true });
+
+  const modal = new ModalBuilder()
+    .setCustomId('enterbet_details_modal')
+    .setTitle('Game Time & Note');
+
+  const startTimeInput = new TextInputBuilder()
+    .setCustomId('event_start_time')
+    .setLabel('Game Start Time (optional)')
+    .setPlaceholder('e.g. Sun 1:00 PM ET, Tonight 7:30 PM')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setMaxLength(50);
+
+  const noteInput = new TextInputBuilder()
+    .setCustomId('bet_note')
+    .setLabel('Note (optional)')
+    .setPlaceholder('e.g. Bron averaging 28 ppg, sharp line movement')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(500);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(startTimeInput),
+    new ActionRowBuilder().addComponents(noteInput),
+  );
+
+  await interaction.showModal(modal);
+}
+
+// Handle details modal submit → show confirmation
+async function handleDetailsModalSubmit(interaction) {
+  const userId = interaction.user.id;
+  const session = betSessions.get(userId);
+  if (!session) return interaction.reply({ content: 'Session expired. Use `/enterbet` again.', ephemeral: true });
+
+  const eventStartTime = interaction.fields.getTextInputValue('event_start_time')?.trim() || null;
+  const betNote = interaction.fields.getTextInputValue('bet_note')?.trim() || null;
+
+  // Store on session
+  session.pendingEventStartTime = eventStartTime;
+  session.pendingBetNote = betNote;
+
+  // Also update the pending leg data
+  if (session.pendingLegData) {
+    session.pendingLegData.event_start_time = eventStartTime;
+  }
+  betSessions.set(userId, session);
+
+  await showBetConfirmation(interaction, session, session.pendingLegData, session.pendingUnits, betNote);
+}
+
+// Handle "Skip & Confirm" button → go straight to confirmation with no game time/note
+async function handleSkipDetails(interaction) {
+  const userId = interaction.user.id;
+  const session = betSessions.get(userId);
+  if (!session) return interaction.update({ content: '❌ Session expired. Use `/enterbet` again.', components: [] });
+
+  // Go straight to confirmation with no game time or note
+  await showBetConfirmation(interaction, session, session.pendingLegData, session.pendingUnits, session.pendingBetNote);
 }
 
 // Show confirmation prompt before placing bet
@@ -617,29 +888,67 @@ async function showBetConfirmation(interaction, session, legData, units, betNote
   const sportName = SPORT_NAMES[legData.sport] || legData.sport;
   let summary;
 
-  if (legData.bet_category === 'team_game') {
+  if (legData.bet_category === 'futures') {
+    const market = legData.futures_market || 'Futures';
+    const selection = legData.futures_selection || legData.pick;
+    summary = `**${sportName}**: 🏆 ${market}\n**Pick**: ${selection}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
+  } else if (legData.bet_category === 'team_game') {
     summary = `**${sportName}**: ${legData.team_a} vs ${legData.team_b}\n**Pick**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
   } else {
     summary = `**${sportName}**: ${legData.player_name}\n**Prop**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
   }
+  if (session.pendingEventStartTime || legData.event_start_time) summary += `\n**⏰ Game Time**: ${session.pendingEventStartTime || legData.event_start_time}`;
   if (betNote) summary += `\n**Note**: ${betNote}`;
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('enterbet_confirm')
-      .setLabel('✅ Confirm Bet')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId('enterbet_cancel')
-      .setLabel('❌ Cancel')
-      .setStyle(ButtonStyle.Danger),
-  );
+  // Determine reply method — modal submits use .reply(), button clicks use .update()
+  const isModalSubmit = interaction.isModalSubmit?.() || false;
+  const respond = isModalSubmit
+    ? (opts) => interaction.reply({ ...opts, ephemeral: true })
+    : (opts) => interaction.update(opts);
 
-  await interaction.reply({
-    content: `⚠️ **Are you sure you want to place this bet?**\n\n${summary}`,
-    components: [row],
-    ephemeral: true,
-  });
+  if (session.isRetro) {
+    // Retro bet — ask for result instead of confirm
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('enterbet_retro_win')
+        .setLabel('✅ Won')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('enterbet_retro_loss')
+        .setLabel('❌ Lost')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId('enterbet_retro_push')
+        .setLabel('🔄 Push')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('enterbet_cancel')
+        .setLabel('Cancel')
+        .setStyle(ButtonStyle.Secondary),
+    );
+
+    await respond({
+      content: `📋 **Retro Bet** — How did this bet finish?\n\n${summary}`,
+      components: [row],
+    });
+  } else {
+    // Normal bet — just confirm or cancel (game time/note already set in step 2)
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('enterbet_confirm')
+        .setLabel('✅ Confirm Bet')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('enterbet_cancel')
+        .setLabel('❌ Cancel')
+        .setStyle(ButtonStyle.Danger),
+    );
+
+    await respond({
+      content: `⚠️ **Are you sure you want to place this bet?**\n\n${summary}`,
+      components: [row],
+    });
+  }
 }
 
 // Handle player prop modal submit
@@ -657,7 +966,6 @@ async function handlePropModalSubmit(interaction) {
   let oddsAmerican = null;
   let oddsDecimal = null;
   let units = null;
-  let betNote = null;
 
   if (!isParlay) {
     const oddsRaw = interaction.fields.getTextInputValue('odds').trim();
@@ -672,7 +980,12 @@ async function handlePropModalSubmit(interaction) {
     if (isNaN(units) || units <= 0) {
       return interaction.reply({ content: '\u274c Invalid units. Enter a positive number.', ephemeral: true });
     }
-    try { betNote = interaction.fields.getTextInputValue('bet_note')?.trim() || null; } catch (e) { /* no note field */ }
+  }
+
+  // Read event start time (available in parlay leg modals)
+  let eventStartTime = null;
+  if (isParlay) {
+    try { eventStartTime = interaction.fields.getTextInputValue('event_start_time')?.trim() || null; } catch (e) { /* no field */ }
   }
 
   const legData = {
@@ -684,6 +997,7 @@ async function handlePropModalSubmit(interaction) {
     wager_type: 'prop',
     odds_american: oddsAmerican,
     odds_decimal: oddsDecimal,
+    event_start_time: eventStartTime,
   };
 
   if (session.betType === 'parlay') {
@@ -699,6 +1013,7 @@ async function handlePropModalSubmit(interaction) {
           .addOptions([
             { label: 'Team Game', value: 'team_game', description: 'Moneyline, spread, or total', emoji: '🏟️' },
             { label: 'Player Prop', value: 'player_prop', description: 'Over/under on a player stat', emoji: '🏀' },
+            { label: 'Futures', value: 'futures', description: 'Championship, MVP, season wins', emoji: '🏆' },
           ])
       );
 
@@ -726,13 +1041,13 @@ async function handlePropModalSubmit(interaction) {
     });
   }
 
-  // Single bet - show confirmation
+  // Single prop bet - show "Continue" button for step 2 (game time + note)
   session.pendingLegData = legData;
   session.pendingUnits = units;
-  session.pendingBetNote = betNote;
+  session.pendingBetNote = null; // Will be set in details modal
   betSessions.set(userId, session);
 
-  await showBetConfirmation(interaction, session, legData, units, betNote);
+  await showDetailsPrompt(interaction, session, legData, units);
 }
 
 // Handle parlay final button click -> show modal
@@ -815,25 +1130,54 @@ async function handleParlayFinalSubmit(interaction) {
       const { SPORT_NAMES } = require('../../config/constants');
       const sn = SPORT_NAMES[leg.sport] || leg.sport;
       summary += `\n**Leg ${i + 1}**: ${sn} — ${leg.pick}`;
+      if (leg.event_start_time) summary += ` ⏰ ${leg.event_start_time}`;
     });
     if (betNote) summary += `\n**Note**: ${betNote}`;
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('enterbet_confirm')
-        .setLabel('✅ Confirm Bet')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId('enterbet_cancel')
-        .setLabel('❌ Cancel')
-        .setStyle(ButtonStyle.Danger),
-    );
+    if (session.isRetro) {
+      // Retro parlay — ask for result
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('enterbet_retro_win')
+          .setLabel('✅ Won')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('enterbet_retro_loss')
+          .setLabel('❌ Lost')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('enterbet_retro_push')
+          .setLabel('🔄 Push')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId('enterbet_cancel')
+          .setLabel('Cancel')
+          .setStyle(ButtonStyle.Secondary),
+      );
 
-    await interaction.reply({
-      content: `⚠️ **Are you sure you want to place this bet?**\n\n${summary}`,
-      components: [row],
-      ephemeral: true,
-    });
+      await interaction.reply({
+        content: `📋 **Retro Parlay** — How did this bet finish?\n\n${summary}`,
+        components: [row],
+        ephemeral: true,
+      });
+    } else {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('enterbet_confirm')
+          .setLabel('✅ Confirm Bet')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId('enterbet_cancel')
+          .setLabel('❌ Cancel')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      await interaction.reply({
+        content: `⚠️ **Are you sure you want to place this bet?**\n\n${summary}`,
+        components: [row],
+        ephemeral: true,
+      });
+    }
   } catch (err) {
     console.error('Error preparing parlay confirmation:', err);
     await interaction.reply({ content: '❌ Error. Please try again.', ephemeral: true });
@@ -857,6 +1201,32 @@ async function handleBetCancel(interaction) {
   const userId = interaction.user.id;
   betSessions.delete(userId);
   await interaction.update({ content: '❌ Bet cancelled.', components: [] });
+}
+
+// Handle retro bet result buttons
+async function handleRetroResult(interaction) {
+  const userId = interaction.user.id;
+  const session = betSessions.get(userId);
+  if (!session) return interaction.update({ content: '❌ Session expired. Use `/enterbet` again.', components: [] });
+
+  // Determine result from button ID
+  const resultMap = {
+    'enterbet_retro_win': 'win',
+    'enterbet_retro_loss': 'loss',
+    'enterbet_retro_push': 'push',
+  };
+  const result = resultMap[interaction.customId];
+  if (!result) return;
+
+  // Store result in session for save functions
+  session.retroResult = result;
+  betSessions.set(userId, session);
+
+  if (session.betType === 'parlay') {
+    await saveParlayBet(interaction, session);
+  } else {
+    await saveSingleBet(interaction, session.pendingLegData, session.pendingUnits, session.pendingBetNote);
+  }
 }
 
 // Save a parlay bet to DB and post embed
@@ -888,14 +1258,18 @@ async function saveParlayBet(interaction, session) {
       units,
       bet_note: betNote,
       is_whale: session.isWhale || false,
-      status: 'open',
+      is_retro: session.isRetro || false,
+      status: session.isRetro ? (session.retroResult || 'win') : 'open',
+      closed_at: session.isRetro ? new Date().toISOString() : null,
     }, displayName);
 
-    // Create parlay legs
+    // Create parlay legs (set all leg statuses to match overall for retro)
+    const retroStatus = session.isRetro ? (session.retroResult || 'win') : 'open';
     const legRecords = session.legs.map((leg, i) => ({
       bet_id: bet.id,
       leg_number: i + 1,
       ...leg,
+      status: retroStatus,
     }));
 
     await db.createParlayLegs(legRecords);
@@ -908,31 +1282,42 @@ async function saveParlayBet(interaction, session) {
       ? buildWhaleBetEmbed(fullBet, displayName, bettor.displayAvatarURL())
       : buildBetEmbed(fullBet, displayName, bettor.displayAvatarURL());
 
-    // Add poll buttons
-    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-    const pollRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`tailbet_yes_${bet.id}`)
-        .setLabel('Yes')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`tailbet_no_${bet.id}`)
-        .setLabel('No')
-        .setStyle(ButtonStyle.Danger)
-    );
+    // Post to channel (channel already resolved above)
+    if (session.isRetro) {
+      // Retro — post without tail poll
+      const retroLabel = `📋 **RETRO SLIP** — ${session.retroResult.toUpperCase()}`;
+      const message = await channel.send({
+        embeds: [embed],
+        content: isWhale ? `🚨🐋 **WHALE DICK RETRO** 🐋🚨\n${retroLabel}` : retroLabel,
+      });
+      await db.updateBetMessageId(bet.id, message.id);
+    } else {
+      // Normal — add poll buttons
+      const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+      const pollRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`tailbet_yes_${bet.id}`)
+          .setLabel('Yes')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`tailbet_no_${bet.id}`)
+          .setLabel('No')
+          .setStyle(ButtonStyle.Danger)
+      );
 
-    // Post to channel
-    const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
-    const message = await channel.send({
-      embeds: [embed],
-      components: [pollRow],
-      content: isWhale ? whaleContent : 'Are You Tailing This Bet?'
-    });
-    await db.updateBetMessageId(bet.id, message.id);
+      const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
+      const message = await channel.send({
+        embeds: [embed],
+        components: [pollRow],
+        content: isWhale ? whaleContent : 'Are You Tailing This Bet?'
+      });
+      await db.updateBetMessageId(bet.id, message.id);
+    }
 
     const forLabel = session.targetUser ? ` for **${displayName}**` : '';
+    const retroSuffix = session.isRetro ? ` — ${session.retroResult.toUpperCase()} (RETRO)` : '';
     await interaction.update({
-      content: `✅ Parlay posted${forLabel}! Slip **${bet.slip_number}** (${session.legs.length} legs, ${units}u at ${oddsAmerican >= 0 ? '+' : ''}${oddsAmerican})`,
+      content: `✅ Parlay posted${forLabel}! Slip **${bet.slip_number}** (${session.legs.length} legs, ${units}u at ${oddsAmerican >= 0 ? '+' : ''}${oddsAmerican})${retroSuffix}`,
       components: [],
     });
 
@@ -972,7 +1357,10 @@ async function saveSingleBet(interaction, legData, units, betNote) {
       units,
       bet_note: betNote,
       is_whale: session?.isWhale || false,
-      status: 'open',
+      is_retro: session?.isRetro || false,
+      event_start_time: legData.event_start_time || session?.pendingEventStartTime || null,
+      status: session?.isRetro ? (session.retroResult || 'win') : 'open',
+      closed_at: session?.isRetro ? new Date().toISOString() : null,
     };
     console.log('Attempting to create single bet with data:', betData);
 
@@ -983,31 +1371,42 @@ async function saveSingleBet(interaction, legData, units, betNote) {
       ? buildWhaleBetEmbed(bet, displayName, bettor.displayAvatarURL())
       : buildBetEmbed(bet, displayName, bettor.displayAvatarURL());
 
-    // Add poll buttons
-    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-    const pollRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`tailbet_yes_${bet.id}`)
-        .setLabel('Yes')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`tailbet_no_${bet.id}`)
-        .setLabel('No')
-        .setStyle(ButtonStyle.Danger)
-    );
+    // Post to channel
+    if (session?.isRetro) {
+      // Retro — post without tail poll
+      const retroLabel = `📋 **RETRO SLIP** — ${session.retroResult.toUpperCase()}`;
+      const message = await channel.send({
+        embeds: [embed],
+        content: isWhale ? `🚨🐋 **WHALE DICK RETRO** 🐋🚨\n${retroLabel}` : retroLabel,
+      });
+      await db.updateBetMessageId(bet.id, message.id);
+    } else {
+      // Normal — add poll buttons
+      const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+      const pollRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`tailbet_yes_${bet.id}`)
+          .setLabel('Yes')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`tailbet_no_${bet.id}`)
+          .setLabel('No')
+          .setStyle(ButtonStyle.Danger)
+      );
 
-    // Post to channel (visible to everyone)
-    const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
-    const message = await channel.send({
-      embeds: [embed],
-      components: [pollRow],
-      content: isWhale ? whaleContent : 'Are You Tailing This Bet?'
-    });
-    await db.updateBetMessageId(bet.id, message.id);
+      const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
+      const message = await channel.send({
+        embeds: [embed],
+        components: [pollRow],
+        content: isWhale ? whaleContent : 'Are You Tailing This Bet?'
+      });
+      await db.updateBetMessageId(bet.id, message.id);
+    }
 
     const forLabel = session?.targetUser ? ` for **${displayName}**` : '';
+    const retroSuffix = session?.isRetro ? ` — ${session.retroResult.toUpperCase()} (RETRO)` : '';
     await interaction.update({
-      content: `✅ Bet posted${forLabel}! Slip **${bet.slip_number}** — ${legData.pick} (${units}u)`,
+      content: `✅ Bet posted${forLabel}! Slip **${bet.slip_number}** — ${legData.pick} (${units}u)${retroSuffix}`,
       components: [],
     });
 
@@ -1041,10 +1440,15 @@ module.exports = {
   handleOverUnderSelect,
   handleTeamModalSubmit,
   handlePropModalSubmit,
+  handleFuturesModalSubmit,
   handleParlayFinalButton,
   handleParlayFinalSubmit,
   handleBetConfirm,
   handleBetCancel,
+  handleDetailsButton,
+  handleDetailsModalSubmit,
+  handleSkipDetails,
+  handleRetroResult,
   betSessions,
   handleTailPoll,
 };

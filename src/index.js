@@ -12,10 +12,12 @@ const deletebet = require('./commands/betting/deletebet');
 const editbet = require('./commands/betting/editbet');
 const advancedstats = require('./commands/betting/advancedstats');
 const whaledick = require('./commands/betting/whaledick');
+const retrobet = require('./commands/betting/retrobet');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 const reminder = require('./commands/general/reminder');
 const remindersDb = require('./database/reminders');
+const { createWebServer, setDiscordClient } = require('./web/server');
 
 // Create Discord client
 const client = new Client({
@@ -27,7 +29,7 @@ const client = new Client({
 
 // Register commands in a collection
 client.commands = new Collection();
-const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, help, convertodds, reminder];
+const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, retrobet, help, convertodds, reminder];
 for (const mod of commandModules) {
   client.commands.set(mod.command.name, mod);
 }
@@ -58,6 +60,14 @@ client.once(Events.ClientReady, (c) => {
     }
   }, 30_000);
   console.log('   ⏰ Reminder scheduler started (30s interval)');
+
+  // ─── Web Server ───
+  setDiscordClient(client);
+  const webApp = createWebServer();
+  const WEB_PORT = process.env.WEB_PORT || 3000;
+  webApp.listen(WEB_PORT, () => {
+    console.log(`   🌐 Bet slip web form running at http://localhost:${WEB_PORT}`);
+  });
 });
 
 // ─── Slash Command Handler ───
@@ -194,6 +204,15 @@ async function handleButton(interaction) {
   if (id === 'enterbet_cancel') {
     return enterbet.handleBetCancel(interaction);
   }
+  if (id === 'enterbet_details_btn') {
+    return enterbet.handleDetailsButton(interaction);
+  }
+  if (id === 'enterbet_skip_details') {
+    return enterbet.handleSkipDetails(interaction);
+  }
+  if (id.startsWith('enterbet_retro_')) {
+    return enterbet.handleRetroResult(interaction);
+  }
   if (id.startsWith('tailbet_')) {
     return enterbet.handleTailPoll(interaction);
   }
@@ -208,6 +227,12 @@ async function handleModalSubmit(interaction) {
   }
   if (id === 'enterbet_prop_modal') {
     return enterbet.handlePropModalSubmit(interaction);
+  }
+  if (id === 'enterbet_futures_modal') {
+    return enterbet.handleFuturesModalSubmit(interaction);
+  }
+  if (id === 'enterbet_details_modal') {
+    return enterbet.handleDetailsModalSubmit(interaction);
   }
   if (id === 'enterbet_parlay_final') {
     return enterbet.handleParlayFinalSubmit(interaction);

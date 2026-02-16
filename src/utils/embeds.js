@@ -15,18 +15,19 @@ function buildBetEmbed(bet, username, avatarUrl) {
   const statusEmoji = STATUS_EMOJI[bet.status] || '❓';
   const sportName = SPORT_NAMES[bet.sport] || bet.sport;
   const color = getStatusColor(bet.status);
+  const retroTag = bet.is_retro ? ' 📋 RETRO' : '';
 
   const embed = new EmbedBuilder()
     .setColor(color)
     .setAuthor({
-      name: `${username}'s Bet`,
+      name: `${username}'s Bet${retroTag}`,
       iconURL: avatarUrl,
     })
     .setTimestamp(new Date(bet.created_at));
 
   if (bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0) {
     // Parlay bet
-    embed.setTitle(`🎰 Parlay (${bet.parlay_legs.length} Legs)`);
+    embed.setTitle(`🎰 Parlay (${bet.parlay_legs.length} Legs)${retroTag ? ' — RETRO SLIP' : ''}`);
 
     let description = '';
     bet.parlay_legs.forEach((leg, i) => {
@@ -34,23 +35,44 @@ function buildBetEmbed(bet, username, avatarUrl) {
       const legEmoji = STATUS_EMOJI[leg.status] || '🟡';
       description += `**Leg ${i + 1}** ${legEmoji}\n`;
 
-      if (leg.bet_category === 'team_game') {
+      if (leg.bet_category === 'futures') {
+        // Market-style: "Market: Selection"
+        const parts = leg.pick ? leg.pick.split(': ') : [leg.pick];
+        const market = parts.length > 1 ? parts[0] : 'Futures';
+        const selection = parts.length > 1 ? parts.slice(1).join(': ') : leg.pick;
+        description += `${legSport}: 🏆 ${market}\n`;
+        description += `Pick: **${selection}**`;
+        if (leg.odds_american) description += ` (${formatOdds(leg.odds_american)})`;
+        description += '\n';
+      } else if (leg.bet_category === 'team_game') {
         description += `${legSport}: ${leg.team_a} vs ${leg.team_b}\n`;
         description += `Pick: **${leg.pick}**`;
         if (leg.odds_american) description += ` (${formatOdds(leg.odds_american)})`;
-        description += '\n\n';
+        description += '\n';
       } else {
         description += `${legSport}: ${leg.player_name}\n`;
         description += `Pick: **${leg.pick}**`;
         if (leg.odds_american) description += ` (${formatOdds(leg.odds_american)})`;
-        description += '\n\n';
+        description += '\n';
       }
+
+      if (leg.event_start_time) {
+        description += `⏰ ${leg.event_start_time}\n`;
+      }
+      description += '\n';
     });
 
     embed.setDescription(description);
   } else {
     // Single bet
-    if (bet.bet_category === 'team_game') {
+    if (bet.bet_category === 'futures') {
+      // Market-style: pick is stored as "Market: Selection"
+      const parts = bet.pick ? bet.pick.split(': ') : [bet.pick];
+      const market = parts.length > 1 ? parts[0] : 'Futures';
+      const selection = parts.length > 1 ? parts.slice(1).join(': ') : bet.pick;
+      embed.setTitle(`🏆 ${sportName}: ${market}${retroTag ? ' — RETRO' : ''}`);
+      embed.setDescription(`**Pick**: ${selection}`);
+    } else if (bet.bet_category === 'team_game') {
       embed.setTitle(`${sportName}: ${bet.team_a} vs ${bet.team_b}`);
 
       const wagerLabel = WAGER_TYPES[bet.wager_type] || bet.wager_type;
@@ -69,6 +91,14 @@ function buildBetEmbed(bet, username, avatarUrl) {
 
   // Common fields
   const fields = [];
+
+  if (bet.event_start_time) {
+    fields.push({
+      name: '⏰ Game Time',
+      value: bet.event_start_time,
+      inline: true,
+    });
+  }
 
   if (bet.odds_american) {
     fields.push({
@@ -95,7 +125,7 @@ function buildBetEmbed(bet, username, avatarUrl) {
 
   fields.push({
     name: 'Status',
-    value: `${statusEmoji} ${bet.status.toUpperCase()}`,
+    value: `${statusEmoji} ${bet.status.toUpperCase()}${bet.is_retro ? ' (RETRO)' : ''}`,
     inline: true,
   });
 
@@ -116,7 +146,8 @@ function buildBetEmbed(bet, username, avatarUrl) {
   }
 
   embed.addFields(fields);
-  embed.setFooter({ text: `GK | Sports Betting Tracker • Slip: ${bet.slip_number || bet.id.slice(0, 8)}` });
+  const retroFooter = bet.is_retro ? ' • 📋 RETRO SLIP' : '';
+  embed.setFooter({ text: `GK | Sports Betting Tracker • Slip: ${bet.slip_number || bet.id.slice(0, 8)}${retroFooter}` });
 
   return embed;
 }
@@ -231,11 +262,12 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
   const statusEmoji = STATUS_EMOJI[bet.status] || '❓';
   const sportName = SPORT_NAMES[bet.sport] || bet.sport;
   const WHALE_COLOR = 0xFF00FF; // Hot magenta
+  const retroTag = bet.is_retro ? ' 📋 RETRO' : '';
 
   const embed = new EmbedBuilder()
     .setColor(WHALE_COLOR)
     .setAuthor({
-      name: `🐋💰 ${username.toUpperCase()} JUST DROPPED A WHALE DICK 💰🐋`,
+      name: `🐋💰 ${username.toUpperCase()} JUST DROPPED A WHALE DICK 💰🐋${retroTag}`,
       iconURL: avatarUrl,
     })
     .setTimestamp(new Date(bet.created_at));
@@ -243,7 +275,7 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
   const divider = '🐋🚨🐋🚨🐋🚨🐋🚨🐋🚨🐋🚨🐋🚨🐋🚨🐋';
 
   if (bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0) {
-    embed.setTitle(`🐋🚨 WHALE DICK PARLAY (${bet.parlay_legs.length} LEGS) 🚨🐋`);
+    embed.setTitle(`🐋🚨 WHALE DICK PARLAY (${bet.parlay_legs.length} LEGS) 🚨🐋${retroTag ? '\n📋 RETRO SLIP' : ''}`);
 
     let description = `${divider}\n\n`;
     bet.parlay_legs.forEach((leg, i) => {
@@ -251,23 +283,42 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
       const legEmoji = STATUS_EMOJI[leg.status] || '🟡';
       description += `🐋 **LEG ${i + 1}** ${legEmoji}\n`;
 
-      if (leg.bet_category === 'team_game') {
+      if (leg.bet_category === 'futures') {
+        const parts = leg.pick ? leg.pick.split(': ') : [leg.pick];
+        const market = parts.length > 1 ? parts[0] : 'Futures';
+        const selection = parts.length > 1 ? parts.slice(1).join(': ') : leg.pick;
+        description += `${legSport}: 🏆 ${market}\n`;
+        description += `Pick: **${selection}**`;
+        if (leg.odds_american) description += ` (${formatOdds(leg.odds_american)})`;
+        description += '\n';
+      } else if (leg.bet_category === 'team_game') {
         description += `${legSport}: ${leg.team_a} vs ${leg.team_b}\n`;
         description += `Pick: **${leg.pick}**`;
         if (leg.odds_american) description += ` (${formatOdds(leg.odds_american)})`;
-        description += '\n\n';
+        description += '\n';
       } else {
         description += `${legSport}: ${leg.player_name}\n`;
         description += `Pick: **${leg.pick}**`;
         if (leg.odds_american) description += ` (${formatOdds(leg.odds_american)})`;
-        description += '\n\n';
+        description += '\n';
       }
+
+      if (leg.event_start_time) {
+        description += `⏰ ${leg.event_start_time}\n`;
+      }
+      description += '\n';
     });
     description += divider;
 
     embed.setDescription(description);
   } else {
-    if (bet.bet_category === 'team_game') {
+    if (bet.bet_category === 'futures') {
+      const parts = bet.pick ? bet.pick.split(': ') : [bet.pick];
+      const market = parts.length > 1 ? parts[0] : 'Futures';
+      const selection = parts.length > 1 ? parts.slice(1).join(': ') : bet.pick;
+      embed.setTitle(`🐋🚨 WHALE DICK FUTURES BET 🚨🐋\n🏆 ${sportName}: ${market}`);
+      embed.setDescription(`${divider}\n\n**Pick**: ${selection}\n\n${divider}`);
+    } else if (bet.bet_category === 'team_game') {
       embed.setTitle(`🐋🚨 WHALE DICK BET 🚨🐋\n${sportName}: ${bet.team_a} vs ${bet.team_b}`);
 
       const wagerLabel = WAGER_TYPES[bet.wager_type] || bet.wager_type;
@@ -284,6 +335,14 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
   }
 
   const fields = [];
+
+  if (bet.event_start_time) {
+    fields.push({
+      name: '🐋 ⏰ Game Time',
+      value: `**${bet.event_start_time}**`,
+      inline: true,
+    });
+  }
 
   if (bet.odds_american) {
     fields.push({
@@ -310,7 +369,7 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
 
   fields.push({
     name: '🐋 Status',
-    value: `${statusEmoji} **${bet.status.toUpperCase()}**`,
+    value: `${statusEmoji} **${bet.status.toUpperCase()}**${bet.is_retro ? ' (RETRO)' : ''}`,
     inline: true,
   });
 
@@ -331,7 +390,8 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
   }
 
   embed.addFields(fields);
-  embed.setFooter({ text: `🐋🐋🐋 WHALE DICK ALERT • Slip: ${bet.slip_number || bet.id.slice(0, 8)} 🐋🐋🐋` });
+  const retroFooter = bet.is_retro ? ' • 📋 RETRO SLIP' : '';
+  embed.setFooter({ text: `🐋🐋🐋 WHALE DICK ALERT • Slip: ${bet.slip_number || bet.id.slice(0, 8)} 🐋🐋🐋${retroFooter}` });
 
   return embed;
 }

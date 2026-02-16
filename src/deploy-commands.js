@@ -13,6 +13,7 @@ const deletebet = require('./commands/betting/deletebet');
 const editbet = require('./commands/betting/editbet');
 const advancedstats = require('./commands/betting/advancedstats');
 const whaledick = require('./commands/betting/whaledick');
+const retrobet = require('./commands/betting/retrobet');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 const reminder = require('./commands/general/reminder');
@@ -29,6 +30,7 @@ const commandObjs = [
   editbet.command,
   advancedstats.command,
   whaledick.command,
+  retrobet.command,
   help.command,
   convertodds.command,
   reminder.command,
