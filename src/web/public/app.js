@@ -67,11 +67,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 function showLogin() {
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app-screen').classList.add('hidden');
+  document.getElementById('app-footer').classList.add('hidden');
 }
 
 function showApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
+  document.getElementById('app-footer').classList.remove('hidden');
 
   // Set user info
   document.getElementById('user-avatar').src = currentUser.avatar;
