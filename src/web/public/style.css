@@ -1279,16 +1279,57 @@ textarea {
   gap: 6px;
   font-size: 12px;
   color: var(--text-muted);
+  padding: 4px 0;
+  flex-wrap: wrap;
 }
 
 .bet-leg-status {
   font-size: 12px;
 }
 
+.bet-leg-num {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+  min-width: 36px;
+}
+
 .bet-leg-pick {
   font-weight: 500;
   color: var(--text-secondary);
+  flex: 1;
 }
+
+.bet-leg-sport {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.leg-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.leg-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 5px;
+  transition: var(--transition);
+}
+
+.leg-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+}
+
+.leg-win:hover { border-color: var(--accent); }
+.leg-loss:hover { border-color: var(--text-danger); }
+.leg-push:hover { border-color: var(--text-secondary); }
+.leg-void:hover { border-color: var(--text-muted); }
 
 /* ════════════════════════════════════════════════════════════
    REMINDERS PAGE

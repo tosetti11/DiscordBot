@@ -518,6 +518,46 @@ function createWebServer() {
     };
   }
 
+  // Close a single parlay leg
+  app.post('/api/bets/:betId/legs/:legId/close', authMiddleware, async (req, res) => {
+    try {
+      const { betId, legId } = req.params;
+      const { status } = req.body;
+
+      if (!['win', 'loss', 'push', 'void'].includes(status)) {
+        return res.status(400).json({ error: 'Status must be win, loss, push, or void' });
+      }
+
+      const bet = await db.getBet(betId);
+      if (!bet) return res.status(404).json({ error: 'Bet not found' });
+      if (bet.discord_id !== req.user.discordId) return res.status(403).json({ error: 'Not your bet' });
+      if (bet.bet_type !== 'parlay') return res.status(400).json({ error: 'Not a parlay' });
+
+      const leg = (bet.parlay_legs || []).find(l => l.id === legId);
+      if (!leg) return res.status(404).json({ error: 'Leg not found' });
+      if (leg.status !== 'open') return res.status(400).json({ error: 'Leg is already closed' });
+
+      await db.updateParlayLegStatus(legId, status);
+
+      // Update Discord message with new leg statuses
+      if (bet.message_id && bet.channel_id) {
+        try {
+          const channel = await discordClient.channels.fetch(bet.channel_id);
+          const message = await channel.messages.fetch(bet.message_id);
+          const updatedBet = await db.getBet(betId);
+          const embedFn = bet.is_whale ? buildWhaleBetEmbed : buildBetEmbed;
+          const embed = embedFn(updatedBet, null, null);
+          await message.edit({ embeds: [embed] });
+        } catch (e) {}
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[API] Close leg error:', err);
+      res.status(500).json({ error: 'Failed to close leg' });
+    }
+  });
+
   // Close a bet
   app.post('/api/bets/:betId/close', authMiddleware, async (req, res) => {
     try {

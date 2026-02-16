@@ -1021,18 +1021,36 @@ function renderBetCard(bet) {
         <button class="btn-action btn-edit" onclick="openEditModal('${bet.id}')" title="Edit">✏️</button>
         <button class="btn-action btn-del" onclick="confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
       </div>`;
+  } else if (isParlay && bet.legs?.some(l => l.status === 'open')) {
+    // Parlay with some legs still open — show edit/delete only
+    actionsHtml = `
+      <div class="bet-actions">
+        <button class="btn-action btn-edit" onclick="openEditModal('${bet.id}')" title="Edit">✏️</button>
+        <button class="btn-action btn-del" onclick="confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
+      </div>`;
   }
 
   // Parlay legs
   let legsHtml = '';
   if (isParlay && bet.legs && bet.legs.length > 0) {
     legsHtml = '<div class="bet-legs">' +
-      bet.legs.map(leg => {
+      bet.legs.map((leg, i) => {
         const legStatus = STATUS_EMOJI[leg.status] || '⬜';
+        const legSport = leg.sportName || leg.sport || '';
+        const legActions = leg.status === 'open'
+          ? `<span class="leg-actions">
+               <button class="leg-btn leg-win" onclick="closeLeg('${bet.id}','${leg.id}','win')" title="Win">✅</button>
+               <button class="leg-btn leg-loss" onclick="closeLeg('${bet.id}','${leg.id}','loss')" title="Loss">❌</button>
+               <button class="leg-btn leg-push" onclick="closeLeg('${bet.id}','${leg.id}','push')" title="Push">🔄</button>
+               <button class="leg-btn leg-void" onclick="closeLeg('${bet.id}','${leg.id}','void')" title="Void">⛔</button>
+             </span>`
+          : '';
         return `<div class="bet-leg">
           <span class="bet-leg-status">${legStatus}</span>
+          <span class="bet-leg-num">Leg ${i + 1}</span>
           <span class="bet-leg-pick">${leg.pick || '—'}</span>
-          <span style="color:var(--text-muted);font-size:11px">${leg.odds || ''}</span>
+          <span class="bet-leg-sport">${legSport}</span>
+          ${legActions}
         </div>`;
       }).join('') +
     '</div>';
@@ -1068,14 +1086,14 @@ function renderBetCard(bet) {
 }
 
 // ─── Close Bet ─────────
-async function closeBet(betId, result) {
-  if (!confirm(`Mark this bet as ${result.toUpperCase()}?`)) return;
+async function closeBet(betId, status) {
+  if (!confirm(`Mark this bet as ${status.toUpperCase()}?`)) return;
 
   try {
     const res = await fetch(`/api/bets/${betId}/close`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ result })
+      body: JSON.stringify({ status })
     });
     const data = await res.json();
     if (data.error) {
@@ -1085,6 +1103,27 @@ async function closeBet(betId, result) {
     loadBets(); // Refresh
   } catch (e) {
     alert('Failed to close bet');
+  }
+}
+
+// ─── Close Parlay Leg ─────────
+async function closeLeg(betId, legId, status) {
+  if (!confirm(`Mark this leg as ${status.toUpperCase()}?`)) return;
+
+  try {
+    const res = await fetch(`/api/bets/${betId}/legs/${legId}/close`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert('Error: ' + data.error);
+      return;
+    }
+    loadBets(); // Refresh
+  } catch (e) {
+    alert('Failed to close leg');
   }
 }
 
