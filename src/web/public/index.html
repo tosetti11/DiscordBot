@@ -220,7 +220,7 @@
                 <div class="datetime-input-wrap">
                   <input type="text" id="event-time" placeholder="e.g. Sun 1:00 PM ET" maxlength="50">
                   <input type="datetime-local" id="event-time-picker" class="datetime-picker-hidden">
-                  <button type="button" class="btn-calendar" onclick="document.getElementById('event-time-picker').showPicker()" title="Pick date & time">📅</button>
+                  <button type="button" class="btn-calendar" id="event-time-cal-btn" title="Pick date & time">📅</button>
                 </div>
               </div>
             </div>
@@ -629,7 +629,7 @@
                 <div class="datetime-row">
                   <input type="text" id="reminder-time" class="form-input" placeholder='e.g. "in 2h", "tomorrow 9pm"' required readonly>
                   <input type="datetime-local" id="reminder-datetime" class="hidden-datetime">
-                  <button type="button" class="btn-calendar" onclick="openReminderCalendar()">📅</button>
+                  <button type="button" class="btn-calendar" id="reminder-cal-btn">📅</button>
                 </div>
               </div>
               <div class="form-group">
@@ -694,7 +694,7 @@
               <div class="datetime-row">
                 <input type="text" id="edit-reminder-time" class="form-input" placeholder="Pick a time" readonly>
                 <input type="datetime-local" id="edit-reminder-datetime" class="hidden-datetime">
-                <button type="button" class="btn-calendar" onclick="openEditReminderCalendar()">📅</button>
+                <button type="button" class="btn-calendar" id="edit-reminder-cal-btn">📅</button>
               </div>
             </div>
             <div class="form-group">

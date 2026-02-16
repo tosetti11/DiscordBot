@@ -507,7 +507,7 @@ function buildParlayLegs() {
     const legPicker = card.querySelector(`.leg-event-picker[data-leg="${i}"]`);
     const legTimeInput = card.querySelector(`.leg-event-time[data-leg="${i}"]`);
 
-    legCalBtn.addEventListener('click', () => legPicker.showPicker());
+    legCalBtn.addEventListener('click', () => { try { legPicker.showPicker(); } catch(e) { legPicker.click(); } });
     legPicker.addEventListener('change', () => {
       legTimeInput.value = formatDateTimePretty(legPicker.value);
       legPicker.value = '';
@@ -1641,7 +1641,8 @@ function initRemindersPage() {
 }
 
 function openReminderCalendar() {
-  document.getElementById('reminder-datetime').showPicker();
+  const el = document.getElementById('reminder-datetime');
+  try { el.showPicker(); } catch(e) { el.click(); }
 }
 
 async function loadReminderChannels() {
@@ -1894,7 +1895,7 @@ function openEditReminderCalendar() {
     }
     picker.removeEventListener('change', handler);
   });
-  picker.showPicker();
+  try { picker.showPicker(); } catch(e) { picker.click(); }
 }
 
 async function submitEditReminder(e) {
@@ -2010,3 +2011,26 @@ async function convertOdds(e) {
     alert('Failed to convert odds');
   }
 }
+
+// Calendar button event listeners
+document.addEventListener('DOMContentLoaded', function() {
+  const eventCalBtn = document.getElementById('event-time-cal-btn');
+  if (eventCalBtn) {
+    eventCalBtn.addEventListener('click', function() {
+      const el = document.getElementById('event-time-picker');
+      try { el.showPicker(); } catch(e) { el.click(); }
+    });
+  }
+  const reminderCalBtn = document.getElementById('reminder-cal-btn');
+  if (reminderCalBtn) {
+    reminderCalBtn.addEventListener('click', function() {
+      openReminderCalendar();
+    });
+  }
+  const editReminderCalBtn = document.getElementById('edit-reminder-cal-btn');
+  if (editReminderCalBtn) {
+    editReminderCalBtn.addEventListener('click', function() {
+      openEditReminderCalendar();
+    });
+  }
+});
