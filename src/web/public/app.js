@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   FadeKing Bet Slip — Frontend JavaScript
+   TheGamblingKing Bet Slip — Frontend JavaScript
    ═══════════════════════════════════════════════ */
 
 const SPORTS = [

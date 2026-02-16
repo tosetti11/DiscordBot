@@ -16,7 +16,7 @@ const { SPORT_NAMES, WAGER_TYPES, STATUS_EMOJI } = require('../config/constants'
 const { buildBetEmbed, buildWhaleBetEmbed } = require('../utils/embeds');
 const remindersDb = require('../database/reminders');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fadeking-jwt-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET || 'thegamblingking-jwt-secret-change-me';
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;

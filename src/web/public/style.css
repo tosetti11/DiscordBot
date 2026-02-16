@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════
-   FadeKing Bet Slip — Spotify-Inspired Theme
+   TheGamblingKing Bet Slip — Spotify-Inspired Theme
    ═══════════════════════════════════════════════ */
 
 :root {
@@ -72,10 +72,20 @@ body {
   width: 90%;
 }
 
-.login-logo {
-  font-size: 64px;
+.login-logo-img {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
   margin-bottom: 16px;
+  border-radius: 50%;
   filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.4));
+}
+
+.header-logo-img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 50%;
 }
 
 .login-card h1 {
