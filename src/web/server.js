@@ -242,6 +242,37 @@ function createWebServer() {
     }
   });
 
+  // Get guild members (admin only) for user picker
+  app.get('/api/guilds/:guildId/members', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      const admin = await isAdminInGuild(guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Admin only' });
+
+      const guild = discordClient?.guilds.cache.get(guildId);
+      if (!guild) return res.json([]);
+
+      const members = await guild.members.fetch();
+      const memberList = members
+        .filter(m => !m.user.bot)
+        .map(m => ({
+          id: m.id,
+          displayName: m.displayName,
+          username: m.user.username,
+          avatar: m.user.displayAvatarURL({ size: 64 }),
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+      res.json(memberList);
+    } catch (err) {
+      console.error('[API] Members error:', err);
+      res.status(500).json({ error: 'Failed to fetch members' });
+    }
+  });
+
   // Get server emojis
   app.get('/api/guilds/:guildId/emojis', authMiddleware, async (req, res) => {
     try {
@@ -531,12 +562,20 @@ function createWebServer() {
 
   // ─── My Bets API ───
 
-  // Get bets for a user (filterable)
+  // Get bets for a user (filterable) — admins can view all or specific users
   app.get('/api/guilds/:guildId/bets', authMiddleware, async (req, res) => {
     try {
       const { guildId } = req.params;
-      const { status, sport, team, search, minUnits, maxUnits, limit = 50, userId, slip } = req.query;
-      const targetId = userId || req.user.discordId;
+      const { status, sport, team, search, minUnits, maxUnits, limit = 50, userId, slip, viewAll } = req.query;
+
+      // If viewAll=true, admin can see all bets in guild; if userId set, see that user
+      let targetId = req.user.discordId;
+      if (viewAll === 'true' || userId) {
+        const admin = await isAdminInGuild(guildId, req.user.discordId);
+        if (admin) {
+          targetId = userId || null; // null = all users
+        }
+      }
 
       const userGuild = req.user.guilds.find(g => g.id === guildId);
       if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
@@ -633,7 +672,11 @@ function createWebServer() {
 
       const bet = await db.getBet(betId);
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
-      if (bet.discord_id !== req.user.discordId) return res.status(403).json({ error: 'Not your bet' });
+
+      // Allow admins to close others' legs
+      const isOwner = bet.discord_id === req.user.discordId;
+      const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
+      if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
       if (bet.bet_type !== 'parlay') return res.status(400).json({ error: 'Not a parlay' });
 
       const leg = (bet.parlay_legs || []).find(l => l.id === legId);
@@ -673,7 +716,11 @@ function createWebServer() {
 
       const bet = await db.getBet(betId);
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
-      if (bet.discord_id !== req.user.discordId) return res.status(403).json({ error: 'Not your bet' });
+
+      // Allow admins to close others' bets
+      const isOwner = bet.discord_id === req.user.discordId;
+      const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
+      if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
       if (bet.status !== 'open') return res.status(400).json({ error: 'Bet is already closed' });
 
       await db.closeBet(betId, status, resultNote || null);
@@ -713,7 +760,11 @@ function createWebServer() {
 
       const bet = await db.getBet(betId);
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
-      if (bet.discord_id !== req.user.discordId) return res.status(403).json({ error: 'Not your bet' });
+
+      // Allow admins to edit others' bets
+      const isOwner = bet.discord_id === req.user.discordId;
+      const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
+      if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
 
       const fields = {};
       if (oddsAmerican !== undefined) fields.odds_american = parseInt(oddsAmerican);
@@ -750,7 +801,11 @@ function createWebServer() {
 
       const bet = await db.getBet(betId);
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
-      if (bet.discord_id !== req.user.discordId) return res.status(403).json({ error: 'Not your bet' });
+
+      // Allow admins to delete others' bets
+      const isOwner = bet.discord_id === req.user.discordId;
+      const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
+      if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
 
       // Delete Discord message
       if (bet.message_id && bet.channel_id) {
@@ -761,7 +816,7 @@ function createWebServer() {
         } catch (e) {}
       }
 
-      await db.deleteBet(betId, req.user.discordId);
+      await db.deleteBet(betId, req.user.discordId, admin);
       res.json({ success: true });
     } catch (err) {
       console.error('[API] Delete bet error:', err);
@@ -918,6 +973,7 @@ function createWebServer() {
         futuresMarket, futuresSelection,
         spreadValue, oddsAmerican, units, betNote,
         eventStartTime, isWhale, overUnder,
+        onBehalfOf, // admin placing bet for another user
         // Parlay fields
         legs,
       } = req.body;
@@ -934,22 +990,46 @@ function createWebServer() {
         }
       }
 
+      // Determine target user (admin placing for someone else)
+      let targetDiscordId = req.user.discordId;
+      let targetUsername = req.user.username;
+      let targetAvatar = req.user.avatar;
+      let targetDisplayName = req.user.displayName;
+
+      if (onBehalfOf && onBehalfOf !== req.user.discordId) {
+        const admin = await isAdminInGuild(guildId, req.user.discordId);
+        if (!admin) {
+          return res.status(403).json({ error: 'Only admins can place bets for other users' });
+        }
+        targetDiscordId = onBehalfOf;
+
+        const guild = discordClient?.guilds.cache.get(guildId);
+        if (guild) {
+          try {
+            const member = await guild.members.fetch(onBehalfOf);
+            targetUsername = member.user.username;
+            targetAvatar = member.user.displayAvatarURL({ size: 128 });
+            targetDisplayName = member.displayName || member.user.username;
+          } catch (e) {}
+        }
+      }
+
       const oddsDecimal = oddsAmerican ? americanToDecimal(parseInt(oddsAmerican)) : null;
 
       // Get or create user in DB
       const discordUser = {
-        id: req.user.discordId,
-        username: req.user.username,
-        displayAvatarURL: () => req.user.avatar,
+        id: targetDiscordId,
+        username: targetUsername,
+        displayAvatarURL: () => targetAvatar,
       };
       const user = await db.getOrCreateUser(discordUser);
 
       // Get display name from guild
       const guild = discordClient?.guilds.cache.get(guildId);
-      let displayName = req.user.displayName;
-      if (guild) {
+      let displayName = targetDisplayName;
+      if (guild && !onBehalfOf) {
         try {
-          const member = await guild.members.fetch(req.user.discordId);
+          const member = await guild.members.fetch(targetDiscordId);
           displayName = member.displayName || displayName;
         } catch (e) { /* use default */ }
       }
@@ -958,7 +1038,7 @@ function createWebServer() {
         // ── Parlay bet ──
         const bet = await db.createBet({
           user_id: user.id,
-          discord_id: req.user.discordId,
+          discord_id: targetDiscordId,
           guild_id: guildId,
           channel_id: channelId,
           bet_type: 'parlay',
@@ -1055,7 +1135,7 @@ function createWebServer() {
 
         const betData = {
           user_id: user.id,
-          discord_id: req.user.discordId,
+          discord_id: targetDiscordId,
           guild_id: guildId,
           channel_id: channelId,
           bet_type: 'single',

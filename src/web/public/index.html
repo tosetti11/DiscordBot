@@ -263,6 +263,16 @@
             </div>
           </div>
 
+          <!-- Admin: Place bet for another user -->
+          <div id="admin-behalf-row" class="form-row hidden">
+            <div class="form-group">
+              <label for="behalf-select">👑 Place Bet For</label>
+              <select id="behalf-select" class="form-select">
+                <option value="">Myself</option>
+              </select>
+            </div>
+          </div>
+
           <!-- Submit -->
           <button type="submit" class="btn btn-submit" id="submit-btn">
             <span class="btn-text">Place Bet 🎰</span>
@@ -456,8 +466,8 @@
     <main id="bets-page" class="main-content hidden">
       <div class="bets-container">
         <div class="bets-header">
-          <h2>📋 My Bets</h2>
-          <p class="slip-subtitle">View, close, edit, or delete your bets</p>
+          <h2>📋 Bets</h2>
+          <p class="slip-subtitle">View, close, edit, or delete bets</p>
         </div>
 
         <!-- Filters -->
@@ -465,6 +475,10 @@
           <div class="bets-filters">
             <select id="bets-guild" class="form-select filter-select">
               <option value="">Server</option>
+            </select>
+            <select id="bets-user" class="form-select filter-select hidden">
+              <option value="">My Bets</option>
+              <option value="all">👑 All Members</option>
             </select>
             <select id="bets-status" class="form-select filter-select">
               <option value="">All Statuses</option>

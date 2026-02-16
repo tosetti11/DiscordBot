@@ -129,6 +129,29 @@ function setupEventListeners() {
       if (!guildPerms.canWhale) document.getElementById('is-whale').checked = false;
     }
 
+    // Show/hide admin "Place bet for" user picker
+    const behalfRow = document.getElementById('admin-behalf-row');
+    if (behalfRow) {
+      if (guildPerms.isAdmin) {
+        behalfRow.classList.remove('hidden');
+        // Fetch guild members for the picker
+        try {
+          const membersRes = await fetch(`/api/guilds/${guildSelect.value}/members`);
+          const members = await membersRes.json();
+          const behalfSelect = document.getElementById('behalf-select');
+          behalfSelect.innerHTML = '<option value="">Myself</option>';
+          members.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.displayName;
+            behalfSelect.appendChild(opt);
+          });
+        } catch (e) {}
+      } else {
+        behalfRow.classList.add('hidden');
+      }
+    }
+
     try {
       const res = await fetch(`/api/guilds/${guildSelect.value}/channels`);
       const channels = await res.json();
@@ -568,6 +591,12 @@ async function handleSubmit(e) {
       if (!body.oddsAmerican || !body.units) throw new Error('Enter odds and units');
     }
 
+    // Admin placing on behalf of another user
+    const behalfVal = document.getElementById('behalf-select')?.value;
+    if (behalfVal) {
+      body.onBehalfOf = behalfVal;
+    }
+
     const res = await fetch('/api/bets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -579,9 +608,11 @@ async function handleSubmit(e) {
     if (!res.ok) throw new Error(data.error || 'Failed to place bet');
 
     // Show success
+    const behalfName = document.getElementById('behalf-select')?.selectedOptions[0]?.textContent;
+    const forWho = body.onBehalfOf ? ` for ${behalfName}` : '';
     document.getElementById('bet-form').classList.add('hidden');
     document.getElementById('success-msg').classList.remove('hidden');
-    document.getElementById('success-detail').textContent = `Slip ${data.slipNumber} has been posted to Discord!`;
+    document.getElementById('success-detail').textContent = `Slip ${data.slipNumber} has been posted to Discord${forWho}!`;
 
   } catch (err) {
     showToast(err.message);
@@ -958,6 +989,7 @@ const SPORT_NAMES = {
 const STATUS_EMOJI = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void: '⛔' };
 
 let betsInitialized = false;
+let betsGuildPerms = {};
 
 function initBetsPage() {
   if (betsInitialized) return;
@@ -972,9 +1004,45 @@ function initBetsPage() {
     sel.appendChild(opt);
   });
 
+  // When guild changes on bets page, check admin + load members for user picker
+  sel.addEventListener('change', async () => {
+    const guildId = sel.value;
+    if (!guildId) return;
+
+    try {
+      const rolesRes = await fetch(`/api/guilds/${guildId}/roles`);
+      betsGuildPerms = await rolesRes.json();
+    } catch (e) {
+      betsGuildPerms = { isAdmin: false };
+    }
+
+    const userSel = document.getElementById('bets-user');
+    if (betsGuildPerms.isAdmin) {
+      userSel.classList.remove('hidden');
+      // Fetch members for the picker
+      try {
+        const membersRes = await fetch(`/api/guilds/${guildId}/members`);
+        const members = await membersRes.json();
+        // Keep the first two options (My Bets, All Members), then add members
+        userSel.innerHTML = '<option value="">My Bets</option><option value="all">👑 All Members</option>';
+        members.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.displayName;
+          userSel.appendChild(opt);
+        });
+      } catch (e) {}
+    } else {
+      userSel.classList.add('hidden');
+      userSel.value = '';
+    }
+
+    loadBets();
+  });
+
   if (currentUser.guilds.length > 0) {
     sel.value = currentUser.guilds[0].id;
-    loadBets();
+    sel.dispatchEvent(new Event('change'));
   }
 }
 
@@ -985,14 +1053,24 @@ async function loadBets() {
   const status = document.getElementById('bets-status').value;
   const sport = document.getElementById('bets-sport').value;
   const search = document.getElementById('bets-search').value.trim();
+  const userFilter = document.getElementById('bets-user').value;
 
   const params = new URLSearchParams();
   if (status) params.set('status', status);
   if (sport) params.set('sport', sport);
   if (search) params.set('search', search);
 
+  // Admin user filter
+  if (userFilter === 'all') {
+    params.set('viewAll', 'true');
+  } else if (userFilter) {
+    params.set('userId', userFilter);
+  }
+
   const container = document.getElementById('bets-list');
   container.innerHTML = '<p class="empty-state">Loading...</p>';
+
+  const showingOthers = userFilter === 'all' || (userFilter && userFilter !== '');
 
   try {
     const res = await fetch(`/api/guilds/${guildId}/bets?${params}`);
@@ -1005,14 +1083,14 @@ async function loadBets() {
 
     container.innerHTML = '';
     bets.forEach(bet => {
-      container.appendChild(renderBetCard(bet));
+      container.appendChild(renderBetCard(bet, showingOthers));
     });
   } catch (e) {
     container.innerHTML = '<p class="empty-state" style="color:var(--text-danger)">Failed to load bets.</p>';
   }
 }
 
-function renderBetCard(bet) {
+function renderBetCard(bet, showOwner = false) {
   const div = document.createElement('div');
   div.className = `bet-card status-${bet.status || 'open'}`;
   div.dataset.betId = bet.id;
@@ -1026,10 +1104,15 @@ function renderBetCard(bet) {
   let pickText = bet.pick || (isParlay ? 'Parlay' : '—');
   let whaleHtml = bet.isWhale ? '<span class="bet-whale-badge">🐋</span>' : '';
   let retroHtml = bet.isRetro ? '<span class="bet-retro-badge">RETRO</span>' : '';
+  let ownerHtml = showOwner && bet.displayName ? `<span class="bet-owner-badge">👤 ${bet.displayName}</span>` : '';
 
-  // Actions (only for open bets)
+  // Can this user manage this bet? Own bets always, admin can manage others'
+  const isOwnBet = bet.discordId === currentUser?.discordId;
+  const canManage = isOwnBet || betsGuildPerms.isAdmin;
+
+  // Actions (only for open bets and if user can manage)
   let actionsHtml = '';
-  if (bet.status === 'open') {
+  if (canManage && bet.status === 'open') {
     actionsHtml = `
       <div class="bet-actions">
         <div class="close-dropdown">
@@ -1040,13 +1123,13 @@ function renderBetCard(bet) {
         <button class="btn-action btn-edit" onclick="openEditModal('${bet.id}')" title="Edit">✏️</button>
         <button class="btn-action btn-del" onclick="confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
       </div>`;
-  } else if (isParlay && bet.legs?.some(l => l.status === 'open')) {
+  } else if (canManage && isParlay && bet.legs?.some(l => l.status === 'open')) {
     // Parlay with some legs still open — show edit/delete only
     actionsHtml = `
       <div class="bet-actions">
         <button class="btn-action btn-edit" onclick="openEditModal('${bet.id}')" title="Edit">✏️</button>
         <button class="btn-action btn-del" onclick="confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
-      </div>`;
+      </div>`;  
   }
 
   // Parlay legs
@@ -1056,7 +1139,7 @@ function renderBetCard(bet) {
       bet.legs.map((leg, i) => {
         const legStatus = STATUS_EMOJI[leg.status] || '⬜';
         const legSport = leg.sportName || leg.sport || '';
-        const legActions = leg.status === 'open'
+        const legActions = (leg.status === 'open' && canManage)
           ? `<span class="leg-actions">
                <button class="leg-btn leg-win" onclick="closeLeg('${bet.id}','${leg.id}','win')" title="Win">✅</button>
                <button class="leg-btn leg-loss" onclick="closeLeg('${bet.id}','${leg.id}','loss')" title="Loss">❌</button>
@@ -1082,6 +1165,7 @@ function renderBetCard(bet) {
   div.innerHTML = `
     <span class="bet-status-icon">${statusEmoji}</span>
     <div class="bet-info">
+      ${ownerHtml ? `<div class="bet-owner-row">${ownerHtml}</div>` : ''}
       <div class="bet-pick-row">
         <span class="bet-pick-text">${pickText}</span>
         ${whaleHtml}${retroHtml}

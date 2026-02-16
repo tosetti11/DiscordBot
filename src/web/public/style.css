@@ -1171,6 +1171,19 @@ textarea {
   font-weight: 600;
 }
 
+.bet-owner-row {
+  margin-bottom: 4px;
+}
+
+.bet-owner-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(29, 185, 84, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
 .bet-meta {
   display: flex;
   gap: 12px;
