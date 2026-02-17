@@ -1005,6 +1005,9 @@ function createWebServer() {
       const userGuild = req.user.guilds.find(g => g.id === guildId);
       if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
 
+      const admin = await isAdminInGuild(guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Admin only' });
+
       const reminders = await remindersDb.getActiveReminders(guildId, 50);
 
       // Get channel names
@@ -1194,10 +1197,9 @@ function createWebServer() {
   // Preview endpoint — returns the embed as JSON for preview rendering
   app.post('/api/announce/preview', authMiddleware, async (req, res) => {
     const { guildId } = req.body;
-    if (guildId) {
-      const admin = await isAdminInGuild(guildId, req.user.discordId);
-      if (!admin) return res.status(403).json({ error: 'Admin only' });
-    }
+    if (!guildId) return res.status(400).json({ error: 'Guild ID required' });
+    const admin = await isAdminInGuild(guildId, req.user.discordId);
+    if (!admin) return res.status(403).json({ error: 'Admin only' });
     const { message, link } = req.body;
     res.json({
       title: '👑 TheGamblingKing',

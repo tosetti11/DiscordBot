@@ -2042,13 +2042,15 @@ async function checkOwnerFeatures() {
     }
   } catch (e) {}
 
-  // Announce: admin in any guild
+  // Announce + Reminders: admin in any guild
   for (const g of currentUser.guilds) {
     try {
       const data = await fetch(`/api/guilds/${g.id}/roles`).then(r => r.json());
       if (data.isAdmin) {
         const announceLink = document.getElementById('nav-announce');
         if (announceLink) announceLink.classList.remove('hidden');
+        const remindersLink = document.getElementById('nav-reminders');
+        if (remindersLink) remindersLink.classList.remove('hidden');
         break;
       }
     } catch (e) {}
