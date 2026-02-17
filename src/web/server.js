@@ -340,9 +340,18 @@ function createWebServer() {
       const guild = discordClient?.guilds.cache.get(guildId);
       if (!guild) return res.json([]);
 
-      // Fetch all members from Discord API (cache may be incomplete)
-      const fetched = await guild.members.fetch();
-      const memberList = fetched
+      // Fetch members using REST API (paginated, avoids gateway rate limits)
+      const allMembers = [];
+      let after = '0';
+      while (true) {
+        const batch = await guild.members.list({ limit: 1000, after });
+        if (batch.size === 0) break;
+        batch.forEach(m => allMembers.push(m));
+        after = batch.lastKey();
+        if (batch.size < 1000) break;
+      }
+
+      const memberList = allMembers
         .filter(m => !m.user.bot)
         .map(m => ({
           id: m.id,

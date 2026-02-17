@@ -2287,16 +2287,25 @@ async function loadAnnounceMembers(guildId) {
 
   try {
     const res = await fetch(`/api/guilds/${guildId}/members`);
-    const members = await res.json();
+    const data = await res.json();
     targetSelect.innerHTML = '<option value="all">📢 All Members</option>';
-    members.forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m.id;
-      opt.textContent = m.displayName;
-      targetSelect.appendChild(opt);
-    });
+    if (res.ok && Array.isArray(data)) {
+      data.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.displayName;
+        targetSelect.appendChild(opt);
+      });
+      if (data.length === 0) {
+        targetSelect.innerHTML += '<option disabled>No members found</option>';
+      }
+    } else {
+      console.error('Members API error:', data);
+      targetSelect.innerHTML += `<option disabled>Error: ${data.error || 'Failed to load'}</option>`;
+    }
   } catch (e) {
-    targetSelect.innerHTML = '<option value="all">📢 All Members</option>';
+    console.error('Members fetch error:', e);
+    targetSelect.innerHTML = '<option value="all">📢 All Members</option><option disabled>Failed to load members</option>';
   }
 }
 
