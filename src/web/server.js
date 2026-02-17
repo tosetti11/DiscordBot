@@ -340,9 +340,9 @@ function createWebServer() {
       const guild = discordClient?.guilds.cache.get(guildId);
       if (!guild) return res.json([]);
 
-      // Use cache (populated by GuildMembers intent) instead of fetching all from API
-      const members = guild.members.cache;
-      const memberList = members
+      // Fetch all members from Discord API (cache may be incomplete)
+      const fetched = await guild.members.fetch();
+      const memberList = fetched
         .filter(m => !m.user.bot)
         .map(m => ({
           id: m.id,
