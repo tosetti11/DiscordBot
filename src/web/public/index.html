@@ -43,6 +43,7 @@
           <a href="#" class="nav-link" data-page="reminders" onclick="switchPage('reminders')">⏰ Reminders</a>
           <a href="#" class="nav-link" data-page="tools" onclick="switchPage('tools')">🔧 Tools</a>
           <a href="#" class="nav-link" data-page="install" onclick="switchPage('install')">📱 App</a>
+          <a href="#" class="nav-link hidden" data-page="analytics" id="nav-analytics" onclick="switchPage('analytics')">📈 Analytics</a>
         </nav>
       </div>
       <div class="header-right">
@@ -910,6 +911,61 @@
       </div>
     </main>
   </div>
+
+  <!-- Analytics Page (admin only) -->
+  <main id="analytics-page" class="main-content hidden">
+    <div class="stats-container">
+      <h2 class="section-title">📈 Site Analytics</h2>
+
+      <!-- Summary Cards -->
+      <div class="analytics-summary" id="analytics-summary">
+        <div class="analytics-card">
+          <span class="analytics-number" id="analytics-unique-users">—</span>
+          <span class="analytics-label">Unique Users</span>
+        </div>
+        <div class="analytics-card">
+          <span class="analytics-number" id="analytics-total-logins">—</span>
+          <span class="analytics-label">Total Logins</span>
+        </div>
+        <div class="analytics-card">
+          <span class="analytics-number" id="analytics-unique-installs">—</span>
+          <span class="analytics-label">App Installs</span>
+        </div>
+        <div class="analytics-card">
+          <span class="analytics-number" id="analytics-total-installs">—</span>
+          <span class="analytics-label">Total Install Events</span>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="analytics-tabs">
+        <button class="analytics-tab active" data-tab="users" onclick="switchAnalyticsTab('users')">👥 Users</button>
+        <button class="analytics-tab" data-tab="installs" onclick="switchAnalyticsTab('installs')">📱 Installs</button>
+        <button class="analytics-tab" data-tab="activity" onclick="switchAnalyticsTab('activity')">🕐 Recent Activity</button>
+      </div>
+
+      <!-- Users Tab -->
+      <div id="analytics-tab-users" class="analytics-tab-content">
+        <div id="analytics-users-list" class="analytics-list">
+          <p class="muted-text">Loading...</p>
+        </div>
+      </div>
+
+      <!-- Installs Tab -->
+      <div id="analytics-tab-installs" class="analytics-tab-content hidden">
+        <div id="analytics-installs-list" class="analytics-list">
+          <p class="muted-text">Loading...</p>
+        </div>
+      </div>
+
+      <!-- Activity Tab -->
+      <div id="analytics-tab-activity" class="analytics-tab-content hidden">
+        <div id="analytics-activity-list" class="analytics-list">
+          <p class="muted-text">Loading...</p>
+        </div>
+      </div>
+    </div>
+  </main>
 
   <!-- Site Footer -->
   <footer id="app-footer" class="site-footer hidden">

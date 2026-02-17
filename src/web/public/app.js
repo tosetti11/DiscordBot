@@ -38,10 +38,19 @@ function triggerInstall() {
       console.log('PWA installed');
       const section = document.getElementById('install-prompt-section');
       if (section) section.classList.add('hidden');
+      // Log PWA install event
+      fetch('/api/analytics/pwa-install', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .catch(() => {});
     }
     deferredInstallPrompt = null;
   });
 }
+
+// Also track installs via the appinstalled event (covers iOS/manual installs)
+window.addEventListener('appinstalled', () => {
+  fetch('/api/analytics/pwa-install', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    .catch(() => {});
+});
 
 const SPORTS = [
   { name: 'NFL', value: 'nfl' },
@@ -131,6 +140,9 @@ function showApp() {
 
   // Auto-select if only one guild
   autoSelectGuild(guildSelect);
+
+  // Check if user is admin in any guild to show analytics nav
+  checkAdminForAnalytics();
 
   // Populate sports
   const sportSelect = document.getElementById('sport-select');
@@ -728,6 +740,7 @@ function switchPage(page) {
     reminders: document.getElementById('reminders-page'),
     tools: document.getElementById('tools-page'),
     install: document.getElementById('install-page'),
+    analytics: document.getElementById('analytics-page'),
   };
 
   // Hide all, show selected
@@ -741,6 +754,7 @@ function switchPage(page) {
   if (page === 'stats') initStatsPage();
   if (page === 'bets') initBetsPage();
   if (page === 'reminders') initRemindersPage();
+  if (page === 'analytics') initAnalyticsPage();
 }
 
 // ═══════════════════════════════════════════════
@@ -2010,6 +2024,199 @@ async function convertOdds(e) {
   } catch (e) {
     alert('Failed to convert odds');
   }
+}
+
+// ═══════════════════════════════════════════════
+//  Admin Analytics
+// ═══════════════════════════════════════════════
+
+async function checkAdminForAnalytics() {
+  // Only the site owner can see analytics — try the endpoint
+  try {
+    const res = await fetch('/api/analytics');
+    if (res.ok) {
+      const navLink = document.getElementById('nav-analytics');
+      if (navLink) navLink.classList.remove('hidden');
+    }
+  } catch (e) {}
+}
+
+let analyticsInitialized = false;
+let analyticsData = null;
+
+async function initAnalyticsPage() {
+  if (analyticsInitialized) return;
+  analyticsInitialized = true;
+
+  try {
+    const res = await fetch('/api/analytics');
+    if (!res.ok) {
+      document.getElementById('analytics-users-list').innerHTML =
+        '<p class="muted-text">Access denied or failed to load analytics.</p>';
+      return;
+    }
+    analyticsData = await res.json();
+    renderAnalyticsSummary();
+    renderAnalyticsUsers();
+    renderAnalyticsInstalls();
+    renderAnalyticsActivity();
+  } catch (e) {
+    document.getElementById('analytics-users-list').innerHTML =
+      '<p class="muted-text">Failed to load analytics.</p>';
+  }
+}
+
+function renderAnalyticsSummary() {
+  document.getElementById('analytics-unique-users').textContent = analyticsData.uniqueUsers;
+  document.getElementById('analytics-total-logins').textContent = analyticsData.totalLogins;
+  document.getElementById('analytics-unique-installs').textContent = analyticsData.uniqueInstallers;
+  document.getElementById('analytics-total-installs').textContent = analyticsData.totalInstalls;
+}
+
+function renderAnalyticsUsers() {
+  const container = document.getElementById('analytics-users-list');
+  const logins = analyticsData.events.filter(e => e.event_type === 'login');
+
+  // Group by user, get most recent login and count
+  const userMap = new Map();
+  logins.forEach(e => {
+    if (!userMap.has(e.discord_id)) {
+      userMap.set(e.discord_id, { ...e, loginCount: 1 });
+    } else {
+      userMap.get(e.discord_id).loginCount++;
+    }
+  });
+
+  const users = [...userMap.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  if (users.length === 0) {
+    container.innerHTML = '<p class="muted-text">No logins recorded yet.</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="analytics-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Logins</th>
+          <th>Last Login</th>
+          <th>Device</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${users.map(u => `
+          <tr>
+            <td class="analytics-user-cell">
+              <img src="${esc(u.avatar)}" class="analytics-avatar" alt="">
+              <span>${esc(u.display_name || u.discord_username)}</span>
+            </td>
+            <td>${u.loginCount}</td>
+            <td>${formatDateTimePretty(u.created_at)}</td>
+            <td class="analytics-device">${parseDevice(u.user_agent)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderAnalyticsInstalls() {
+  const container = document.getElementById('analytics-installs-list');
+  const installs = analyticsData.events.filter(e => e.event_type === 'pwa_install');
+
+  // Group by user
+  const installMap = new Map();
+  installs.forEach(e => {
+    if (!installMap.has(e.discord_id)) {
+      installMap.set(e.discord_id, e);
+    }
+  });
+
+  const users = [...installMap.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  if (users.length === 0) {
+    container.innerHTML = '<p class="muted-text">No app installs recorded yet.</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="analytics-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Installed</th>
+          <th>Device</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${users.map(u => `
+          <tr>
+            <td class="analytics-user-cell">
+              <img src="${esc(u.avatar)}" class="analytics-avatar" alt="">
+              <span>${esc(u.display_name || u.discord_username)}</span>
+            </td>
+            <td>${formatDateTimePretty(u.created_at)}</td>
+            <td class="analytics-device">${parseDevice(u.user_agent)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderAnalyticsActivity() {
+  const container = document.getElementById('analytics-activity-list');
+  const events = analyticsData.events.slice(0, 100); // Latest 100
+
+  if (events.length === 0) {
+    container.innerHTML = '<p class="muted-text">No activity yet.</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="analytics-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Event</th>
+          <th>Time</th>
+          <th>Device</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${events.map(e => `
+          <tr>
+            <td class="analytics-user-cell">
+              <img src="${esc(e.avatar)}" class="analytics-avatar" alt="">
+              <span>${esc(e.display_name || e.discord_username)}</span>
+            </td>
+            <td><span class="analytics-badge ${e.event_type === 'login' ? 'badge-login' : 'badge-install'}">${e.event_type === 'login' ? '🔑 Login' : '📱 Install'}</span></td>
+            <td>${formatDateTimePretty(e.created_at)}</td>
+            <td class="analytics-device">${parseDevice(e.user_agent)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function switchAnalyticsTab(tab) {
+  document.querySelectorAll('.analytics-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.analytics-tab[data-tab="${tab}"]`).classList.add('active');
+
+  document.querySelectorAll('.analytics-tab-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById(`analytics-tab-${tab}`).classList.remove('hidden');
+}
+
+function parseDevice(ua) {
+  if (!ua) return '—';
+  if (/iPhone|iPad/i.test(ua)) return '🍎 iOS';
+  if (/Android/i.test(ua)) return '🤖 Android';
+  if (/Windows/i.test(ua)) return '🖥️ Windows';
+  if (/Mac/i.test(ua)) return '💻 Mac';
+  if (/Linux/i.test(ua)) return '🐧 Linux';
+  return '🌐 Other';
 }
 
 // Calendar button event listeners

@@ -185,3 +185,22 @@ CREATE TABLE IF NOT EXISTS reminders (
 CREATE INDEX IF NOT EXISTS idx_reminders_active_scheduled
   ON reminders (scheduled_at)
   WHERE is_active = true;
+
+-- Web analytics table (login / install tracking)
+CREATE TABLE IF NOT EXISTS web_analytics (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  discord_id TEXT NOT NULL,
+  discord_username TEXT,
+  display_name TEXT,
+  avatar TEXT,
+  event_type TEXT NOT NULL CHECK (event_type IN ('login', 'pwa_install')),
+  user_agent TEXT,
+  ip_address TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_web_analytics_event_type
+  ON web_analytics (event_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_web_analytics_discord_id
+  ON web_analytics (discord_id, event_type);

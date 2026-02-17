@@ -33,6 +33,7 @@ let discordClient = null; // Will be set from index.js
 
 const WHALE_ROLES = ['sharp', 'admin', 'the king'];
 const ADMIN_ROLES = ['admin', 'the king'];
+const SITE_OWNER_ID = '1338301556973633577'; // Only this Discord user can view analytics
 
 function setDiscordClient(client) {
   discordClient = client;
@@ -239,6 +240,21 @@ function createWebServer() {
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production' || BASE_URL.startsWith('https'),
       });
+
+      // Log login event for analytics
+      try {
+        await supabase.from('web_analytics').insert({
+          discord_id: userData.id,
+          discord_username: userData.username,
+          display_name: userData.global_name || userData.username,
+          avatar,
+          event_type: 'login',
+          user_agent: req.headers['user-agent'] || null,
+          ip_address: req.ip || null,
+        });
+      } catch (analyticsErr) {
+        console.error('[Analytics] Failed to log login:', analyticsErr);
+      }
 
       res.redirect('/');
     } catch (err) {
@@ -1089,6 +1105,72 @@ function createWebServer() {
     } catch (err) {
       console.error('[API] Edit reminder error:', err);
       res.status(500).json({ error: 'Failed to edit reminder' });
+    }
+  });
+
+  // ─── Analytics API ───
+
+  // Log PWA install event
+  app.post('/api/analytics/pwa-install', authMiddleware, postLimiter, async (req, res) => {
+    try {
+      await supabase.from('web_analytics').insert({
+        discord_id: req.user.discordId,
+        discord_username: req.user.username,
+        display_name: req.user.displayName,
+        avatar: req.user.avatar,
+        event_type: 'pwa_install',
+        user_agent: req.headers['user-agent'] || null,
+        ip_address: req.ip || null,
+      });
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Analytics] PWA install log error:', err);
+      res.status(500).json({ error: 'Failed to log install' });
+    }
+  });
+
+  // Get analytics data (site owner only)
+  app.get('/api/analytics', authMiddleware, async (req, res) => {
+    try {
+      // Hardcoded owner check — only the site owner can view analytics
+      if (req.user.discordId !== SITE_OWNER_ID) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Fetch all analytics events, most recent first
+      const { data: events, error } = await supabase
+        .from('web_analytics')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (error) throw error;
+
+      // Build summary
+      const uniqueLogins = new Map();
+      const uniqueInstalls = new Map();
+      (events || []).forEach(e => {
+        if (e.event_type === 'login') {
+          if (!uniqueLogins.has(e.discord_id)) {
+            uniqueLogins.set(e.discord_id, e);
+          }
+        } else if (e.event_type === 'pwa_install') {
+          if (!uniqueInstalls.has(e.discord_id)) {
+            uniqueInstalls.set(e.discord_id, e);
+          }
+        }
+      });
+
+      res.json({
+        totalLogins: events.filter(e => e.event_type === 'login').length,
+        totalInstalls: events.filter(e => e.event_type === 'pwa_install').length,
+        uniqueUsers: uniqueLogins.size,
+        uniqueInstallers: uniqueInstalls.size,
+        events,
+      });
+    } catch (err) {
+      console.error('[API] Analytics error:', err);
+      res.status(500).json({ error: 'Failed to fetch analytics' });
     }
   });
 

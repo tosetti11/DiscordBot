@@ -2035,3 +2035,151 @@ textarea {
     height: 80px;
   }
 }
+
+/* ═══════════════════════════════════════
+   Analytics Page (Admin)
+   ═══════════════════════════════════════ */
+
+.analytics-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.analytics-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.analytics-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.analytics-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.analytics-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--bg-hover);
+  padding-bottom: 8px;
+}
+
+.analytics-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.analytics-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.analytics-tab.active {
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.analytics-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--bg-hover);
+}
+
+.analytics-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text-primary);
+}
+
+.analytics-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.analytics-user-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.analytics-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.analytics-device {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.analytics-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge-login {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+}
+
+.badge-install {
+  background: rgba(63, 185, 80, 0.15);
+  color: #3fb950;
+}
+
+@media (max-width: 600px) {
+  .analytics-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .analytics-tabs {
+    flex-wrap: wrap;
+  }
+  .analytics-table {
+    font-size: 0.8rem;
+  }
+  .analytics-table th,
+  .analytics-table td {
+    padding: 8px 6px;
+  }
+  .analytics-avatar {
+    width: 22px;
+    height: 22px;
+  }
+}
