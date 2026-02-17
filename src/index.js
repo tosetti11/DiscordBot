@@ -24,6 +24,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -251,5 +252,51 @@ if (!process.env.DISCORD_TOKEN) {
   console.error('   Copy .env.example to .env and fill in your values.');
   process.exit(1);
 }
+
+// ─── Welcome DM on Member Join ───
+client.on(Events.GuildMemberAdd, async (member) => {
+  try {
+    const dm = await member.createDM();
+    await dm.send({
+      embeds: [{
+        color: 0xf5c518,
+        title: '👑 Welcome to TheGamblingKing!',
+        description: `Hey **${member.displayName}**, welcome to the server! Here\'s everything you need to get started:`,
+        fields: [
+          {
+            name: '🎰 Place Bets',
+            value: 'Use `/enterbet` in any channel or visit the web app to submit your picks with our sleek bet slip.',
+          },
+          {
+            name: '🔗 Tail Bets',
+            value: 'When someone posts a pick, hit **Yes** or **No** on the poll to tail or fade their bet.',
+          },
+          {
+            name: '🏆 Leaderboards',
+            value: 'Use `/leaderboard` to see who\'s on top, or check the web dashboard for full stats.',
+          },
+          {
+            name: '📊 Your Stats',
+            value: 'Use `/mystats` to see your record, ROI, streaks, and more.',
+          },
+          {
+            name: '🌐 Web Dashboard',
+            value: '**[thegamblingkingapp.com](https://thegamblingkingapp.com)**\nLog in with Discord to place bets, view stats, set reminders, and more — all from your browser or phone.',
+          },
+          {
+            name: '📱 Get the App',
+            value: 'Visit the web dashboard and tap **📱 App** in the nav to install it on your phone for instant access.',
+          },
+        ],
+        thumbnail: { url: 'https://thegamblingkingapp.com/TheGamblingKing.jpg' },
+        footer: { text: 'TheGamblingKing • Good luck out there 🎲' },
+      }],
+    });
+    console.log(`[Welcome] Sent DM to ${member.user.username}`);
+  } catch (err) {
+    // User may have DMs disabled — that's fine
+    console.log(`[Welcome] Could not DM ${member.user.username}: ${err.message}`);
+  }
+});
 
 client.login(process.env.DISCORD_TOKEN);
