@@ -1029,6 +1029,10 @@
 
       <!-- Summary Cards -->
       <div class="analytics-summary" id="analytics-summary">
+        <div class="analytics-card analytics-card-online">
+          <span class="analytics-number" id="analytics-online-count">—</span>
+          <span class="analytics-label">🟢 Online Now</span>
+        </div>
         <div class="analytics-card">
           <span class="analytics-number" id="analytics-unique-users">—</span>
           <span class="analytics-label">Unique Users</span>
@@ -1057,13 +1061,21 @@
 
       <!-- Tabs -->
       <div class="analytics-tabs">
-        <button class="analytics-tab active" data-tab="users" onclick="switchAnalyticsTab('users')">👥 Users</button>
+        <button class="analytics-tab active" data-tab="online" onclick="switchAnalyticsTab('online')">🟢 Online</button>
+        <button class="analytics-tab" data-tab="users" onclick="switchAnalyticsTab('users')">👥 Users</button>
         <button class="analytics-tab" data-tab="installs" onclick="switchAnalyticsTab('installs')">📱 Installs</button>
         <button class="analytics-tab" data-tab="activity" onclick="switchAnalyticsTab('activity')">🕐 Recent Activity</button>
       </div>
 
+      <!-- Online Tab -->
+      <div id="analytics-tab-online" class="analytics-tab-content">
+        <div id="analytics-online-list" class="analytics-list">
+          <p class="muted-text">Loading...</p>
+        </div>
+      </div>
+
       <!-- Users Tab -->
-      <div id="analytics-tab-users" class="analytics-tab-content">
+      <div id="analytics-tab-users" class="analytics-tab-content hidden">
         <div id="analytics-users-list" class="analytics-list">
           <p class="muted-text">Loading...</p>
         </div>

@@ -95,6 +95,10 @@ async function canPlaceWhale(guildId, discordId) {
 function createWebServer() {
   const app = express();
 
+  // In-memory active users (heartbeat-based, no DB)
+  const activeUsers = new Map();
+  const HEARTBEAT_TIMEOUT = 60000; // 60s — offline if no ping
+
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 
@@ -1366,6 +1370,35 @@ function createWebServer() {
     }
   });
 
+  // Heartbeat — clients ping every 30s
+  app.post('/api/heartbeat', authMiddleware, (req, res) => {
+    activeUsers.set(req.user.discordId, {
+      discordId: req.user.discordId,
+      username: req.user.username,
+      displayName: req.user.displayName,
+      avatar: req.user.avatar,
+      lastSeen: Date.now(),
+    });
+    res.json({ ok: true });
+  });
+
+  // Get online users (owner only)
+  app.get('/api/analytics/online', authMiddleware, (req, res) => {
+    if (req.user.discordId !== SITE_OWNER_ID) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const now = Date.now();
+    const online = [];
+    for (const [id, u] of activeUsers) {
+      if (now - u.lastSeen < HEARTBEAT_TIMEOUT) {
+        online.push(u);
+      } else {
+        activeUsers.delete(id);
+      }
+    }
+    res.json({ count: online.length, users: online });
+  });
+
   // Get analytics data (site owner only)
   app.get('/api/analytics', authMiddleware, async (req, res) => {
     try {
@@ -1699,6 +1732,14 @@ function createWebServer() {
   app.get('/{*splat}', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   });
+
+  // Cleanup stale heartbeats every 30s
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, u] of activeUsers) {
+      if (now - u.lastSeen >= HEARTBEAT_TIMEOUT) activeUsers.delete(id);
+    }
+  }, 30000);
 
   return app;
 }

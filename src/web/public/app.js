@@ -153,6 +153,10 @@ function showApp() {
   // Check if user is admin in any guild to show analytics nav
   checkOwnerFeatures();
 
+  // Start heartbeat (pings server every 30s so owner can see who's online)
+  fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+  setInterval(() => fetch('/api/heartbeat', { method: 'POST' }).catch(() => {}), 30000);
+
   // Populate sports
   const sportSelect = document.getElementById('sport-select');
   SPORTS.forEach(s => {
@@ -2106,9 +2110,22 @@ async function initAnalyticsPage() {
     }
     analyticsData = await res.json();
     renderAnalyticsSummary();
+    renderOnlineUsers();
     renderAnalyticsUsers();
     renderAnalyticsInstalls();
     renderAnalyticsActivity();
+
+    // Auto-refresh online users every 15s
+    setInterval(async () => {
+      try {
+        const onRes = await fetch('/api/analytics/online');
+        if (onRes.ok) {
+          const onData = await onRes.json();
+          document.getElementById('analytics-online-count').textContent = onData.count;
+          renderOnlineUsers(onData);
+        }
+      } catch (e) {}
+    }, 15000);
   } catch (e) {
     document.getElementById('analytics-users-list').innerHTML =
       '<p class="muted-text">Failed to load analytics.</p>';
@@ -2122,6 +2139,43 @@ function renderAnalyticsSummary() {
   document.getElementById('analytics-leaderboard-views').textContent = analyticsData.leaderboardViews;
   document.getElementById('analytics-unique-installs').textContent = analyticsData.uniqueInstallers;
   document.getElementById('analytics-page-views').textContent = analyticsData.pageViews;
+
+  // Fetch online count
+  fetch('/api/analytics/online').then(r => r.json()).then(d => {
+    document.getElementById('analytics-online-count').textContent = d.count;
+  }).catch(() => {});
+}
+
+function renderOnlineUsers(data) {
+  const container = document.getElementById('analytics-online-list');
+  const fetchAndRender = async () => {
+    let onlineData = data;
+    if (!onlineData) {
+      try {
+        const res = await fetch('/api/analytics/online');
+        if (!res.ok) return;
+        onlineData = await res.json();
+      } catch (e) { return; }
+    }
+    if (!onlineData.users || onlineData.users.length === 0) {
+      container.innerHTML = '<p class="muted-text">No users online right now.</p>';
+      return;
+    }
+    container.innerHTML = onlineData.users.map(u => {
+      const avatarUrl = u.avatar
+        ? `https://cdn.discordapp.com/avatars/${u.discordId}/${u.avatar}.png?size=64`
+        : `https://cdn.discordapp.com/embed/avatars/${parseInt(u.discordId) % 5}.png`;
+      return `<div class="analytics-user-row">
+        <img src="${esc(avatarUrl)}" class="analytics-avatar" alt="">
+        <span class="online-dot"></span>
+        <div class="analytics-user-info">
+          <strong>${esc(u.displayName || u.username)}</strong>
+          <span class="muted-text">${esc(u.username)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  };
+  fetchAndRender();
 }
 
 function renderAnalyticsUsers() {
