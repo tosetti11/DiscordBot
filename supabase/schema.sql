@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS web_analytics (
   discord_username TEXT,
   display_name TEXT,
   avatar TEXT,
-  event_type TEXT NOT NULL CHECK (event_type IN ('login', 'pwa_install')),
+  event_type TEXT NOT NULL CHECK (event_type IN ('login', 'pwa_install', 'page_view', 'bet_placed', 'view_leaderboard', 'view_stats', 'view_bets', 'view_tools', 'view_reminders')),
   user_agent TEXT,
   ip_address TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()

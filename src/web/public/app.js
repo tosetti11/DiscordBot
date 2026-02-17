@@ -52,6 +52,15 @@ window.addEventListener('appinstalled', () => {
     .catch(() => {});
 });
 
+// ── Activity Tracking ──
+function trackActivity(event) {
+  fetch('/api/analytics/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event }),
+  }).catch(() => {});
+}
+
 const SPORTS = [
   { name: 'NFL', value: 'nfl' },
   { name: 'NBA', value: 'nba' },
@@ -683,6 +692,9 @@ async function handleSubmit(e) {
     if (!res.ok) throw new Error(data.error || 'Failed to place bet');
 
     // Show success
+    // Track bet placement
+    trackActivity('bet_placed');
+
     const behalfName = document.getElementById('behalf-select')?.selectedOptions[0]?.textContent;
     const forWho = body.onBehalfOf ? ` for ${behalfName}` : '';
     document.getElementById('bet-form').classList.add('hidden');
@@ -741,6 +753,12 @@ function showToast(msg) {
 // ═══════════════════════════════════════════════
 
 function switchPage(page) {
+  // Track page view
+  const trackablePages = { stats: 'view_stats', bets: 'view_bets', tools: 'view_tools', reminders: 'view_reminders', slip: 'page_view' };
+  if (trackablePages[page]) {
+    trackActivity(trackablePages[page]);
+  }
+
   // Toggle nav links
   document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
   document.querySelector(`.nav-link[data-page="${page}"]`).classList.add('active');
@@ -1092,6 +1110,8 @@ function renderBreakdown(containerId, rows, totalBets) {
 async function loadLeaderboard() {
   const guildId = document.getElementById('stats-guild').value;
   if (!guildId) return;
+
+  trackActivity('view_leaderboard');
 
   const container = document.getElementById('leaderboard-list');
   container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">Loading...</div>';
@@ -2098,8 +2118,10 @@ async function initAnalyticsPage() {
 function renderAnalyticsSummary() {
   document.getElementById('analytics-unique-users').textContent = analyticsData.uniqueUsers;
   document.getElementById('analytics-total-logins').textContent = analyticsData.totalLogins;
+  document.getElementById('analytics-bets-placed').textContent = analyticsData.betsPlaced;
+  document.getElementById('analytics-leaderboard-views').textContent = analyticsData.leaderboardViews;
   document.getElementById('analytics-unique-installs').textContent = analyticsData.uniqueInstallers;
-  document.getElementById('analytics-total-installs').textContent = analyticsData.totalInstalls;
+  document.getElementById('analytics-page-views').textContent = analyticsData.pageViews;
 }
 
 function renderAnalyticsUsers() {
@@ -2220,7 +2242,7 @@ function renderAnalyticsActivity() {
               <img src="${esc(e.avatar)}" class="analytics-avatar" alt="">
               <span>${esc(e.display_name || e.discord_username)}</span>
             </td>
-            <td><span class="analytics-badge ${e.event_type === 'login' ? 'badge-login' : 'badge-install'}">${e.event_type === 'login' ? '🔑 Login' : '📱 Install'}</span></td>
+            <td><span class="analytics-badge ${badgeClass(e.event_type)}">${eventLabel(e.event_type)}</span></td>
             <td>${formatDateTimePretty(e.created_at)}</td>
             <td class="analytics-device">${parseDevice(e.user_agent)}</td>
           </tr>
@@ -2246,6 +2268,31 @@ function parseDevice(ua) {
   if (/Mac/i.test(ua)) return '💻 Mac';
   if (/Linux/i.test(ua)) return '🐧 Linux';
   return '🌐 Other';
+}
+
+function eventLabel(type) {
+  const labels = {
+    login: '🔑 Login',
+    pwa_install: '📱 Install',
+    bet_placed: '🎰 Bet Placed',
+    view_leaderboard: '🏆 Leaderboard',
+    view_stats: '📊 Stats',
+    view_bets: '📋 Bets',
+    view_tools: '🔧 Tools',
+    view_reminders: '⏰ Reminders',
+    page_view: '🎟️ Slip',
+  };
+  return labels[type] || type;
+}
+
+function badgeClass(type) {
+  const classes = {
+    login: 'badge-login',
+    pwa_install: 'badge-install',
+    bet_placed: 'badge-bet',
+    view_leaderboard: 'badge-leaderboard',
+  };
+  return classes[type] || 'badge-page';
 }
 
 // ═══════════════════════════════════════════════

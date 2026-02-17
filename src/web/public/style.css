@@ -2164,6 +2164,21 @@ textarea {
   color: #3fb950;
 }
 
+.badge-bet {
+  background: rgba(245, 197, 24, 0.15);
+  color: #f5c518;
+}
+
+.badge-leaderboard {
+  background: rgba(210, 153, 34, 0.15);
+  color: #d29922;
+}
+
+.badge-page {
+  background: rgba(139, 148, 158, 0.15);
+  color: #8b949e;
+}
+
 @media (max-width: 600px) {
   .analytics-summary {
     grid-template-columns: repeat(2, 1fr);

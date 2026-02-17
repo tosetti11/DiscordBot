@@ -1342,6 +1342,30 @@ function createWebServer() {
     }
   });
 
+  // Generic activity tracking endpoint
+  const ALLOWED_EVENTS = ['page_view', 'bet_placed', 'view_leaderboard', 'view_stats', 'view_bets', 'view_tools', 'view_reminders'];
+  app.post('/api/analytics/track', authMiddleware, async (req, res) => {
+    try {
+      const { event, metadata } = req.body;
+      if (!event || !ALLOWED_EVENTS.includes(event)) {
+        return res.status(400).json({ error: 'Invalid event type' });
+      }
+      await supabase.from('web_analytics').insert({
+        discord_id: req.user.discordId,
+        discord_username: req.user.username,
+        display_name: req.user.displayName,
+        avatar: req.user.avatar,
+        event_type: event,
+        user_agent: req.headers['user-agent'] || null,
+        ip_address: req.ip || null,
+      });
+      res.json({ success: true });
+    } catch (err) {
+      // Silent fail — don't block user experience for analytics
+      res.json({ success: true });
+    }
+  });
+
   // Get analytics data (site owner only)
   app.get('/api/analytics', authMiddleware, async (req, res) => {
     try {
@@ -1355,13 +1379,17 @@ function createWebServer() {
         .from('web_analytics')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(500);
+        .limit(2000);
 
       if (error) throw error;
 
       // Build summary
       const uniqueLogins = new Map();
       const uniqueInstalls = new Map();
+      let betsPlaced = 0;
+      let leaderboardViews = 0;
+      let pageViews = 0;
+
       (events || []).forEach(e => {
         if (e.event_type === 'login') {
           if (!uniqueLogins.has(e.discord_id)) {
@@ -1371,6 +1399,12 @@ function createWebServer() {
           if (!uniqueInstalls.has(e.discord_id)) {
             uniqueInstalls.set(e.discord_id, e);
           }
+        } else if (e.event_type === 'bet_placed') {
+          betsPlaced++;
+        } else if (e.event_type === 'view_leaderboard') {
+          leaderboardViews++;
+        } else {
+          pageViews++;
         }
       });
 
@@ -1379,6 +1413,9 @@ function createWebServer() {
         totalInstalls: events.filter(e => e.event_type === 'pwa_install').length,
         uniqueUsers: uniqueLogins.size,
         uniqueInstallers: uniqueInstalls.size,
+        betsPlaced,
+        leaderboardViews,
+        pageViews,
         events,
       });
     } catch (err) {
