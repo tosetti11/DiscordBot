@@ -1420,6 +1420,12 @@ function renderBetCard(bet, showOwner = false) {
         <button class="btn-action btn-edit" onclick="openEditModal('${bet.id}')" title="Edit">✏️</button>
         <button class="btn-action btn-del" onclick="confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
       </div>`;
+  } else if (betsGuildPerms.isAdmin && ['win', 'loss', 'push', 'void'].includes(bet.status)) {
+    // Admin can reopen closed bets
+    actionsHtml = `
+      <div class="bet-actions">
+        <button class="btn-action btn-reopen" onclick="reopenBet('${bet.id}')" title="Reopen Bet">🔓</button>
+      </div>`;
   } else if (canManage && isParlay && bet.legs?.some(l => l.status === 'open')) {
     // Parlay with some legs still open — show edit/delete only
     actionsHtml = `
@@ -1486,6 +1492,19 @@ function renderBetCard(bet, showOwner = false) {
 }
 
 // ─── Close Bet ─────────
+async function reopenBet(betId) {
+  if (!confirm('Reopen this bet? It will be set back to open status.')) return;
+  try {
+    const res = await fetch(`/api/bets/${betId}/reopen`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Failed to reopen'); return; }
+    showToast('Bet reopened');
+    if (currentBetsTab === 'tailed') loadTailedBets(); else loadBets();
+  } catch (e) {
+    showToast('Failed to reopen bet');
+  }
+}
+
 async function closeBet(betId, status) {
   if (!confirm(`Mark this bet as ${status.toUpperCase()}?`)) return;
 

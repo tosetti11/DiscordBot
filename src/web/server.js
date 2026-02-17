@@ -929,6 +929,46 @@ function createWebServer() {
     }
   });
 
+  // Reopen a closed bet (admin only)
+  app.post('/api/bets/:betId/reopen', authMiddleware, async (req, res) => {
+    try {
+      const { betId } = req.params;
+      const bet = await db.getBet(betId);
+      if (!bet) return res.status(404).json({ error: 'Bet not found' });
+
+      const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Only admins can reopen bets' });
+      if (bet.status === 'open') return res.status(400).json({ error: 'Bet is already open' });
+
+      await db.reopenBet(betId);
+
+      // Reopen all parlay legs too
+      if (bet.bet_type === 'parlay' && bet.parlay_legs) {
+        for (const leg of bet.parlay_legs) {
+          if (['win', 'loss', 'push', 'void'].includes(leg.status)) {
+            await db.updateParlayLegStatus(leg.id, 'open');
+          }
+        }
+      }
+
+      // Update Discord message
+      if (bet.message_id && bet.channel_id) {
+        try {
+          const channel = await discordClient.channels.fetch(bet.channel_id);
+          const message = await channel.messages.fetch(bet.message_id);
+          const updatedBet = await db.getBet(betId);
+          const embed = buildBetEmbed(updatedBet, null, null);
+          await message.edit({ embeds: [embed], components: [] });
+        } catch (e) {}
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[API] Reopen bet error:', err);
+      res.status(500).json({ error: 'Failed to reopen bet' });
+    }
+  });
+
   // Edit a bet
   app.patch('/api/bets/:betId', authMiddleware, async (req, res) => {
     try {

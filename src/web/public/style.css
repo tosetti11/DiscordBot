@@ -1287,6 +1287,7 @@ textarea {
 .btn-action.btn-push  { color: #808080; }
 .btn-action.btn-edit  { color: #5865F2; }
 .btn-action.btn-del   { color: var(--text-danger); }
+.btn-action.btn-reopen { color: #43b581; }
 
 /* Close bet dropdown */
 .close-dropdown {

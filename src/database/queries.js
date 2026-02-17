@@ -354,6 +354,25 @@ async function getAllBetsInGuild(guildId, { status, statusIn, discordId, sport, 
 }
 
 /**
+ * Reopen a closed bet (set status back to open, clear result)
+ */
+async function reopenBet(betId) {
+  const { data, error } = await supabase
+    .from('bets')
+    .update({
+      status: 'open',
+      result_note: null,
+      closed_at: null,
+    })
+    .eq('id', betId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Delete a bet completely (and its parlay legs via CASCADE)
  */
 async function deleteBet(betId, discordId, isAdmin = false) {
@@ -393,5 +412,6 @@ module.exports = {
   getBetBySlip,
   getAllBetsInGuild,
   deleteBet,
+  reopenBet,
   updateBetFields,
 };
