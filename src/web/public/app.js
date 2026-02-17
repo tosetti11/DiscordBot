@@ -261,6 +261,13 @@ function setupEventListeners() {
     document.getElementById('parlay-legs-container').classList.toggle('hidden', !isParlay);
     document.getElementById('parlay-totals').classList.toggle('hidden', !isParlay);
 
+    // Toggle required on single-bet fields so hidden fields don't block form submission
+    const singleRequired = ['sport-select', 'bet-category', 'wager-type', 'odds', 'units'];
+    singleRequired.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.required = !isParlay;
+    });
+
     if (isParlay) {
       buildParlayLegs();
     }
@@ -708,6 +715,12 @@ function resetForm() {
   document.getElementById('parlay-legs-container').classList.add('hidden');
   document.getElementById('parlay-totals').classList.add('hidden');
   document.getElementById('wager-type-group').classList.remove('hidden');
+
+  // Restore required on single-bet fields
+  ['sport-select', 'bet-category', 'wager-type', 'odds', 'units'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.required = true;
+  });
 }
 
 // ── Toast ──
