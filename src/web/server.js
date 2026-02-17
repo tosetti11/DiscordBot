@@ -1108,7 +1108,209 @@ function createWebServer() {
     }
   });
 
+  // ─── Announce / DM API ───
+
+  // Send DM to one user or all members (admin only)
+  app.post('/api/announce', authMiddleware, postLimiter, async (req, res) => {
+    try {
+      const { guildId, message, link, targetUserId } = req.body;
+      if (!guildId || !message) {
+        return res.status(400).json({ error: 'Guild and message are required' });
+      }
+
+      // Admin check for this guild
+      const admin = await isAdminInGuild(guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Admin only' });
+
+      const guild = discordClient?.guilds.cache.get(guildId);
+      if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+      // Build embed
+      const { EmbedBuilder } = require('discord.js');
+      const embed = new EmbedBuilder()
+        .setColor(0xFFD700)
+        .setTitle('👑 TheGamblingKing')
+        .setDescription(message.slice(0, 2000))
+        .setThumbnail('https://thegamblingkingapp.com/TheGamblingKing.jpg')
+        .setTimestamp()
+        .setFooter({ text: 'TheGamblingKing • thegamblingkingapp.com' });
+
+      if (link) {
+        embed.addFields({ name: '🔗 Link', value: link.slice(0, 500) });
+      }
+
+      if (targetUserId && targetUserId !== 'all') {
+        // Single user
+        try {
+          const member = await fetchMember(guild, targetUserId);
+          const dm = await member.createDM();
+          await dm.send({ embeds: [embed] });
+          return res.json({ success: true, sent: 1, failed: 0 });
+        } catch (err) {
+          return res.json({ success: false, sent: 0, failed: 1, error: 'Could not DM user — DMs may be disabled' });
+        }
+      } else {
+        // All members — run async, respond immediately
+        const members = await guild.members.fetch();
+        const nonBots = members.filter(m => !m.user.bot);
+
+        let sent = 0;
+        let failed = 0;
+
+        // Send response immediately with count
+        res.json({ success: true, sending: true, totalMembers: nonBots.size });
+
+        // Send DMs in background
+        for (const [, member] of nonBots) {
+          try {
+            const dm = await member.createDM();
+            await dm.send({ embeds: [embed] });
+            sent++;
+          } catch (err) {
+            failed++;
+          }
+          // Rate limit delay
+          await new Promise(r => setTimeout(r, 500));
+        }
+        console.log(`[Announce] Sent: ${sent}, Failed: ${failed}`);
+      }
+    } catch (err) {
+      console.error('[API] Announce error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to send announcement' });
+      }
+    }
+  });
+
+  // Preview endpoint — returns the embed as JSON for preview rendering
+  app.post('/api/announce/preview', authMiddleware, async (req, res) => {
+    const { guildId } = req.body;
+    if (guildId) {
+      const admin = await isAdminInGuild(guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Admin only' });
+    }
+    const { message, link } = req.body;
+    res.json({
+      title: '👑 TheGamblingKing',
+      description: (message || '').slice(0, 2000),
+      link: link || null,
+      color: '#FFD700',
+      thumbnail: 'https://thegamblingkingapp.com/TheGamblingKing.jpg',
+      footer: 'TheGamblingKing • thegamblingkingapp.com',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // ─── Analytics API ───
+
+  // Get welcome message settings for a guild
+  app.get('/api/guilds/:guildId/welcome', authMiddleware, async (req, res) => {
+    try {
+      const admin = await isAdminInGuild(req.params.guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Admin only' });
+
+      const { data } = await supabase
+        .from('guild_settings')
+        .select('*')
+        .eq('guild_id', req.params.guildId)
+        .single();
+
+      const defaults = {
+        welcome_enabled: true,
+        welcome_message: {
+          title: '👑 Welcome to TheGamblingKing!',
+          description: 'Hey **{user}**, welcome to the server! Here\'s everything you need to get started:',
+          fields: [
+            { name: '🎰 Place Bets', value: 'Use `/enterbet` in any channel or visit the web app to submit your picks with our sleek bet slip.' },
+            { name: '🔗 Tail Bets', value: 'When someone posts a pick, hit **Yes** or **No** on the poll to tail or fade their bet.' },
+            { name: '🏆 Leaderboards', value: 'Use `/leaderboard` to see who\'s on top, or check the web dashboard for full stats.' },
+            { name: '📊 Your Stats', value: 'Use `/mystats` to see your record, ROI, streaks, and more.' },
+            { name: '🌐 Web Dashboard', value: '**[thegamblingkingapp.com](https://thegamblingkingapp.com)**\\nLog in with Discord to place bets, view stats, set reminders, and more — all from your browser or phone.' },
+            { name: '📱 Get the App', value: 'Visit the web dashboard and tap **📱 App** in the nav to install it on your phone for instant access.' },
+          ],
+        },
+      };
+
+      res.json(data || defaults);
+    } catch (err) {
+      console.error('[API] Welcome settings error:', err);
+      res.status(500).json({ error: 'Failed to load welcome settings' });
+    }
+  });
+
+  // Update welcome message settings
+  app.put('/api/guilds/:guildId/welcome', authMiddleware, postLimiter, async (req, res) => {
+    try {
+      const admin = await isAdminInGuild(req.params.guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Admin only' });
+
+      const { welcome_enabled, welcome_message } = req.body;
+
+      // Validate
+      if (welcome_message) {
+        if (welcome_message.title && welcome_message.title.length > 256) {
+          return res.status(400).json({ error: 'Title too long (max 256)' });
+        }
+        if (welcome_message.description && welcome_message.description.length > 2000) {
+          return res.status(400).json({ error: 'Description too long (max 2000)' });
+        }
+        if (welcome_message.fields && welcome_message.fields.length > 10) {
+          return res.status(400).json({ error: 'Too many fields (max 10)' });
+        }
+      }
+
+      const { error } = await supabase
+        .from('guild_settings')
+        .upsert({
+          guild_id: req.params.guildId,
+          welcome_enabled: welcome_enabled !== false,
+          welcome_message: welcome_message || {},
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'guild_id' });
+
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[API] Update welcome error:', err);
+      res.status(500).json({ error: 'Failed to update welcome settings' });
+    }
+  });
+
+  // Send test welcome DM to yourself
+  app.post('/api/guilds/:guildId/welcome/test', authMiddleware, postLimiter, async (req, res) => {
+    try {
+      const admin = await isAdminInGuild(req.params.guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Admin only' });
+
+      const { welcome_message } = req.body;
+      const wm = welcome_message || {};
+
+      const guild = discordClient?.guilds.cache.get(req.params.guildId);
+      if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+      const member = await fetchMember(guild, req.user.discordId);
+      const title = wm.title || '👑 Welcome to TheGamblingKing!';
+      const description = (wm.description || 'Hey **{user}**, welcome to the server!')
+        .replace('{user}', member.displayName);
+
+      const dm = await member.createDM();
+      await dm.send({
+        embeds: [{
+          color: 0xf5c518,
+          title,
+          description,
+          fields: wm.fields || [],
+          thumbnail: { url: 'https://thegamblingkingapp.com/TheGamblingKing.jpg' },
+          footer: { text: 'TheGamblingKing • Good luck out there 🎲' },
+        }],
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[API] Test welcome error:', err);
+      res.status(500).json({ error: 'Failed to send test DM — DMs may be disabled' });
+    }
+  });
 
   // Log PWA install event
   app.post('/api/analytics/pwa-install', authMiddleware, postLimiter, async (req, res) => {

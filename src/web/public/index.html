@@ -44,6 +44,7 @@
           <a href="#" class="nav-link" data-page="tools" onclick="switchPage('tools')">🔧 Tools</a>
           <a href="#" class="nav-link" data-page="install" onclick="switchPage('install')">📱 App</a>
           <a href="#" class="nav-link hidden" data-page="analytics" id="nav-analytics" onclick="switchPage('analytics')">📈 Analytics</a>
+          <a href="#" class="nav-link hidden" data-page="announce" id="nav-announce" onclick="switchPage('announce')">📣 Announce</a>
         </nav>
       </div>
       <div class="header-right">
@@ -911,6 +912,116 @@
       </div>
     </main>
   </div>
+
+  <!-- Announce Page (owner only) -->
+  <main id="announce-page" class="main-content hidden">
+    <div class="stats-container">
+      <h2 class="section-title">📣 Send Announcement</h2>
+      <p class="slip-subtitle">DM a single user or all server members</p>
+
+      <div class="announce-layout">
+        <!-- Compose Form -->
+        <div class="announce-form-card">
+          <div class="form-group">
+            <label for="announce-guild">Server</label>
+            <select id="announce-guild" class="form-select">
+              <option value="" disabled selected>Select server...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="announce-target">Send To</label>
+            <select id="announce-target" class="form-select">
+              <option value="all">📢 All Members</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="announce-message">Message</label>
+            <textarea id="announce-message" class="form-input form-textarea" rows="4" maxlength="2000" placeholder="Type your announcement..."></textarea>
+            <span class="char-count"><span id="announce-char-count">0</span>/2000</span>
+          </div>
+
+          <div class="form-group">
+            <label for="announce-link">Link (optional)</label>
+            <input type="text" id="announce-link" class="form-input" placeholder="https://thegamblingkingapp.com">
+          </div>
+
+          <div class="announce-actions">
+            <button class="btn btn-secondary" onclick="previewAnnouncement()">👁️ Preview</button>
+            <button class="btn btn-accent" id="announce-send-btn" onclick="sendAnnouncement()">📤 Send</button>
+          </div>
+
+          <div id="announce-status" class="announce-status hidden"></div>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="announce-preview-card">
+          <h3 class="card-title">Preview</h3>
+          <div id="announce-preview" class="announce-preview">
+            <div class="preview-embed">
+              <div class="preview-embed-accent"></div>
+              <div class="preview-embed-body">
+                <div class="preview-embed-header">
+                  <img src="/TheGamblingKing.jpg" class="preview-thumb" alt="">
+                  <strong class="preview-title">👑 TheGamblingKing</strong>
+                </div>
+                <p class="preview-description" id="preview-description">Your message will appear here...</p>
+                <div class="preview-link hidden" id="preview-link-field">
+                  <strong>🔗 Link</strong>
+                  <a id="preview-link-value" href="#" target="_blank"></a>
+                </div>
+                <div class="preview-footer">
+                  <span>TheGamblingKing • thegamblingkingapp.com</span>
+                  <span id="preview-timestamp"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Welcome Message Editor -->
+      <div class="welcome-editor-section">
+        <h2 class="section-title" style="margin-top: 32px;">✉️ Welcome Message</h2>
+        <p class="slip-subtitle">Automatically sent via DM when a new member joins the server</p>
+
+        <div class="welcome-editor-card">
+          <div class="form-row" style="align-items: center; margin-bottom: 16px;">
+            <label class="toggle-label" for="welcome-enabled">
+              <input type="checkbox" id="welcome-enabled" checked>
+              <span>Welcome DM Enabled</span>
+            </label>
+          </div>
+
+          <div id="welcome-fields-container">
+            <div class="form-group">
+              <label for="welcome-title">Title</label>
+              <input type="text" id="welcome-title" class="form-input" maxlength="256" value="👑 Welcome to TheGamblingKing!">
+            </div>
+
+            <div class="form-group">
+              <label for="welcome-description">Description <span class="muted-text">(use {user} for member name)</span></label>
+              <textarea id="welcome-description" class="form-input form-textarea" rows="2" maxlength="2000">Hey **{user}**, welcome to the server! Here's everything you need to get started:</textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Fields <span class="muted-text">(sections in the message)</span></label>
+              <div id="welcome-fields-list"></div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addWelcomeField()" style="margin-top: 8px;">+ Add Field</button>
+            </div>
+          </div>
+
+          <div class="announce-actions">
+            <button class="btn btn-secondary" onclick="testWelcomeMessage()">📩 Send Test DM</button>
+            <button class="btn btn-accent" onclick="saveWelcomeMessage()">💾 Save</button>
+          </div>
+
+          <div id="welcome-status" class="announce-status hidden"></div>
+        </div>
+      </div>
+    </div>
+  </main>
 
   <!-- Analytics Page (admin only) -->
   <main id="analytics-page" class="main-content hidden">

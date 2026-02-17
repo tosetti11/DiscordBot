@@ -204,3 +204,11 @@ CREATE INDEX IF NOT EXISTS idx_web_analytics_event_type
 
 CREATE INDEX IF NOT EXISTS idx_web_analytics_discord_id
   ON web_analytics (discord_id, event_type);
+
+-- Guild settings (welcome message, etc.)
+CREATE TABLE IF NOT EXISTS guild_settings (
+  guild_id TEXT PRIMARY KEY,
+  welcome_enabled BOOLEAN DEFAULT true,
+  welcome_message JSONB DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);

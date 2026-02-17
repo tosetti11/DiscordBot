@@ -16,6 +16,7 @@ const retrobet = require('./commands/betting/retrobet');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 const reminder = require('./commands/general/reminder');
+const announce = require('./commands/general/announce');
 const remindersDb = require('./database/reminders');
 const { createWebServer, setDiscordClient } = require('./web/server');
 
@@ -30,7 +31,7 @@ const client = new Client({
 
 // Register commands in a collection
 client.commands = new Collection();
-const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, retrobet, help, convertodds, reminder];
+const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, retrobet, help, convertodds, reminder, announce];
 for (const mod of commandModules) {
   client.commands.set(mod.command.name, mod);
 }
@@ -254,40 +255,41 @@ if (!process.env.DISCORD_TOKEN) {
 }
 
 // ─── Welcome DM on Member Join ───
+const { supabase } = require('./config/supabase');
+
+const DEFAULT_WELCOME_FIELDS = [
+  { name: '🎰 Place Bets', value: 'Use `/enterbet` in any channel or visit the web app to submit your picks with our sleek bet slip.' },
+  { name: '🔗 Tail Bets', value: 'When someone posts a pick, hit **Yes** or **No** on the poll to tail or fade their bet.' },
+  { name: '🏆 Leaderboards', value: 'Use `/leaderboard` to see who\'s on top, or check the web dashboard for full stats.' },
+  { name: '📊 Your Stats', value: 'Use `/mystats` to see your record, ROI, streaks, and more.' },
+  { name: '🌐 Web Dashboard', value: '**[thegamblingkingapp.com](https://thegamblingkingapp.com)**\nLog in with Discord to place bets, view stats, set reminders, and more — all from your browser or phone.' },
+  { name: '📱 Get the App', value: 'Visit the web dashboard and tap **📱 App** in the nav to install it on your phone for instant access.' },
+];
+
 client.on(Events.GuildMemberAdd, async (member) => {
   try {
+    // Check if welcome is enabled and get custom message
+    const { data: settings } = await supabase
+      .from('guild_settings')
+      .select('*')
+      .eq('guild_id', member.guild.id)
+      .single();
+
+    // If explicitly disabled, skip
+    if (settings && settings.welcome_enabled === false) return;
+
+    const wm = settings?.welcome_message || {};
+    const title = wm.title || '👑 Welcome to TheGamblingKing!';
+    const description = wm.description || `Hey **${member.displayName}**, welcome to the server! Here's everything you need to get started:`;
+    const fields = wm.fields || DEFAULT_WELCOME_FIELDS;
+
     const dm = await member.createDM();
     await dm.send({
       embeds: [{
         color: 0xf5c518,
-        title: '👑 Welcome to TheGamblingKing!',
-        description: `Hey **${member.displayName}**, welcome to the server! Here\'s everything you need to get started:`,
-        fields: [
-          {
-            name: '🎰 Place Bets',
-            value: 'Use `/enterbet` in any channel or visit the web app to submit your picks with our sleek bet slip.',
-          },
-          {
-            name: '🔗 Tail Bets',
-            value: 'When someone posts a pick, hit **Yes** or **No** on the poll to tail or fade their bet.',
-          },
-          {
-            name: '🏆 Leaderboards',
-            value: 'Use `/leaderboard` to see who\'s on top, or check the web dashboard for full stats.',
-          },
-          {
-            name: '📊 Your Stats',
-            value: 'Use `/mystats` to see your record, ROI, streaks, and more.',
-          },
-          {
-            name: '🌐 Web Dashboard',
-            value: '**[thegamblingkingapp.com](https://thegamblingkingapp.com)**\nLog in with Discord to place bets, view stats, set reminders, and more — all from your browser or phone.',
-          },
-          {
-            name: '📱 Get the App',
-            value: 'Visit the web dashboard and tap **📱 App** in the nav to install it on your phone for instant access.',
-          },
-        ],
+        title,
+        description: description.replace('{user}', member.displayName),
+        fields,
         thumbnail: { url: 'https://thegamblingkingapp.com/TheGamblingKing.jpg' },
         footer: { text: 'TheGamblingKing • Good luck out there 🎲' },
       }],

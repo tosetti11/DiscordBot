@@ -17,6 +17,7 @@ const retrobet = require('./commands/betting/retrobet');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 const reminder = require('./commands/general/reminder');
+const announce = require('./commands/general/announce');
 
 
 const commandObjs = [
@@ -34,6 +35,7 @@ const commandObjs = [
   help.command,
   convertodds.command,
   reminder.command,
+  announce.command,
 ];
 console.log('Registering the following commands:');
 for (const c of commandObjs) {

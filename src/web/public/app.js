@@ -142,7 +142,7 @@ function showApp() {
   autoSelectGuild(guildSelect);
 
   // Check if user is admin in any guild to show analytics nav
-  checkAdminForAnalytics();
+  checkOwnerFeatures();
 
   // Populate sports
   const sportSelect = document.getElementById('sport-select');
@@ -741,6 +741,7 @@ function switchPage(page) {
     tools: document.getElementById('tools-page'),
     install: document.getElementById('install-page'),
     analytics: document.getElementById('analytics-page'),
+    announce: document.getElementById('announce-page'),
   };
 
   // Hide all, show selected
@@ -755,6 +756,7 @@ function switchPage(page) {
   if (page === 'bets') initBetsPage();
   if (page === 'reminders') initRemindersPage();
   if (page === 'analytics') initAnalyticsPage();
+  if (page === 'announce') initAnnouncePage();
 }
 
 // ═══════════════════════════════════════════════
@@ -2030,8 +2032,8 @@ async function convertOdds(e) {
 //  Admin Analytics
 // ═══════════════════════════════════════════════
 
-async function checkAdminForAnalytics() {
-  // Only the site owner can see analytics — try the endpoint
+async function checkOwnerFeatures() {
+  // Analytics: owner-only (try the endpoint)
   try {
     const res = await fetch('/api/analytics');
     if (res.ok) {
@@ -2039,6 +2041,18 @@ async function checkAdminForAnalytics() {
       if (navLink) navLink.classList.remove('hidden');
     }
   } catch (e) {}
+
+  // Announce: admin in any guild
+  for (const g of currentUser.guilds) {
+    try {
+      const data = await fetch(`/api/guilds/${g.id}/roles`).then(r => r.json());
+      if (data.isAdmin) {
+        const announceLink = document.getElementById('nav-announce');
+        if (announceLink) announceLink.classList.remove('hidden');
+        break;
+      }
+    } catch (e) {}
+  }
 }
 
 let analyticsInitialized = false;
@@ -2219,7 +2233,279 @@ function parseDevice(ua) {
   return '🌐 Other';
 }
 
-// Calendar button event listeners
+// ═══════════════════════════════════════════════
+//  Announce / DM Composer
+// ═══════════════════════════════════════════════
+
+let announceInitialized = false;
+
+function initAnnouncePage() {
+  if (announceInitialized) return;
+  announceInitialized = true;
+
+  // Populate guild dropdown
+  const guildSelect = document.getElementById('announce-guild');
+  currentUser.guilds.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    guildSelect.appendChild(opt);
+  });
+
+  // Auto-select if one guild
+  if (currentUser.guilds.length === 1) {
+    guildSelect.value = currentUser.guilds[0].id;
+    guildSelect.closest('.form-group').style.display = 'none';
+    loadAnnounceMembers(currentUser.guilds[0].id);
+    loadWelcomeSettings(currentUser.guilds[0].id);
+  }
+
+  // Guild change → load members + welcome settings
+  guildSelect.addEventListener('change', () => {
+    loadAnnounceMembers(guildSelect.value);
+    loadWelcomeSettings(guildSelect.value);
+  });
+
+  // Live preview as you type
+  const msgInput = document.getElementById('announce-message');
+  const linkInput = document.getElementById('announce-link');
+  const charCount = document.getElementById('announce-char-count');
+
+  msgInput.addEventListener('input', () => {
+    charCount.textContent = msgInput.value.length;
+    updateAnnouncePreview();
+  });
+  linkInput.addEventListener('input', () => updateAnnouncePreview());
+
+  // Set initial timestamp
+  document.getElementById('preview-timestamp').textContent = new Date().toLocaleString();
+}
+
+async function loadAnnounceMembers(guildId) {
+  const targetSelect = document.getElementById('announce-target');
+  targetSelect.innerHTML = '<option value="all">📢 All Members</option><option disabled>Loading members...</option>';
+
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/members`);
+    const members = await res.json();
+    targetSelect.innerHTML = '<option value="all">📢 All Members</option>';
+    members.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.displayName;
+      targetSelect.appendChild(opt);
+    });
+  } catch (e) {
+    targetSelect.innerHTML = '<option value="all">📢 All Members</option>';
+  }
+}
+
+function updateAnnouncePreview() {
+  const msg = document.getElementById('announce-message').value || 'Your message will appear here...';
+  const link = document.getElementById('announce-link').value;
+
+  document.getElementById('preview-description').textContent = msg;
+
+  const linkField = document.getElementById('preview-link-field');
+  const linkValue = document.getElementById('preview-link-value');
+  if (link) {
+    linkField.classList.remove('hidden');
+    linkValue.textContent = link;
+    linkValue.href = link;
+  } else {
+    linkField.classList.add('hidden');
+  }
+
+  document.getElementById('preview-timestamp').textContent = new Date().toLocaleString();
+}
+
+function previewAnnouncement() {
+  updateAnnouncePreview();
+}
+
+async function sendAnnouncement() {
+  const guildId = document.getElementById('announce-guild').value;
+  const targetUserId = document.getElementById('announce-target').value;
+  const message = document.getElementById('announce-message').value.trim();
+  const link = document.getElementById('announce-link').value.trim();
+  const statusDiv = document.getElementById('announce-status');
+  const sendBtn = document.getElementById('announce-send-btn');
+
+  if (!guildId) {
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = 'Please select a server.';
+    statusDiv.classList.remove('hidden');
+    return;
+  }
+  if (!message) {
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = 'Please enter a message.';
+    statusDiv.classList.remove('hidden');
+    return;
+  }
+
+  const targetName = targetUserId === 'all'
+    ? 'ALL members'
+    : document.getElementById('announce-target').selectedOptions[0]?.textContent || 'user';
+
+  if (!confirm(`Send this DM to ${targetName}?`)) return;
+
+  sendBtn.disabled = true;
+  sendBtn.textContent = '⏳ Sending...';
+  statusDiv.className = 'announce-status announce-info';
+  statusDiv.textContent = 'Sending...';
+  statusDiv.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/announce', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guildId, message, link: link || null, targetUserId }),
+    });
+    const data = await res.json();
+
+    if (data.sending) {
+      statusDiv.className = 'announce-status announce-success';
+      statusDiv.textContent = `📤 Sending DMs to ${data.totalMembers} members in the background. Check server logs for results.`;
+    } else if (data.success) {
+      statusDiv.className = 'announce-status announce-success';
+      statusDiv.textContent = `✅ DM sent successfully! (${data.sent} sent, ${data.failed} failed)`;
+    } else {
+      statusDiv.className = 'announce-status announce-error';
+      statusDiv.textContent = `❌ ${data.error || 'Failed to send'}`;
+    }
+  } catch (e) {
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = '❌ Failed to send announcement.';
+  }
+
+  sendBtn.disabled = false;
+  sendBtn.textContent = '📤 Send';
+}
+
+// ── Welcome Message Editor ──
+let welcomeLoaded = false;
+
+async function loadWelcomeSettings(guildId) {
+  if (!guildId) return;
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/welcome`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    document.getElementById('welcome-enabled').checked = data.enabled;
+    document.getElementById('welcome-title').value = data.title || '';
+    document.getElementById('welcome-description').value = data.description || '';
+
+    const list = document.getElementById('welcome-fields-list');
+    list.innerHTML = '';
+    (data.fields || []).forEach(f => addWelcomeField(f.name, f.value));
+
+    welcomeLoaded = true;
+  } catch (e) {
+    console.error('Failed to load welcome settings', e);
+  }
+}
+
+function addWelcomeField(name, value) {
+  const list = document.getElementById('welcome-fields-list');
+  const row = document.createElement('div');
+  row.className = 'welcome-field-row';
+  row.innerHTML = `
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" class="form-input wf-name" maxlength="256" value="${esc(name || '')}">
+    </div>
+    <div class="form-group">
+      <label>Value</label>
+      <input type="text" class="form-input wf-value" maxlength="1024" value="${esc(value || '')}">
+    </div>
+    <button type="button" class="welcome-field-remove" onclick="this.closest('.welcome-field-row').remove()" title="Remove">✕</button>
+  `;
+  list.appendChild(row);
+}
+
+function getWelcomePayload() {
+  const guildId = document.getElementById('announce-guild').value;
+  const enabled = document.getElementById('welcome-enabled').checked;
+  const title = document.getElementById('welcome-title').value.trim();
+  const description = document.getElementById('welcome-description').value.trim();
+  const fieldRows = document.querySelectorAll('#welcome-fields-list .welcome-field-row');
+  const fields = [];
+  fieldRows.forEach(row => {
+    const name = row.querySelector('.wf-name').value.trim();
+    const value = row.querySelector('.wf-value').value.trim();
+    if (name && value) fields.push({ name, value });
+  });
+  return { guildId, enabled, title, description, fields };
+}
+
+async function saveWelcomeMessage() {
+  const { guildId, enabled, title, description, fields } = getWelcomePayload();
+  const statusDiv = document.getElementById('welcome-status');
+
+  if (!guildId) {
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = 'Please select a server first.';
+    statusDiv.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/welcome`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, title, description, fields }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      statusDiv.className = 'announce-status announce-success';
+      statusDiv.textContent = '✅ Welcome message saved!';
+    } else {
+      statusDiv.className = 'announce-status announce-error';
+      statusDiv.textContent = `❌ ${data.error || 'Failed to save'}`;
+    }
+  } catch (e) {
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = '❌ Failed to save welcome message.';
+  }
+  statusDiv.classList.remove('hidden');
+}
+
+async function testWelcomeMessage() {
+  const { guildId, title, description, fields } = getWelcomePayload();
+  const statusDiv = document.getElementById('welcome-status');
+
+  if (!guildId) {
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = 'Please select a server first.';
+    statusDiv.classList.remove('hidden');
+    return;
+  }
+
+  statusDiv.className = 'announce-status announce-info';
+  statusDiv.textContent = '📩 Sending test DM...';
+  statusDiv.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/welcome/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description, fields }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      statusDiv.className = 'announce-status announce-success';
+      statusDiv.textContent = '✅ Test DM sent! Check your DMs.';
+    } else {
+      statusDiv.className = 'announce-status announce-error';
+      statusDiv.textContent = `❌ ${data.error || 'Failed to send test'}`;
+    }
+  } catch (e) {
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = '❌ Failed to send test DM.';
+  }
+}
 document.addEventListener('DOMContentLoaded', function() {
   const eventCalBtn = document.getElementById('event-time-cal-btn');
   if (eventCalBtn) {
