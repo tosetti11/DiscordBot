@@ -440,7 +440,64 @@
           <!-- Tail Stats -->
           <div class="stats-section" id="tail-section">
             <h3 class="section-title">🔗 Tailing Stats</h3>
-            <div class="breakdown-grid" id="tail-breakdown"></div>
+            <div id="tail-breakdown">
+              <div class="kpi-grid">
+                <div class="kpi-card">
+                  <div class="kpi-label">Record</div>
+                  <div class="kpi-value" id="tail-kpi-record">—</div>
+                </div>
+                <div class="kpi-card accent">
+                  <div class="kpi-label">Win %</div>
+                  <div class="kpi-value" id="tail-kpi-winpct">—</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-label">Net Units</div>
+                  <div class="kpi-value" id="tail-kpi-net">—</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-label">ROI</div>
+                  <div class="kpi-value" id="tail-kpi-roi">—</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-label">Total Tails</div>
+                  <div class="kpi-value" id="tail-kpi-total">—</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-label">Open</div>
+                  <div class="kpi-value" id="tail-kpi-open">—</div>
+                </div>
+              </div>
+              <div class="highlights-row">
+                <div class="highlight-card">
+                  <div class="highlight-label">Current Streak</div>
+                  <div class="highlight-value" id="tail-hl-streak">—</div>
+                </div>
+                <div class="highlight-card">
+                  <div class="highlight-label">Avg Odds</div>
+                  <div class="highlight-value" id="tail-hl-avg-odds">—</div>
+                </div>
+                <div class="highlight-card">
+                  <div class="highlight-label">Avg Units</div>
+                  <div class="highlight-value" id="tail-hl-avg-units">—</div>
+                </div>
+                <div class="highlight-card">
+                  <div class="highlight-label">Units Wagered</div>
+                  <div class="highlight-value" id="tail-hl-wagered">—</div>
+                </div>
+              </div>
+              <div class="highlights-row">
+                <div class="highlight-card best">
+                  <div class="highlight-label">💰 Best Tail</div>
+                  <div class="highlight-value" id="tail-hl-best">—</div>
+                  <div class="highlight-sub" id="tail-hl-best-detail"></div>
+                </div>
+                <div class="highlight-card worst">
+                  <div class="highlight-label">💸 Worst Tail</div>
+                  <div class="highlight-value" id="tail-hl-worst">—</div>
+                  <div class="highlight-sub" id="tail-hl-worst-detail"></div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Daily P&L Chart (text-based) -->

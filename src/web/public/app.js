@@ -897,51 +897,69 @@ function fmtNet(v) {
   return `${v >= 0 ? '+' : ''}${fmtU(v)}u`;
 }
 
+function populateTailSection(t) {
+  document.getElementById('tail-kpi-record').textContent = `${t.tail_wins}W-${t.tail_losses}L-${t.tail_pushes}P`;
+  setKPI('tail-kpi-winpct', `${t.tail_win_pct}%`);
+  setKPI('tail-kpi-net', fmtNet(t.tail_net_units), t.tail_net_units);
+  setKPI('tail-kpi-roi', `${t.tail_roi}%`, t.tail_roi);
+  document.getElementById('tail-kpi-total').textContent = t.total_tails;
+  document.getElementById('tail-kpi-open').textContent = t.open_tails;
+
+  // Streak
+  const streakEl = document.getElementById('tail-hl-streak');
+  if (t.tail_streak && t.tail_streak.count > 0) {
+    streakEl.textContent = `${t.tail_streak.count} ${t.tail_streak.type === 'win' ? '🔥 W' : '❄️ L'}`;
+    streakEl.className = `highlight-value ${t.tail_streak.type === 'win' ? 'positive' : 'negative'}`;
+  } else {
+    streakEl.textContent = '—';
+    streakEl.className = 'highlight-value';
+  }
+
+  document.getElementById('tail-hl-avg-odds').textContent = t.tail_avg_odds >= 0 ? `+${t.tail_avg_odds}` : t.tail_avg_odds;
+  document.getElementById('tail-hl-avg-units').textContent = `${t.tail_avg_units}u`;
+  document.getElementById('tail-hl-wagered').textContent = `${fmtU(t.tail_units_wagered)}u`;
+
+  // Best / Worst tail
+  if (t.tail_best_bet) {
+    document.getElementById('tail-hl-best').textContent = fmtNet(t.tail_best_bet.payout);
+    document.getElementById('tail-hl-best').className = 'highlight-value positive';
+    document.getElementById('tail-hl-best-detail').textContent = `${t.tail_best_bet.pick} (${t.tail_best_bet.odds >= 0 ? '+' : ''}${t.tail_best_bet.odds})`;
+  }
+  if (t.tail_worst_bet) {
+    document.getElementById('tail-hl-worst').textContent = fmtNet(t.tail_worst_bet.payout);
+    document.getElementById('tail-hl-worst').className = 'highlight-value negative';
+    document.getElementById('tail-hl-worst-detail').textContent = `${t.tail_worst_bet.pick} (${t.tail_worst_bet.odds >= 0 ? '+' : ''}${t.tail_worst_bet.odds})`;
+  }
+}
+
 function renderTailOnlyStats(data) {
   const t = data.tailStats;
 
-  // Set KPIs to tail data
-  document.getElementById('kpi-record').textContent = `${t.tail_wins}W-${t.tail_losses}L-${t.tail_pushes}P`;
-  setKPI('kpi-winpct', `${t.tail_win_pct}%`);
-  setKPI('kpi-net', fmtNet(t.tail_net_units), t.tail_net_units);
-  setKPI('kpi-roi', '—');
-  document.getElementById('kpi-total').textContent = t.total_tails;
-  document.getElementById('kpi-open').textContent = t.open_tails;
+  // Clear main KPIs (no personal bets)
+  document.getElementById('kpi-record').textContent = '0W-0L-0P';
+  setKPI('kpi-winpct', '0%');
+  setKPI('kpi-net', '0u', 0);
+  setKPI('kpi-roi', '0%', 0);
+  document.getElementById('kpi-total').textContent = '0';
+  document.getElementById('kpi-open').textContent = '0';
 
-  // Highlights — show tail context
   const streakEl = document.getElementById('hl-streak');
   streakEl.textContent = '—';
   streakEl.className = 'highlight-value';
   document.getElementById('hl-avg-odds').textContent = '—';
   document.getElementById('hl-avg-units').textContent = '—';
   document.getElementById('hl-wagered').textContent = '—';
-
-  // Best / Worst
-  const bestEl = document.getElementById('hl-best');
-  const worstEl = document.getElementById('hl-worst');
-  bestEl.textContent = '—';
-  bestEl.className = 'highlight-value';
+  document.getElementById('hl-best').textContent = '—';
+  document.getElementById('hl-best').className = 'highlight-value';
   document.getElementById('hl-best-detail').textContent = '';
-  worstEl.textContent = '—';
-  worstEl.className = 'highlight-value';
+  document.getElementById('hl-worst').textContent = '—';
+  document.getElementById('hl-worst').className = 'highlight-value';
   document.getElementById('hl-worst-detail').textContent = '';
 
-  // Show tail section prominently
+  // Show tail section with full stats
   const tailSec = document.getElementById('tail-section');
   tailSec.classList.remove('hidden');
-  document.getElementById('tail-breakdown').innerHTML = `
-    <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">This user has only tailed bets — no bets placed directly.</p>
-    <div class="breakdown-row">
-      <span class="breakdown-name">🔗 Tails (${t.total_tails})</span>
-      <div class="breakdown-bar-wrap">
-        <div class="breakdown-bar ${t.tail_win_pct >= 50 ? 'green' : 'red'}" style="width:${t.tail_win_pct}%"></div>
-      </div>
-      <span class="breakdown-stats">
-        ${t.tail_wins}W-${t.tail_losses}L-${t.tail_pushes}P | ${t.tail_win_pct}% |
-        <span class="breakdown-net ${t.tail_net_units >= 0 ? 'positive' : 'negative'}">${fmtNet(t.tail_net_units)}</span>
-      </span>
-    </div>
-  `;
+  populateTailSection(t);
 
   // Hide sections that don't apply
   renderBreakdown('bet-type-breakdown', [], 0);
@@ -1019,19 +1037,7 @@ function renderStats(data) {
   const tailSec = document.getElementById('tail-section');
   if (data.tailStats) {
     tailSec.classList.remove('hidden');
-    const t = data.tailStats;
-    document.getElementById('tail-breakdown').innerHTML = `
-      <div class="breakdown-row">
-        <span class="breakdown-name">🔗 Tails</span>
-        <div class="breakdown-bar-wrap">
-          <div class="breakdown-bar ${t.tail_win_pct >= 50 ? 'green' : 'red'}" style="width:${t.tail_win_pct}%"></div>
-        </div>
-        <span class="breakdown-stats">
-          ${t.tail_wins}W-${t.tail_losses}L-${t.tail_pushes}P | ${t.tail_win_pct}% |
-          <span class="breakdown-net ${t.tail_net_units >= 0 ? 'positive' : 'negative'}">${fmtNet(t.tail_net_units)}</span>
-        </span>
-      </div>
-    `;
+    populateTailSection(data.tailStats);
   } else {
     tailSec.classList.add('hidden');
   }

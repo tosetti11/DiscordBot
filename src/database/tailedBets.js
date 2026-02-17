@@ -161,11 +161,12 @@ async function getTailersInGuild(guildId) {
 
 /**
  * Get tail stats for a user scoped to a specific guild
+ * Returns full stats matching the user bet section layout
  */
 async function getTailStatsInGuild(discordId, guildId) {
   const { data, error } = await supabase
     .from('tailed_bets')
-    .select('*, bets!inner(status, units, odds_american, guild_id)')
+    .select('*, bets!inner(status, units, odds_american, guild_id, pick, sport, created_at)')
     .eq('tailer_discord_id', discordId)
     .eq('tailed', true)
     .eq('bets.guild_id', guildId);
@@ -173,26 +174,69 @@ async function getTailStatsInGuild(discordId, guildId) {
   if (error) throw error;
   if (!data || data.length === 0) return null;
 
+  const total = data.length;
+  const open = data.filter(t => t.bets.status === 'open').length;
   const closed = data.filter(t => ['win', 'loss', 'push'].includes(t.bets.status));
   const wins = closed.filter(t => t.bets.status === 'win').length;
   const losses = closed.filter(t => t.bets.status === 'loss').length;
   const pushes = closed.filter(t => t.bets.status === 'push').length;
-  const total = data.length;
-  const open = data.filter(t => t.bets.status === 'open').length;
+  const winPct = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 1000) / 10 : 0;
 
   let netUnits = 0;
+  let unitsWagered = 0;
   for (const t of closed) {
     const b = t.bets;
+    unitsWagered += Number(b.units);
     if (b.status === 'win') {
       netUnits += b.odds_american >= 0
         ? b.units * (b.odds_american / 100)
         : b.units * (100 / Math.abs(b.odds_american));
     } else if (b.status === 'loss') {
-      netUnits -= b.units;
+      netUnits -= Number(b.units);
+    }
+  }
+  netUnits = Math.round(netUnits * 100) / 100;
+  unitsWagered = Math.round(unitsWagered * 100) / 100;
+  const roi = unitsWagered > 0 ? Math.round((netUnits / unitsWagered) * 1000) / 10 : 0;
+
+  // Avg odds
+  const allOdds = data.filter(t => t.bets.odds_american).map(t => t.bets.odds_american);
+  const avgOdds = allOdds.length > 0 ? Math.round(allOdds.reduce((a, b) => a + b, 0) / allOdds.length) : 0;
+
+  // Avg units
+  const allUnits = data.map(t => Number(t.bets.units));
+  const avgUnits = allUnits.length > 0 ? Math.round((allUnits.reduce((a, b) => a + b, 0) / allUnits.length) * 100) / 100 : 0;
+
+  // Streak (most recent closed first)
+  const closedSorted = data
+    .filter(t => ['win', 'loss'].includes(t.bets.status))
+    .sort((a, b) => new Date(b.bets.created_at) - new Date(a.bets.created_at));
+  let streakCount = 0;
+  let streakType = '';
+  if (closedSorted.length > 0) {
+    streakType = closedSorted[0].bets.status;
+    for (const t of closedSorted) {
+      if (t.bets.status === streakType) streakCount++;
+      else break;
     }
   }
 
-  const winPct = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 1000) / 10 : 0;
+  // Best / worst bet
+  let bestBet = null, worstBet = null;
+  for (const t of closed.filter(t => ['win', 'loss'].includes(t.bets.status))) {
+    const b = t.bets;
+    let payout = 0;
+    if (b.status === 'win') {
+      payout = b.odds_american >= 0
+        ? b.units * (b.odds_american / 100)
+        : b.units * (100 / Math.abs(b.odds_american));
+    } else {
+      payout = -b.units;
+    }
+    payout = Math.round(payout * 100) / 100;
+    if (!bestBet || payout > bestBet.payout) bestBet = { pick: b.pick, payout, odds: b.odds_american, units: b.units, sport: b.sport };
+    if (!worstBet || payout < worstBet.payout) worstBet = { pick: b.pick, payout, odds: b.odds_american, units: b.units, sport: b.sport };
+  }
 
   return {
     total_tails: total,
@@ -201,7 +245,14 @@ async function getTailStatsInGuild(discordId, guildId) {
     tail_losses: losses,
     tail_pushes: pushes,
     tail_win_pct: winPct,
-    tail_net_units: Math.round(netUnits * 100) / 100,
+    tail_net_units: netUnits,
+    tail_units_wagered: unitsWagered,
+    tail_roi: roi,
+    tail_avg_odds: avgOdds,
+    tail_avg_units: avgUnits,
+    tail_streak: { count: streakCount, type: streakType },
+    tail_best_bet: bestBet,
+    tail_worst_bet: worstBet,
   };
 }
 
