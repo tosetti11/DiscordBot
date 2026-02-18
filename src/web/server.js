@@ -294,8 +294,36 @@ function createWebServer() {
         }
       } catch (e) {}
     }
+    // Provide a proxied avatar URL so browsers don't cache stale CDN images
+    user.avatarProxy = `/api/avatar/${user.discordId}`;
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json(user);
+  });
+
+  // Proxy avatar image through our server to avoid CDN cache issues
+  app.get('/api/avatar/:discordId', async (req, res) => {
+    try {
+      let avatarUrl = null;
+      if (discordClient) {
+        const dUser = await discordClient.users.fetch(req.params.discordId).catch(() => null);
+        if (dUser) {
+          avatarUrl = dUser.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+        }
+      }
+      if (!avatarUrl) {
+        // Default Discord avatar
+        const index = Number((BigInt(req.params.discordId) >> 22n) % 6n);
+        avatarUrl = `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+      }
+      const response = await fetch(avatarUrl);
+      if (!response.ok) throw new Error('Failed to fetch avatar');
+      res.set('Content-Type', response.headers.get('content-type') || 'image/png');
+      res.set('Cache-Control', 'no-cache, must-revalidate');
+      const buffer = await response.arrayBuffer();
+      res.send(Buffer.from(buffer));
+    } catch (e) {
+      res.redirect(`https://cdn.discordapp.com/embed/avatars/0.png`);
+    }
   });
 
   // Logout
