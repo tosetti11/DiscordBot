@@ -891,23 +891,22 @@ function toggleAdminMenu() {
 }
 
 // ═══════════════════════════════════════════════
-//  Chat Drawer (Discord Widgetbot)
+//  Floating Chat Panel (Discord Widgetbot)
 // ═══════════════════════════════════════════════
 
-let chatDrawerOpen = false;
+let chatPanelOpen = false;
 let chatWidgetLoaded = false;
 let chatOnlineInterval = null;
 
-function toggleChatDrawer() {
-  chatDrawerOpen = !chatDrawerOpen;
-  document.getElementById('chat-drawer').classList.toggle('open', chatDrawerOpen);
-  document.getElementById('chat-drawer-overlay').classList.toggle('open', chatDrawerOpen);
-  closeSidebar();
+function toggleChatPanel() {
+  chatPanelOpen = !chatPanelOpen;
+  document.getElementById('chat-panel').classList.toggle('open', chatPanelOpen);
+  document.getElementById('chat-fab').classList.toggle('hidden', chatPanelOpen);
 
-  if (chatDrawerOpen && !chatWidgetLoaded) {
+  if (chatPanelOpen && !chatWidgetLoaded) {
     loadChatWidget();
   }
-  if (chatDrawerOpen) {
+  if (chatPanelOpen) {
     fetchOnlineMembers();
     if (!chatOnlineInterval) {
       chatOnlineInterval = setInterval(fetchOnlineMembers, 60000);
@@ -917,11 +916,9 @@ function toggleChatDrawer() {
 
 function loadChatWidget() {
   const wrap = document.getElementById('chat-widget-wrap');
-  // Use the first guild the user has access to
   const guildSel = document.getElementById('guild-select');
   const guildId = guildSel?.value || '1465176016828895456';
 
-  // Find the chat channel ID from the channels dropdown if available, otherwise use guild default
   fetch(`/api/guilds/${guildId}/chat-channel`)
     .then(r => r.json())
     .then(data => {
@@ -947,9 +944,9 @@ async function fetchOnlineMembers() {
     if (!data.members) return;
 
     const countEl = document.getElementById('chat-online-count');
-    const dotEl = document.getElementById('chat-online-dot');
-    countEl.textContent = `${data.members.length} online`;
-    if (dotEl) dotEl.title = `${data.members.length} online`;
+    const badgeEl = document.getElementById('chat-fab-badge');
+    countEl.textContent = data.members.length;
+    if (badgeEl) badgeEl.textContent = data.members.length > 0 ? data.members.length : '';
 
     const listEl = document.getElementById('chat-online-list');
     listEl.innerHTML = data.members.map(m => `
@@ -966,9 +963,7 @@ async function fetchOnlineMembers() {
 
 function toggleOnlineList() {
   const list = document.getElementById('chat-online-list');
-  const btn = document.getElementById('chat-online-toggle');
   list.classList.toggle('hidden');
-  btn.classList.toggle('expanded');
 }
 
 function switchPage(page) {

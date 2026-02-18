@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=6">
+  <link rel="stylesheet" href="/style.css?v=7">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -75,10 +75,6 @@
         </a>
         <a href="javascript:void(0)" class="sidebar-link" data-page="install" onclick="switchPage('install')">
           <span class="sidebar-icon">📱</span> App
-        </a>
-        <a href="javascript:void(0)" class="sidebar-link" id="chat-nav-link" onclick="toggleChatDrawer()">
-          <span class="sidebar-icon">💬</span> Chat
-          <span class="chat-online-dot" id="chat-online-dot" title="0 online"></span>
         </a>
         <!-- Admin Section -->
         <div class="sidebar-divider"></div>
@@ -1289,17 +1285,19 @@
   </main>
   </div>
 
-  <!-- Chat Drawer -->
-  <div id="chat-drawer-overlay" class="chat-drawer-overlay" onclick="toggleChatDrawer()"></div>
-  <aside id="chat-drawer" class="chat-drawer">
-    <div class="chat-drawer-header">
+  <!-- Floating Chat Panel -->
+  <div id="chat-fab" class="chat-fab" onclick="toggleChatPanel()">
+    <span class="chat-fab-icon">💬</span>
+    <span class="chat-fab-badge" id="chat-fab-badge"></span>
+  </div>
+  <aside id="chat-panel" class="chat-panel">
+    <div class="chat-panel-header">
       <h3>💬 Server Chat</h3>
-      <button class="chat-drawer-close" onclick="toggleChatDrawer()">✕</button>
-    </div>
-    <div class="chat-online-bar" id="chat-online-bar">
-      <span class="chat-online-icon">🟢</span>
-      <span id="chat-online-count">0 online</span>
-      <button class="chat-online-toggle" id="chat-online-toggle" onclick="toggleOnlineList()">▸</button>
+      <div class="chat-panel-actions">
+        <span class="chat-online-indicator" id="chat-online-indicator">🟢 <span id="chat-online-count">0</span></span>
+        <button class="chat-panel-btn" id="chat-online-toggle" onclick="toggleOnlineList()" title="Online members">👥</button>
+        <button class="chat-panel-btn chat-panel-close" onclick="toggleChatPanel()" title="Close">✕</button>
+      </div>
     </div>
     <div class="chat-online-list hidden" id="chat-online-list"></div>
     <div class="chat-widget-wrap" id="chat-widget-wrap">
@@ -1315,6 +1313,6 @@
     </div>
   </footer>
 
-  <script src="/app.js?v=6"></script>
+  <script src="/app.js?v=7"></script>
 </body>
 </html>
