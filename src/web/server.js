@@ -274,15 +274,10 @@ function createWebServer() {
     if (discordClient) {
       try {
         const dUser = await discordClient.users.fetch(user.discordId).catch(() => null);
-        console.log(`[DEBUG Avatar] discordId=${user.discordId} dUser=${!!dUser} avatar=${dUser?.avatar} url=${dUser?.displayAvatarURL({ size: 128 })}`);
         if (dUser) {
-          user.avatar = dUser.displayAvatarURL({ size: 128 });
+          user.avatar = dUser.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
         }
-      } catch (e) {
-        console.log(`[DEBUG Avatar] Error:`, e.message);
-      }
-    } else {
-      console.log(`[DEBUG Avatar] No discordClient available`);
+      } catch (e) {}
     }
     res.json(user);
   });
