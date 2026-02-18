@@ -983,6 +983,7 @@ function createWebServer() {
       propDescription: bet.prop_description,
       pick: bet.pick,
       oddsAmerican: bet.odds_american,
+      spreadValue: bet.spread_value,
       units: bet.units,
       status: bet.status,
       betNote: bet.bet_note,

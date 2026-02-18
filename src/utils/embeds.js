@@ -77,9 +77,6 @@ function buildBetEmbed(bet, username, avatarUrl) {
 
       const wagerLabel = WAGER_TYPES[bet.wager_type] || bet.wager_type;
       let pickLine = bet.pick || '';
-      if (bet.wager_type === 'spread' && bet.spread_value !== null) {
-        pickLine = `${bet.pick} ${formatSpread(bet.spread_value)}`;
-      }
 
       embed.setDescription(`**${wagerLabel}**: ${pickLine}`);
     } else {
@@ -323,9 +320,6 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
 
       const wagerLabel = WAGER_TYPES[bet.wager_type] || bet.wager_type;
       let pickLine = bet.pick || '';
-      if (bet.wager_type === 'spread' && bet.spread_value !== null) {
-        pickLine = `${bet.pick} ${formatSpread(bet.spread_value)}`;
-      }
 
       embed.setDescription(`${divider}\n\n**${wagerLabel}**: ${pickLine}\n\n${divider}`);
     } else {
