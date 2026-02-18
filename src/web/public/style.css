@@ -683,101 +683,270 @@ textarea {
   margin-bottom: 12px;
 }
 
-/* ── KPI Cards ── */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+/* ── KPI Cards → replaced by Hero Banner ── */
+
+/* ═══════════════════════════════════════════════════════
+   Stats Panels — Ticket-style collapsible design
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Hero Banner (top-level KPIs) ── */
+.sp-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: linear-gradient(170deg, #1e1e1e 0%, #161616 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 135, 50, 0.12);
+  padding: 24px 20px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
-.kpi-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  padding: 20px;
+.sp-hero-stat {
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0 20px;
+  flex: 1;
+  min-width: 80px;
 }
 
-.kpi-card.accent {
-  border-color: var(--accent);
-  background: var(--accent-dim);
+.sp-hero-stat.sp-hero-main {
+  flex: 1.5;
 }
 
-.kpi-label {
-  font-size: 11px;
-  font-weight: 600;
+.sp-hero-stat.sp-hero-sm {
+  flex: 0.7;
+}
+
+.sp-hero-divider {
+  width: 1px;
+  height: 36px;
+  background: rgba(255, 135, 50, 0.15);
+  flex-shrink: 0;
+}
+
+.sp-hero-label {
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted);
   margin-bottom: 6px;
 }
 
-.kpi-value {
+.sp-hero-value {
   font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.5px;
+  color: var(--text-primary);
 }
 
-.kpi-value.positive { color: var(--accent); }
-.kpi-value.negative { color: var(--text-danger); }
-
-/* ── Highlights ── */
-.highlights-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
+.sp-hero-value.sp-accent {
+  color: #FF8732;
 }
 
-.highlight-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
+.sp-hero-value.positive { color: #43b581; }
+.sp-hero-value.negative { color: #D62300; }
+
+/* ── Collapsible Panel ── */
+.sp-panel {
+  background: linear-gradient(170deg, #1e1e1e 0%, #161616 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 135, 50, 0.08);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.sp-panel:hover {
+  border-color: rgba(255, 135, 50, 0.18);
+}
+
+.sp-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 16px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
 }
 
-.highlight-card.best {
-  border-left: 3px solid var(--accent);
+.sp-panel-header:hover {
+  background: rgba(255, 135, 50, 0.04);
 }
 
-.highlight-card.worst {
-  border-left: 3px solid var(--text-danger);
+.sp-panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
 }
 
-.highlight-label {
-  font-size: 11px;
-  font-weight: 600;
+.sp-panel-chevron {
+  font-size: 16px;
+  color: #FF8732;
+  transition: transform 0.2s;
+  width: 20px;
+  text-align: center;
+}
+
+.sp-panel-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+}
+
+.sp-panel-body.sp-panel-open {
+  /* JS sets exact max-height; this is the open default */
+  max-height: none;
+}
+
+.sp-panel-body > *:first-child {
+  padding-top: 0;
+}
+
+.sp-panel-body > *:last-child {
+  padding-bottom: 20px;
+}
+
+.sp-panel-divider {
+  border: none;
+  border-top: 1px dashed rgba(255, 135, 50, 0.1);
+  margin: 14px 20px;
+}
+
+/* ── Metric Grid (streak, avg odds, etc.) ── */
+.sp-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 4px 20px;
+}
+
+.sp-metric {
+  text-align: center;
+  padding: 10px 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+}
+
+.sp-metric-label {
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
   color: var(--text-muted);
   margin-bottom: 4px;
 }
 
-.highlight-value {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.highlight-sub {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-/* ── Stats Sections ── */
-.stats-section {
-  margin-bottom: 28px;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 12px;
+.sp-metric-value {
+  font-size: 18px;
+  font-weight: 800;
   color: var(--text-primary);
 }
 
-/* ── Breakdown Bars ── */
+.sp-metric-value.positive { color: #43b581; }
+.sp-metric-value.negative { color: #D62300; }
+
+/* ── Best / Worst Row ── */
+.sp-bw-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 20px;
+}
+
+.sp-bw-card {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sp-bw-best {
+  border-left: 3px solid #43b581;
+}
+
+.sp-bw-worst {
+  border-left: 3px solid #D62300;
+}
+
+.sp-bw-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.sp-bw-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.sp-bw-value.positive { color: #43b581; }
+.sp-bw-value.negative { color: #D62300; }
+
+.sp-bw-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Mini Hero (inside tail panel) ── */
+.sp-mini-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 20px;
+}
+
+.sp-mini-stat {
+  text-align: center;
+  min-width: 60px;
+}
+
+.sp-mini-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.sp-mini-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.sp-mini-value.sp-accent { color: #FF8732; }
+.sp-mini-value.positive { color: #43b581; }
+.sp-mini-value.negative { color: #D62300; }
+
+/* ── Sub-sections inside panels ── */
+.sp-sub-section {
+  padding: 0 20px;
+}
+
+.sp-sub-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #FF8732;
+  margin-bottom: 8px;
+}
+
+/* ── Breakdown bar (refined) ── */
 .breakdown-grid {
   display: flex;
   flex-direction: column;
@@ -787,11 +956,11 @@ textarea {
 .breakdown-row {
   display: flex;
   align-items: center;
-  background: var(--bg-card);
-  border-radius: var(--radius-sm);
-  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  padding: 10px 14px;
   gap: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 135, 50, 0.06);
 }
 
 .breakdown-name {
@@ -816,8 +985,8 @@ textarea {
   transition: width 0.6s ease;
 }
 
-.breakdown-bar.green { background: var(--accent); }
-.breakdown-bar.red { background: var(--text-danger); }
+.breakdown-bar.green { background: #43b581; }
+.breakdown-bar.red { background: #D62300; }
 
 .breakdown-stats {
   font-size: 12px;
@@ -832,8 +1001,8 @@ textarea {
   font-size: 13px;
 }
 
-.breakdown-net.positive { color: var(--accent); }
-.breakdown-net.negative { color: var(--text-danger); }
+.breakdown-net.positive { color: #43b581; }
+.breakdown-net.negative { color: #D62300; }
 
 /* ── P&L Table ── */
 .pnl-table-wrap {
@@ -1034,12 +1203,40 @@ textarea {
     display: none;
   }
 
-  .kpi-grid {
+  .sp-hero {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 18px 16px;
+  }
+
+  .sp-hero-divider {
+    display: none;
+  }
+
+  .sp-hero-stat {
+    min-width: 45%;
+    flex: unset;
+  }
+
+  .sp-hero-stat.sp-hero-main,
+  .sp-hero-stat.sp-hero-sm {
+    flex: unset;
+  }
+
+  .sp-hero-value {
+    font-size: 22px;
+  }
+
+  .sp-metric-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .highlights-row {
+  .sp-bw-row {
     grid-template-columns: 1fr;
+  }
+
+  .sp-mini-hero {
+    gap: 10px;
   }
 
   .breakdown-row {

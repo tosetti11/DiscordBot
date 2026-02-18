@@ -351,178 +351,222 @@
 
         <!-- Stats Content -->
         <div id="stats-content" class="hidden">
-          <!-- KPI Cards Row -->
-          <div class="kpi-grid">
-            <div class="kpi-card">
-              <div class="kpi-label">Record</div>
-              <div class="kpi-value" id="kpi-record">—</div>
+
+          <!-- ══ Performance Overview (hero banner) ══ -->
+          <div class="sp-hero">
+            <div class="sp-hero-stat sp-hero-main">
+              <div class="sp-hero-label">Record</div>
+              <div class="sp-hero-value" id="kpi-record">—</div>
             </div>
-            <div class="kpi-card accent">
-              <div class="kpi-label">Win %</div>
-              <div class="kpi-value" id="kpi-winpct">—</div>
+            <div class="sp-hero-divider"></div>
+            <div class="sp-hero-stat">
+              <div class="sp-hero-label">Win %</div>
+              <div class="sp-hero-value sp-accent" id="kpi-winpct">—</div>
             </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Net Units</div>
-              <div class="kpi-value" id="kpi-net">—</div>
+            <div class="sp-hero-divider"></div>
+            <div class="sp-hero-stat">
+              <div class="sp-hero-label">Net Units</div>
+              <div class="sp-hero-value" id="kpi-net">—</div>
             </div>
-            <div class="kpi-card">
-              <div class="kpi-label">ROI</div>
-              <div class="kpi-value" id="kpi-roi">—</div>
+            <div class="sp-hero-divider"></div>
+            <div class="sp-hero-stat">
+              <div class="sp-hero-label">ROI</div>
+              <div class="sp-hero-value" id="kpi-roi">—</div>
             </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Total Bets</div>
-              <div class="kpi-value" id="kpi-total">—</div>
+            <div class="sp-hero-divider"></div>
+            <div class="sp-hero-stat sp-hero-sm">
+              <div class="sp-hero-label">Total</div>
+              <div class="sp-hero-value" id="kpi-total">—</div>
             </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Open</div>
-              <div class="kpi-value" id="kpi-open">—</div>
+            <div class="sp-hero-divider"></div>
+            <div class="sp-hero-stat sp-hero-sm">
+              <div class="sp-hero-label">Open</div>
+              <div class="sp-hero-value" id="kpi-open">—</div>
             </div>
           </div>
 
-          <!-- Streak + Highlights Row -->
-          <div class="highlights-row">
-            <div class="highlight-card" id="streak-card">
-              <div class="highlight-label">Current Streak</div>
-              <div class="highlight-value" id="hl-streak">—</div>
+          <!-- ══ Betting Activity (collapsible) ══ -->
+          <div class="sp-panel">
+            <div class="sp-panel-header" onclick="togglePanel(this)">
+              <span class="sp-panel-title">📊 Betting Activity</span>
+              <span class="sp-panel-chevron">▾</span>
             </div>
-            <div class="highlight-card" id="avg-odds-card">
-              <div class="highlight-label">Avg Odds</div>
-              <div class="highlight-value" id="hl-avg-odds">—</div>
-            </div>
-            <div class="highlight-card" id="avg-units-card">
-              <div class="highlight-label">Avg Units</div>
-              <div class="highlight-value" id="hl-avg-units">—</div>
-            </div>
-            <div class="highlight-card" id="wagered-card">
-              <div class="highlight-label">Units Wagered</div>
-              <div class="highlight-value" id="hl-wagered">—</div>
-            </div>
-          </div>
-
-          <!-- Best / Worst -->
-          <div class="highlights-row">
-            <div class="highlight-card best">
-              <div class="highlight-label">💰 Best Bet</div>
-              <div class="highlight-value" id="hl-best">—</div>
-              <div class="highlight-sub" id="hl-best-detail"></div>
-            </div>
-            <div class="highlight-card worst">
-              <div class="highlight-label">💸 Worst Bet</div>
-              <div class="highlight-value" id="hl-worst">—</div>
-              <div class="highlight-sub" id="hl-worst-detail"></div>
-            </div>
-          </div>
-
-          <!-- Singles vs Parlays -->
-          <div class="stats-section">
-            <h3 class="section-title">🎰 Bet Type Breakdown</h3>
-            <div class="breakdown-grid" id="bet-type-breakdown"></div>
-          </div>
-
-          <!-- By Sport -->
-          <div class="stats-section">
-            <h3 class="section-title">🏟️ By Sport</h3>
-            <div class="breakdown-grid" id="sport-breakdown"></div>
-          </div>
-
-          <!-- By Wager Type -->
-          <div class="stats-section">
-            <h3 class="section-title">🎯 By Wager Type</h3>
-            <div class="breakdown-grid" id="wager-breakdown"></div>
-          </div>
-
-          <!-- Whale Stats -->
-          <div class="stats-section" id="whale-section">
-            <h3 class="section-title">🐋 Whale Dick Stats</h3>
-            <div class="breakdown-grid" id="whale-breakdown"></div>
-          </div>
-
-          <!-- Tail Stats -->
-          <div class="stats-section" id="tail-section">
-            <h3 class="section-title">🔗 Tailing Stats</h3>
-            <div id="tail-breakdown">
-              <div class="kpi-grid">
-                <div class="kpi-card">
-                  <div class="kpi-label">Record</div>
-                  <div class="kpi-value" id="tail-kpi-record">—</div>
+            <div class="sp-panel-body sp-panel-open">
+              <div class="sp-metric-grid">
+                <div class="sp-metric" id="streak-card">
+                  <div class="sp-metric-label">Current Streak</div>
+                  <div class="sp-metric-value" id="hl-streak">—</div>
                 </div>
-                <div class="kpi-card accent">
-                  <div class="kpi-label">Win %</div>
-                  <div class="kpi-value" id="tail-kpi-winpct">—</div>
+                <div class="sp-metric" id="avg-odds-card">
+                  <div class="sp-metric-label">Avg Odds</div>
+                  <div class="sp-metric-value" id="hl-avg-odds">—</div>
                 </div>
-                <div class="kpi-card">
-                  <div class="kpi-label">Net Units</div>
-                  <div class="kpi-value" id="tail-kpi-net">—</div>
+                <div class="sp-metric" id="avg-units-card">
+                  <div class="sp-metric-label">Avg Units</div>
+                  <div class="sp-metric-value" id="hl-avg-units">—</div>
                 </div>
-                <div class="kpi-card">
-                  <div class="kpi-label">ROI</div>
-                  <div class="kpi-value" id="tail-kpi-roi">—</div>
-                </div>
-                <div class="kpi-card">
-                  <div class="kpi-label">Total Tails</div>
-                  <div class="kpi-value" id="tail-kpi-total">—</div>
-                </div>
-                <div class="kpi-card">
-                  <div class="kpi-label">Open</div>
-                  <div class="kpi-value" id="tail-kpi-open">—</div>
+                <div class="sp-metric" id="wagered-card">
+                  <div class="sp-metric-label">Units Wagered</div>
+                  <div class="sp-metric-value" id="hl-wagered">—</div>
                 </div>
               </div>
-              <div class="highlights-row">
-                <div class="highlight-card">
-                  <div class="highlight-label">Current Streak</div>
-                  <div class="highlight-value" id="tail-hl-streak">—</div>
+              <div class="sp-panel-divider"></div>
+              <div class="sp-bw-row">
+                <div class="sp-bw-card sp-bw-best">
+                  <div class="sp-bw-label">💰 Best Bet</div>
+                  <div class="sp-bw-value" id="hl-best">—</div>
+                  <div class="sp-bw-sub" id="hl-best-detail"></div>
                 </div>
-                <div class="highlight-card">
-                  <div class="highlight-label">Avg Odds</div>
-                  <div class="highlight-value" id="tail-hl-avg-odds">—</div>
-                </div>
-                <div class="highlight-card">
-                  <div class="highlight-label">Avg Units</div>
-                  <div class="highlight-value" id="tail-hl-avg-units">—</div>
-                </div>
-                <div class="highlight-card">
-                  <div class="highlight-label">Units Wagered</div>
-                  <div class="highlight-value" id="tail-hl-wagered">—</div>
-                </div>
-              </div>
-              <div class="highlights-row">
-                <div class="highlight-card best">
-                  <div class="highlight-label">💰 Best Tail</div>
-                  <div class="highlight-value" id="tail-hl-best">—</div>
-                  <div class="highlight-sub" id="tail-hl-best-detail"></div>
-                </div>
-                <div class="highlight-card worst">
-                  <div class="highlight-label">💸 Worst Tail</div>
-                  <div class="highlight-value" id="tail-hl-worst">—</div>
-                  <div class="highlight-sub" id="tail-hl-worst-detail"></div>
+                <div class="sp-bw-card sp-bw-worst">
+                  <div class="sp-bw-label">💸 Worst Bet</div>
+                  <div class="sp-bw-value" id="hl-worst">—</div>
+                  <div class="sp-bw-sub" id="hl-worst-detail"></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Daily P&L Chart (text-based) -->
-          <div class="stats-section">
-            <h3 class="section-title">📈 Daily P&L</h3>
-            <div class="pnl-table-wrap">
-              <table class="pnl-table" id="pnl-table">
-                <thead>
-                  <tr><th>Date</th><th>Bets</th><th>W</th><th>L</th><th>Net</th></tr>
-                </thead>
-                <tbody id="pnl-tbody"></tbody>
-              </table>
+          <!-- ══ Breakdowns (collapsible) ══ -->
+          <div class="sp-panel">
+            <div class="sp-panel-header" onclick="togglePanel(this)">
+              <span class="sp-panel-title">🎰 Breakdowns</span>
+              <span class="sp-panel-chevron">▾</span>
+            </div>
+            <div class="sp-panel-body sp-panel-open">
+              <div class="sp-sub-section">
+                <div class="sp-sub-label">By Bet Type</div>
+                <div class="breakdown-grid" id="bet-type-breakdown"></div>
+              </div>
+              <div class="sp-panel-divider"></div>
+              <div class="sp-sub-section">
+                <div class="sp-sub-label">By Sport</div>
+                <div class="breakdown-grid" id="sport-breakdown"></div>
+              </div>
+              <div class="sp-panel-divider"></div>
+              <div class="sp-sub-section">
+                <div class="sp-sub-label">By Wager Type</div>
+                <div class="breakdown-grid" id="wager-breakdown"></div>
+              </div>
             </div>
           </div>
 
-          <!-- Recent Bets -->
-          <div class="stats-section">
-            <h3 class="section-title">🕐 Recent Bets</h3>
-            <div class="recent-bets-list" id="recent-bets"></div>
+          <!-- ══ Whale Stats (collapsible) ══ -->
+          <div class="sp-panel" id="whale-section">
+            <div class="sp-panel-header" onclick="togglePanel(this)">
+              <span class="sp-panel-title">🐋 Whale Stats</span>
+              <span class="sp-panel-chevron">▾</span>
+            </div>
+            <div class="sp-panel-body sp-panel-open">
+              <div class="breakdown-grid" id="whale-breakdown"></div>
+            </div>
           </div>
 
-          <!-- Leaderboard -->
-          <div class="stats-section">
-            <h3 class="section-title">🏆 Leaderboard</h3>
-            <div class="leaderboard-list" id="leaderboard-list"></div>
+          <!-- ══ Tail Stats (collapsible) ══ -->
+          <div class="sp-panel" id="tail-section">
+            <div class="sp-panel-header" onclick="togglePanel(this)">
+              <span class="sp-panel-title">🔗 Tailing Stats</span>
+              <span class="sp-panel-chevron">▾</span>
+            </div>
+            <div class="sp-panel-body sp-panel-open" id="tail-breakdown">
+              <div class="sp-mini-hero">
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Record</div>
+                  <div class="sp-mini-value" id="tail-kpi-record">—</div>
+                </div>
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Win %</div>
+                  <div class="sp-mini-value sp-accent" id="tail-kpi-winpct">—</div>
+                </div>
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Net Units</div>
+                  <div class="sp-mini-value" id="tail-kpi-net">—</div>
+                </div>
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">ROI</div>
+                  <div class="sp-mini-value" id="tail-kpi-roi">—</div>
+                </div>
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Total</div>
+                  <div class="sp-mini-value" id="tail-kpi-total">—</div>
+                </div>
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Open</div>
+                  <div class="sp-mini-value" id="tail-kpi-open">—</div>
+                </div>
+              </div>
+              <div class="sp-panel-divider"></div>
+              <div class="sp-metric-grid">
+                <div class="sp-metric">
+                  <div class="sp-metric-label">Streak</div>
+                  <div class="sp-metric-value" id="tail-hl-streak">—</div>
+                </div>
+                <div class="sp-metric">
+                  <div class="sp-metric-label">Avg Odds</div>
+                  <div class="sp-metric-value" id="tail-hl-avg-odds">—</div>
+                </div>
+                <div class="sp-metric">
+                  <div class="sp-metric-label">Avg Units</div>
+                  <div class="sp-metric-value" id="tail-hl-avg-units">—</div>
+                </div>
+                <div class="sp-metric">
+                  <div class="sp-metric-label">Wagered</div>
+                  <div class="sp-metric-value" id="tail-hl-wagered">—</div>
+                </div>
+              </div>
+              <div class="sp-panel-divider"></div>
+              <div class="sp-bw-row">
+                <div class="sp-bw-card sp-bw-best">
+                  <div class="sp-bw-label">💰 Best Tail</div>
+                  <div class="sp-bw-value" id="tail-hl-best">—</div>
+                  <div class="sp-bw-sub" id="tail-hl-best-detail"></div>
+                </div>
+                <div class="sp-bw-card sp-bw-worst">
+                  <div class="sp-bw-label">💸 Worst Tail</div>
+                  <div class="sp-bw-value" id="tail-hl-worst">—</div>
+                  <div class="sp-bw-sub" id="tail-hl-worst-detail"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Daily P&L (collapsible) ══ -->
+          <div class="sp-panel">
+            <div class="sp-panel-header" onclick="togglePanel(this)">
+              <span class="sp-panel-title">📈 Daily P&L</span>
+              <span class="sp-panel-chevron">▾</span>
+            </div>
+            <div class="sp-panel-body sp-panel-open">
+              <div class="pnl-table-wrap">
+                <table class="pnl-table" id="pnl-table">
+                  <thead>
+                    <tr><th>Date</th><th>Bets</th><th>W</th><th>L</th><th>Net</th></tr>
+                  </thead>
+                  <tbody id="pnl-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ Recent Bets (collapsible) ══ -->
+          <div class="sp-panel">
+            <div class="sp-panel-header" onclick="togglePanel(this)">
+              <span class="sp-panel-title">🕐 Recent Bets</span>
+              <span class="sp-panel-chevron">▸</span>
+            </div>
+            <div class="sp-panel-body">
+              <div class="recent-bets-list" id="recent-bets"></div>
+            </div>
+          </div>
+
+          <!-- ══ Leaderboard (collapsible) ══ -->
+          <div class="sp-panel">
+            <div class="sp-panel-header" onclick="togglePanel(this)">
+              <span class="sp-panel-title">🏆 Leaderboard</span>
+              <span class="sp-panel-chevron">▸</span>
+            </div>
+            <div class="sp-panel-body">
+              <div class="leaderboard-list" id="leaderboard-list"></div>
+            </div>
           </div>
         </div>
       </div>

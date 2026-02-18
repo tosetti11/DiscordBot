@@ -909,10 +909,10 @@ function populateTailSection(t) {
   const streakEl = document.getElementById('tail-hl-streak');
   if (t.tail_streak && t.tail_streak.count > 0) {
     streakEl.textContent = `${t.tail_streak.count} ${t.tail_streak.type === 'win' ? '🔥 W' : '❄️ L'}`;
-    streakEl.className = `highlight-value ${t.tail_streak.type === 'win' ? 'positive' : 'negative'}`;
+    streakEl.className = `sp-metric-value ${t.tail_streak.type === 'win' ? 'positive' : 'negative'}`;
   } else {
     streakEl.textContent = '—';
-    streakEl.className = 'highlight-value';
+    streakEl.className = 'sp-metric-value';
   }
 
   document.getElementById('tail-hl-avg-odds').textContent = t.tail_avg_odds >= 0 ? `+${t.tail_avg_odds}` : t.tail_avg_odds;
@@ -922,12 +922,12 @@ function populateTailSection(t) {
   // Best / Worst tail
   if (t.tail_best_bet) {
     document.getElementById('tail-hl-best').textContent = fmtNet(t.tail_best_bet.payout);
-    document.getElementById('tail-hl-best').className = 'highlight-value positive';
+    document.getElementById('tail-hl-best').className = 'sp-bw-value positive';
     document.getElementById('tail-hl-best-detail').textContent = `${t.tail_best_bet.pick} (${t.tail_best_bet.odds >= 0 ? '+' : ''}${t.tail_best_bet.odds})`;
   }
   if (t.tail_worst_bet) {
     document.getElementById('tail-hl-worst').textContent = fmtNet(t.tail_worst_bet.payout);
-    document.getElementById('tail-hl-worst').className = 'highlight-value negative';
+    document.getElementById('tail-hl-worst').className = 'sp-bw-value negative';
     document.getElementById('tail-hl-worst-detail').textContent = `${t.tail_worst_bet.pick} (${t.tail_worst_bet.odds >= 0 ? '+' : ''}${t.tail_worst_bet.odds})`;
   }
 }
@@ -945,15 +945,15 @@ function renderTailOnlyStats(data) {
 
   const streakEl = document.getElementById('hl-streak');
   streakEl.textContent = '—';
-  streakEl.className = 'highlight-value';
+  streakEl.className = 'sp-metric-value';
   document.getElementById('hl-avg-odds').textContent = '—';
   document.getElementById('hl-avg-units').textContent = '—';
   document.getElementById('hl-wagered').textContent = '—';
   document.getElementById('hl-best').textContent = '—';
-  document.getElementById('hl-best').className = 'highlight-value';
+  document.getElementById('hl-best').className = 'sp-bw-value';
   document.getElementById('hl-best-detail').textContent = '';
   document.getElementById('hl-worst').textContent = '—';
-  document.getElementById('hl-worst').className = 'highlight-value';
+  document.getElementById('hl-worst').className = 'sp-bw-value';
   document.getElementById('hl-worst-detail').textContent = '';
 
   // Show tail section with full stats
@@ -988,10 +988,10 @@ function renderStats(data) {
   const streakEl = document.getElementById('hl-streak');
   if (s.count > 0) {
     streakEl.textContent = `${s.count} ${s.type === 'win' ? '🔥 W' : '❄️ L'}`;
-    streakEl.className = `highlight-value ${s.type === 'win' ? 'positive' : 'negative'}`;
+    streakEl.className = `sp-metric-value ${s.type === 'win' ? 'positive' : 'negative'}`;
   } else {
     streakEl.textContent = '—';
-    streakEl.className = 'highlight-value';
+    streakEl.className = 'sp-metric-value';
   }
 
   document.getElementById('hl-avg-odds').textContent = data.avgOdds >= 0 ? `+${data.avgOdds}` : data.avgOdds;
@@ -1001,12 +1001,12 @@ function renderStats(data) {
   // Best / Worst
   if (data.bestBet) {
     document.getElementById('hl-best').textContent = `${fmtNet(data.bestBet.payout)}`;
-    document.getElementById('hl-best').className = 'highlight-value positive';
+    document.getElementById('hl-best').className = 'sp-bw-value positive';
     document.getElementById('hl-best-detail').textContent = `${data.bestBet.pick} (${data.bestBet.odds >= 0 ? '+' : ''}${data.bestBet.odds})`;
   }
   if (data.worstBet) {
     document.getElementById('hl-worst').textContent = `${fmtNet(data.worstBet.payout)}`;
-    document.getElementById('hl-worst').className = 'highlight-value negative';
+    document.getElementById('hl-worst').className = 'sp-bw-value negative';
     document.getElementById('hl-worst-detail').textContent = `${data.worstBet.pick} (${data.worstBet.odds >= 0 ? '+' : ''}${data.worstBet.odds})`;
   }
 
@@ -1591,6 +1591,28 @@ function toggleTicketLegs(toggleEl) {
     toggleEl.querySelector('span:first-child').textContent = `Hide Legs`;
     body.addEventListener('transitionend', () => {
       if (body.classList.contains('legs-open')) body.style.maxHeight = 'none';
+    }, { once: true });
+  }
+}
+
+// ─── Toggle Stats Panel ─────────
+function togglePanel(headerEl) {
+  const panel = headerEl.closest('.sp-panel');
+  const body = panel.querySelector('.sp-panel-body');
+  const chevron = headerEl.querySelector('.sp-panel-chevron');
+  const isOpen = body.classList.contains('sp-panel-open');
+
+  if (isOpen) {
+    body.style.maxHeight = body.scrollHeight + 'px';
+    requestAnimationFrame(() => { body.style.maxHeight = '0'; });
+    body.classList.remove('sp-panel-open');
+    chevron.textContent = '▸';
+  } else {
+    body.classList.add('sp-panel-open');
+    body.style.maxHeight = body.scrollHeight + 'px';
+    chevron.textContent = '▾';
+    body.addEventListener('transitionend', () => {
+      if (body.classList.contains('sp-panel-open')) body.style.maxHeight = 'none';
     }, { once: true });
   }
 }
