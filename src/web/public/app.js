@@ -1327,7 +1327,7 @@ function renderTailedBetCard(bet) {
 
   div.innerHTML = `
     <div class="ticket-header">
-      <div class="ticket-brand"><span class="ticket-brand-icon">👑</span><span class="ticket-brand-name">TheGamblingKing</span></div>
+      <div class="ticket-brand"><img src="/TheGamblingKing.jpg" alt="GK" class="ticket-brand-logo"><span class="ticket-brand-sep">│</span><span class="ticket-brand-user">${esc(bet.displayName) || 'Unknown'}</span></div>
       <div class="ticket-status ticket-status-${bet.status}">${statusText}</div>
     </div>
     <div class="ticket-divider"></div>
@@ -1350,7 +1350,7 @@ function renderTailedBetCard(bet) {
     </div>
     <div class="ticket-divider"></div>
     <div class="ticket-footer">
-      <div class="ticket-footer-left"><span class="ticket-user">👤 ${esc(bet.displayName) || 'Unknown'}</span></div>
+      <div class="ticket-footer-left"></div>
       <div class="ticket-footer-right"><span class="ticket-date">${esc(date)}</span></div>
     </div>
   `;
@@ -1515,8 +1515,9 @@ function renderBetCard(bet, showOwner = false) {
   div.innerHTML = `
     <div class="ticket-header">
       <div class="ticket-brand">
-        <span class="ticket-brand-icon">👑</span>
-        <span class="ticket-brand-name">TheGamblingKing</span>
+        <img src="/TheGamblingKing.jpg" alt="GK" class="ticket-brand-logo">
+        <span class="ticket-brand-sep">│</span>
+        <span class="ticket-brand-user">${esc(displayName)}</span>
       </div>
       <div class="ticket-status ticket-status-${bet.status}">${statusText}</div>
     </div>
@@ -1557,7 +1558,6 @@ function renderBetCard(bet, showOwner = false) {
 
     <div class="ticket-footer">
       <div class="ticket-footer-left">
-        <span class="ticket-user">👤 ${esc(displayName)}</span>
         ${slipDisplay ? `<span class="ticket-slip">#${esc(slipDisplay)}</span>` : ''}
       </div>
       <div class="ticket-footer-right">

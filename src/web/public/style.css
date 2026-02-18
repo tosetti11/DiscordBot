@@ -1184,19 +1184,30 @@ textarea {
   gap: 6px;
 }
 
-.ticket-brand-icon {
-  font-size: 18px;
+.ticket-brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(255, 135, 50, 0.35);
 }
 
-.ticket-brand-name {
+.ticket-brand-sep {
+  color: rgba(255, 135, 50, 0.3);
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1;
+  user-select: none;
+}
+
+.ticket-brand-user {
   font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  background: linear-gradient(135deg, #FF8732, #F5C518);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
 }
 
 .ticket-status {
