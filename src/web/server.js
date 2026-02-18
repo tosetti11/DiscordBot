@@ -462,7 +462,7 @@ function createWebServer() {
       if (!guild) return res.json({ channelId: null });
 
       // Look for the preferred chat channel
-      const preferred = ["the-king's-money-printer", 'the-kings-money-printer', 'the-crackhouse', 'daily-action-chat', 'general'];
+      const preferred = ["the-king\u2019s-money-printer", "the-king's-money-printer", 'the-kings-money-printer', 'the-crackhouse', 'daily-action-chat', 'general'];
       const textChannels = guild.channels.cache.filter(c => c.isTextBased() && !c.isThread() && !c.isVoiceBased());
 
       for (const name of preferred) {
