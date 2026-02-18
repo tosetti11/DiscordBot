@@ -199,6 +199,21 @@ async function updateParlayLegStatus(legId, status) {
 }
 
 /**
+ * Update arbitrary fields on a parlay leg
+ */
+async function updateParlayLegFields(legId, fields) {
+  const { data, error } = await supabase
+    .from('parlay_legs')
+    .update(fields)
+    .eq('id', legId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Update bet message_id (after posting embed)
  */
 async function updateBetMessageId(betId, messageId) {
@@ -405,6 +420,7 @@ module.exports = {
   getUserBets,
   closeBet,
   updateParlayLegStatus,
+  updateParlayLegFields,
   updateBetMessageId,
   getUserStats,
   getWhaleStats,

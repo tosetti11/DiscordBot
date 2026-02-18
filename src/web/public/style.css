@@ -1756,6 +1756,13 @@ textarea {
   margin-bottom: 2px;
 }
 
+.ticket-game-time,
+.ticket-leg-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 .ticket-note {
   font-size: 12px;
   color: var(--text-muted);

@@ -997,10 +997,15 @@ function createWebServer() {
         legNumber: l.leg_number,
         sport: l.sport,
         sportName: SPORT_NAMES[l.sport] || l.sport,
+        betCategory: l.bet_category,
+        wagerType: l.wager_type,
         teamA: l.team_a,
         teamB: l.team_b,
+        playerName: l.player_name,
+        propDescription: l.prop_description,
         pick: l.pick,
-        wagerType: l.wager_type,
+        oddsAmerican: l.odds_american,
+        spreadValue: l.spread_value,
         status: l.status,
         eventStartTime: l.event_start_time,
       })),
@@ -1155,7 +1160,9 @@ function createWebServer() {
   app.patch('/api/bets/:betId', authMiddleware, async (req, res) => {
     try {
       const { betId } = req.params;
-      const { oddsAmerican, units, pick, betNote, sport, wagerType, teamA, teamB } = req.body;
+      const { oddsAmerican, units, pick, betNote, sport, wagerType, teamA, teamB,
+              eventStartTime, playerName, propDescription, betCategory, spreadValue,
+              legs } = req.body;
 
       const bet = await db.getBet(betId);
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
@@ -1174,10 +1181,82 @@ function createWebServer() {
       if (wagerType !== undefined) fields.wager_type = wagerType;
       if (teamA !== undefined) fields.team_a = teamA;
       if (teamB !== undefined) fields.team_b = teamB;
+      if (eventStartTime !== undefined) fields.event_start_time = eventStartTime || null;
+      if (playerName !== undefined) fields.player_name = playerName;
+      if (propDescription !== undefined) fields.prop_description = propDescription;
+      if (betCategory !== undefined) fields.bet_category = betCategory;
+      if (spreadValue !== undefined) fields.spread_value = spreadValue ? parseFloat(spreadValue) : null;
 
-      if (Object.keys(fields).length === 0) return res.status(400).json({ error: 'No fields to update' });
+      if (Object.keys(fields).length > 0) {
+        // Reconstruct `pick` from edited field values + existing bet data
+        const mergedBet = { ...bet, ...fields };
+        const cat = mergedBet.bet_category || bet.bet_category;
+        const wt = mergedBet.wager_type || bet.wager_type;
+        if (cat === 'futures') {
+          // pick comes pre-built from client for futures (market: selection)
+          if (!fields.pick && bet.pick) fields.pick = bet.pick;
+        } else if (cat === 'team_game') {
+          const tA = mergedBet.team_a || '';
+          if (wt === 'moneyline') fields.pick = `${tA} ML`;
+          else if (wt === 'spread') {
+            const sv = parseFloat(mergedBet.spread_value || 0);
+            fields.pick = `${tA} ${sv > 0 ? '+' : ''}${sv}`;
+          } else if (wt === 'total') {
+            const sv = parseFloat(mergedBet.spread_value || 0);
+            fields.pick = `Over ${Math.abs(sv)}`;
+          }
+        } else if (cat === 'player_prop') {
+          fields.pick = mergedBet.prop_description || mergedBet.pick || bet.pick;
+        }
 
-      await db.updateBetFields(betId, fields);
+        await db.updateBetFields(betId, fields);
+      }
+
+      // Update parlay legs if provided
+      if (legs && Array.isArray(legs) && bet.bet_type === 'parlay') {
+        for (const leg of legs) {
+          if (!leg.id) continue;
+          const legFields = {};
+          if (leg.sport !== undefined) legFields.sport = leg.sport;
+          if (leg.betCategory !== undefined) legFields.bet_category = leg.betCategory;
+          if (leg.wagerType !== undefined) legFields.wager_type = leg.wagerType;
+          if (leg.teamA !== undefined) legFields.team_a = leg.teamA;
+          if (leg.teamB !== undefined) legFields.team_b = leg.teamB;
+          if (leg.playerName !== undefined) legFields.player_name = leg.playerName;
+          if (leg.propDescription !== undefined) legFields.prop_description = leg.propDescription;
+          if (leg.oddsAmerican !== undefined) legFields.odds_american = leg.oddsAmerican ? parseInt(leg.oddsAmerican) : null;
+          if (leg.spreadValue !== undefined) legFields.spread_value = leg.spreadValue ? parseFloat(leg.spreadValue) : null;
+          if (leg.eventStartTime !== undefined) legFields.event_start_time = leg.eventStartTime || null;
+
+          // Reconstruct leg pick
+          const lCat = leg.betCategory || 'team_game';
+          const lWt = leg.wagerType || 'moneyline';
+          if (lCat === 'futures') {
+            // pick comes pre-built from client for futures legs
+            if (leg.pick) legFields.pick = leg.pick;
+          } else if (lCat === 'team_game') {
+            const lTeamA = leg.teamA || '';
+            if (lWt === 'moneyline') legFields.pick = `${lTeamA} ML`;
+            else if (lWt === 'spread') {
+              const sv = parseFloat(leg.spreadValue || 0);
+              legFields.pick = `${lTeamA} ${sv > 0 ? '+' : ''}${sv}`;
+            } else if (lWt === 'total') {
+              const sv = parseFloat(leg.spreadValue || 0);
+              legFields.pick = `${leg.overUnder || 'Over'} ${Math.abs(sv)}`;
+            }
+          } else if (lCat === 'player_prop') {
+            legFields.pick = leg.propDescription || '';
+          }
+
+          if (Object.keys(legFields).length > 0) {
+            await db.updateParlayLegFields(leg.id, legFields);
+          }
+        }
+      }
+
+      if (Object.keys(fields).length === 0 && (!legs || !Array.isArray(legs))) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
 
       // Update Discord message
       const updatedBet = await db.getBet(betId);

@@ -322,6 +322,7 @@ function setupEventListeners() {
   singlePicker.addEventListener('change', () => {
     document.getElementById('event-time').value = formatDateTimePretty(singlePicker.value);
     singlePicker.value = '';
+    singlePicker.blur();
   });
 
   // Form submit
@@ -553,6 +554,7 @@ function buildParlayLegs() {
     legPicker.addEventListener('change', () => {
       legTimeInput.value = formatDateTimePretty(legPicker.value);
       legPicker.value = '';
+      legPicker.blur();
     });
   }
 }
@@ -695,6 +697,81 @@ async function handleSubmit(e) {
       body.onBehalfOf = behalfVal;
     }
 
+    // ── Edit mode: PATCH existing bet instead of creating new one ──
+    const editBetId = submitBtn.dataset.editMode;
+    if (editBetId) {
+      const patchBody = {};
+      if (body.betType === 'parlay' || betTypeVal === 'parlay') {
+        patchBody.oddsAmerican = body.oddsAmerican;
+        patchBody.units = body.units;
+        patchBody.betNote = body.betNote;
+        patchBody.sport = body.sport;
+        // Map leg data with IDs from editingBetData
+        patchBody.legs = (body.legs || []).map((leg, i) => {
+          const origLeg = editingBetData?.legs?.[i];
+          const legPatch = {
+            id: origLeg?.id,
+            sport: leg.sport,
+            betCategory: leg.betCategory,
+            wagerType: leg.wagerType,
+            teamA: leg.teamA || null,
+            teamB: leg.teamB || null,
+            playerName: leg.playerName || null,
+            propDescription: leg.propDescription || null,
+            spreadValue: leg.spreadValue || null,
+            eventStartTime: leg.eventStartTime || null,
+          };
+          // Only include overUnder if it was set (total bets)
+          if (leg.overUnder) legPatch.overUnder = leg.overUnder;
+          // Reconstruct pick for futures legs
+          if (leg.betCategory === 'futures' && leg.futuresMarket && leg.futuresSelection) {
+            legPatch.pick = `${leg.futuresMarket}: ${leg.futuresSelection}`;
+          }
+          return legPatch;
+        });
+      } else {
+        // Single bet fields
+        patchBody.sport = body.sport;
+        patchBody.betCategory = body.betCategory;
+        patchBody.wagerType = body.wagerType;
+        patchBody.teamA = body.teamA || null;
+        patchBody.teamB = body.teamB || null;
+        patchBody.playerName = body.playerName || null;
+        patchBody.propDescription = body.propDescription || null;
+        patchBody.oddsAmerican = body.oddsAmerican;
+        patchBody.units = body.units;
+        patchBody.spreadValue = body.spreadValue || null;
+        patchBody.eventStartTime = body.eventStartTime || null;
+        patchBody.betNote = body.betNote || null;
+        // Reconstruct pick on the client for futures
+        if (body.betCategory === 'futures' && body.futuresMarket && body.futuresSelection) {
+          patchBody.pick = `${body.futuresMarket}: ${body.futuresSelection}`;
+        }
+        if (body.overUnder) patchBody.overUnder = body.overUnder;
+      }
+
+      const patchRes = await fetch(`/api/bets/${editBetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchBody),
+      });
+      const patchData = await patchRes.json();
+      if (!patchData.success) throw new Error(patchData.error || 'Failed to save changes');
+
+      // Clear edit mode and navigate back to bets
+      delete submitBtn.dataset.editMode;
+      editingBetData = null;
+      submitBtn.querySelector('.btn-text').textContent = 'Place Bet 🎰';
+      // Re-enable locked selects
+      document.getElementById('guild-select').disabled = false;
+      document.getElementById('channel-select').disabled = false;
+      document.getElementById('bet-type').disabled = false;
+      showToast('Bet updated successfully!');
+      switchPage('bets');
+      loadBets();
+      return;
+    }
+
     const res = await fetch('/api/bets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -729,6 +806,18 @@ function resetForm() {
   document.getElementById('bet-form').reset();
   document.getElementById('bet-form').classList.remove('hidden');
   document.getElementById('success-msg').classList.add('hidden');
+
+  // Clear edit mode state
+  const submitBtn = document.getElementById('submit-btn');
+  if (submitBtn.dataset.editMode) {
+    delete submitBtn.dataset.editMode;
+    submitBtn.querySelector('.btn-text').textContent = 'Place Bet 🎰';
+    editingBetData = null;
+  }
+  // Re-enable selects that may have been disabled during edit
+  document.getElementById('guild-select').disabled = false;
+  document.getElementById('channel-select').disabled = false;
+  document.getElementById('bet-type').disabled = false;
 
   // Reset dynamic fields
   document.getElementById('team-fields').classList.add('hidden');
@@ -1593,6 +1682,7 @@ function renderBetCard(bet, showOwner = false) {
         </div>
         <div class="ticket-leg-pick">${esc(leg.pick) || '—'}</div>
         ${leg.teamA && leg.teamB ? `<div class="ticket-leg-matchup">${esc(leg.teamA)} vs ${esc(leg.teamB)}</div>` : ''}
+        ${leg.eventStartTime ? `<div class="ticket-leg-time">⏰ ${esc(leg.eventStartTime)}</div>` : ''}
         ${legActions}
       </div>`;
     }).join('');
@@ -1616,6 +1706,9 @@ function renderBetCard(bet, showOwner = false) {
     }
     if (bet.playerName) {
       matchupHtml += `<div class="ticket-player">${esc(bet.playerName)}${bet.propDescription ? ' — ' + esc(bet.propDescription) : ''}</div>`;
+    }
+    if (bet.eventStartTime) {
+      matchupHtml += `<div class="ticket-game-time">⏰ ${esc(bet.eventStartTime)}</div>`;
     }
   }
 
@@ -1786,11 +1879,6 @@ async function closeLeg(betId, legId, status) {
 let editingBetData = null;
 
 function openEditModal(betId) {
-  // Find bet data from rendered cards
-  const allCards = document.querySelectorAll('.ticket');
-  editingBetData = null;
-  // Look through currently loaded bets (they're in the DOM via data attributes)
-  // We'll fetch the bet fresh from the API to get all fields
   fetchBetForEdit(betId);
 }
 
@@ -1801,95 +1889,188 @@ async function fetchBetForEdit(betId) {
     if (!bet || bet.error) { alert('Could not load bet data'); return; }
 
     editingBetData = bet;
-    document.getElementById('edit-bet-id').value = bet.id;
 
-    // Populate sport dropdown
-    const sportSel = document.getElementById('edit-sport');
-    sportSel.innerHTML = '<option value="">— keep current —</option>';
-    const mainSportSel = document.getElementById('sport-select');
-    if (mainSportSel) {
-      [...mainSportSel.options].forEach(o => {
-        if (o.value) {
-          const opt = document.createElement('option');
-          opt.value = o.value;
-          opt.textContent = o.textContent;
-          if (o.value === bet.sport) opt.selected = true;
-          sportSel.appendChild(opt);
-        }
+    // Navigate to the slip form page
+    switchPage('slip');
+    resetForm();
+
+    // Mark the form as edit mode
+    const submitBtn = document.getElementById('submit-btn');
+    submitBtn.querySelector('.btn-text').textContent = 'Save Changes ✏️';
+    submitBtn.dataset.editMode = betId;
+
+    const isParlay = bet.betType === 'parlay';
+
+    // Set guild & channel (disabled during edit)
+    const guildSel = document.getElementById('guild-select');
+    guildSel.value = bet.guildId || '';
+    guildSel.disabled = true;
+    // Load channels for this guild then set value
+    const channelSel = document.getElementById('channel-select');
+    channelSel.disabled = true;
+
+    // Set bet type
+    const betTypeSel = document.getElementById('bet-type');
+    betTypeSel.value = bet.betType || 'single';
+    betTypeSel.disabled = true;
+
+    if (isParlay) {
+      // Show parlay mode
+      document.getElementById('parlay-count-row').classList.remove('hidden');
+      document.getElementById('single-fields').classList.add('hidden');
+      document.getElementById('parlay-legs-container').classList.remove('hidden');
+      document.getElementById('parlay-totals').classList.remove('hidden');
+
+      const legCount = bet.legs?.length || 2;
+      document.getElementById('parlay-legs-count').value = legCount;
+
+      // Remove required from single fields
+      ['bet-category', 'wager-type', 'odds', 'units'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.required = false;
       });
+
+      // Build parlay leg forms
+      buildParlayLegs();
+
+      // Populate each leg
+      setTimeout(() => {
+        bet.legs?.forEach((leg, i) => {
+          const idx = i + 1;
+          const sportEl = document.querySelector(`.leg-sport[data-leg="${idx}"]`);
+          if (sportEl) sportEl.value = leg.sport || '';
+
+          const catEl = document.querySelector(`.leg-category[data-leg="${idx}"]`);
+          if (catEl) {
+            // Determine category
+            const cat = leg.wagerType === 'futures' ? 'futures'
+              : leg.wagerType === 'prop' ? 'player_prop'
+              : (leg.teamA || leg.teamB) ? 'team_game'
+              : leg.betCategory || 'team_game';
+            catEl.value = cat;
+            catEl.dispatchEvent(new Event('change'));
+
+            if (cat === 'team_game') {
+              const wagerEl = document.querySelector(`.leg-wager-type[data-leg="${idx}"]`);
+              if (wagerEl) {
+                wagerEl.value = leg.wagerType || 'moneyline';
+                wagerEl.dispatchEvent(new Event('change'));
+              }
+              const teamAEl = document.querySelector(`.leg-team-a[data-leg="${idx}"]`);
+              const teamBEl = document.querySelector(`.leg-team-b[data-leg="${idx}"]`);
+              if (teamAEl) teamAEl.value = leg.teamA || '';
+              if (teamBEl) teamBEl.value = leg.teamB || '';
+              const spreadEl = document.querySelector(`.leg-spread-value[data-leg="${idx}"]`);
+              if (spreadEl && leg.spreadValue) spreadEl.value = leg.spreadValue;
+            } else if (cat === 'player_prop') {
+              const playerEl = document.querySelector(`.leg-player-name[data-leg="${idx}"]`);
+              const propEl = document.querySelector(`.leg-prop-desc[data-leg="${idx}"]`);
+              if (playerEl) playerEl.value = leg.playerName || '';
+              if (propEl) propEl.value = leg.propDescription || '';
+            } else if (cat === 'futures') {
+              const marketEl = document.querySelector(`.leg-futures-market[data-leg="${idx}"]`);
+              const selEl = document.querySelector(`.leg-futures-selection[data-leg="${idx}"]`);
+              if (marketEl && leg.pick) {
+                const parts = leg.pick.split(': ');
+                marketEl.value = parts.length > 1 ? parts[0] : leg.pick;
+                if (selEl) selEl.value = parts.length > 1 ? parts.slice(1).join(': ') : '';
+              }
+            }
+          }
+
+          // Odds per leg
+          const legOddsEl = document.querySelector(`.leg-odds[data-leg="${idx}"]`);
+          if (legOddsEl && leg.oddsAmerican) legOddsEl.value = leg.oddsAmerican;
+
+          // Game time per leg
+          const legTimeEl = document.querySelector(`.leg-event-time[data-leg="${idx}"]`);
+          if (legTimeEl && leg.eventStartTime) legTimeEl.value = leg.eventStartTime;
+        });
+      }, 100);
+
+      // Set sport from first leg
+      const sportSel = document.getElementById('sport-select');
+      if (bet.legs?.[0]?.sport) sportSel.value = bet.legs[0].sport;
+
+      // Parlay totals
+      document.getElementById('parlay-odds').value = bet.oddsAmerican || '';
+      document.getElementById('parlay-units').value = bet.units || '';
+      document.getElementById('parlay-note').value = bet.betNote || '';
+
+    } else {
+      // Single bet
+      document.getElementById('sport-select').value = bet.sport || '';
+
+      const cat = bet.betCategory || (bet.wagerType === 'futures' ? 'futures' : (bet.playerName ? 'player_prop' : 'team_game'));
+      const catSel = document.getElementById('bet-category');
+      catSel.value = cat;
+
+      // Trigger category change to show fields
+      if (cat === 'team_game') {
+        document.getElementById('team-fields').classList.remove('hidden');
+        document.getElementById('wager-type-group').classList.remove('hidden');
+        document.getElementById('prop-fields').classList.add('hidden');
+        document.getElementById('futures-fields').classList.add('hidden');
+
+        document.getElementById('team-a').value = bet.teamA || '';
+        document.getElementById('team-b').value = bet.teamB || '';
+
+        const wagerSel = document.getElementById('wager-type');
+        wagerSel.value = bet.wagerType || 'moneyline';
+        if (bet.wagerType === 'spread') {
+          document.getElementById('spread-line-row').classList.remove('hidden');
+          document.getElementById('spread-value').value = bet.spreadValue || '';
+        } else if (bet.wagerType === 'total') {
+          document.getElementById('spread-line-row').classList.remove('hidden');
+          document.getElementById('over-under-row').classList.remove('hidden');
+          document.getElementById('spread-value').value = bet.spreadValue || '';
+          document.getElementById('spread-label').textContent = 'Total Line';
+        }
+      } else if (cat === 'player_prop') {
+        document.getElementById('prop-fields').classList.remove('hidden');
+        document.getElementById('team-fields').classList.add('hidden');
+        document.getElementById('futures-fields').classList.add('hidden');
+        document.getElementById('wager-type-group').classList.add('hidden');
+
+        document.getElementById('player-name').value = bet.playerName || '';
+        document.getElementById('prop-desc').value = bet.propDescription || '';
+      } else if (cat === 'futures') {
+        document.getElementById('futures-fields').classList.remove('hidden');
+        document.getElementById('team-fields').classList.add('hidden');
+        document.getElementById('prop-fields').classList.add('hidden');
+        document.getElementById('wager-type-group').classList.add('hidden');
+
+        if (bet.pick) {
+          const parts = bet.pick.split(': ');
+          document.getElementById('futures-market').value = parts.length > 1 ? parts[0] : bet.pick;
+          document.getElementById('futures-selection').value = parts.length > 1 ? parts.slice(1).join(': ') : '';
+        }
+      }
+
+      document.getElementById('odds').value = bet.oddsAmerican || '';
+      document.getElementById('units').value = bet.units || '';
+      document.getElementById('event-time').value = bet.eventStartTime || '';
+      document.getElementById('bet-note').value = bet.betNote || '';
     }
 
-    // Prefill wager type
-    const wagerSel = document.getElementById('edit-wager-type');
-    if (bet.wagerType) {
-      [...wagerSel.options].forEach(o => { o.selected = (o.value === bet.wagerType); });
-    }
+    // Whale toggle
+    const whaleEl = document.getElementById('is-whale');
+    if (whaleEl) whaleEl.checked = bet.isWhale || false;
 
-    // Prefill all fields with current values
-    document.getElementById('edit-team-a').value = bet.teamA || '';
-    document.getElementById('edit-team-b').value = bet.teamB || '';
-    document.getElementById('edit-pick').value = bet.pick || '';
-    document.getElementById('edit-odds').value = bet.oddsAmerican || '';
-    document.getElementById('edit-units').value = bet.units || '';
-    document.getElementById('edit-note').value = bet.betNote || '';
-
-    document.getElementById('edit-modal').classList.remove('hidden');
   } catch (e) {
     alert('Failed to load bet for editing');
   }
 }
 
 function closeEditModal() {
-  document.getElementById('edit-modal').classList.add('hidden');
+  // Legacy — edit now uses the main slip form; just clear state
+  resetForm();
   editingBetData = null;
 }
 
 async function submitEditBet(e) {
   e.preventDefault();
-  const betId = document.getElementById('edit-bet-id').value;
-  const fields = {};
-
-  const sport = document.getElementById('edit-sport').value;
-  const wagerType = document.getElementById('edit-wager-type').value;
-  const teamA = document.getElementById('edit-team-a').value.trim();
-  const teamB = document.getElementById('edit-team-b').value.trim();
-  const pick = document.getElementById('edit-pick').value.trim();
-  const odds = document.getElementById('edit-odds').value.trim();
-  const units = document.getElementById('edit-units').value.trim();
-  const note = document.getElementById('edit-note').value.trim();
-
-  // Only send fields that differ from original or are non-empty
-  if (sport) fields.sport = sport;
-  if (wagerType) fields.wagerType = wagerType;
-  if (teamA !== (editingBetData?.teamA || '')) fields.teamA = teamA;
-  if (teamB !== (editingBetData?.teamB || '')) fields.teamB = teamB;
-  if (pick !== (editingBetData?.pick || '')) fields.pick = pick;
-  if (odds && odds !== String(editingBetData?.oddsAmerican || '')) fields.oddsAmerican = odds;
-  if (units && units !== String(editingBetData?.units || '')) fields.units = units;
-  // Always send note if it changed (allow clearing)
-  if (note !== (editingBetData?.betNote || '')) fields.betNote = note;
-
-  if (Object.keys(fields).length === 0) {
-    alert('No changes detected');
-    return;
-  }
-
-  try {
-    const res = await fetch(`/api/bets/${betId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fields)
-    });
-    const data = await res.json();
-    if (data.error) {
-      alert('Error: ' + data.error);
-      return;
-    }
-    closeEditModal();
-    loadBets();
-  } catch (e) {
-    alert('Failed to edit bet');
-  }
+  // This function is no longer used — edits go through handleSubmit in edit mode
 }
 
 // ─── Delete Bet ─────────
