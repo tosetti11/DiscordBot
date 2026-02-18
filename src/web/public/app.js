@@ -926,11 +926,11 @@ function loadChatWidget() {
       const src = channelId
         ? `https://e.widgetbot.io/channels/${guildId}/${channelId}`
         : `https://e.widgetbot.io/channels/${guildId}`;
-      wrap.innerHTML = `<iframe src="${src}" allow="clipboard-write; fullscreen"></iframe>`;
+      wrap.innerHTML = `<iframe src="${src}" allow="clipboard-write; fullscreen" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-forms"></iframe>`;
       chatWidgetLoaded = true;
     })
     .catch(() => {
-      wrap.innerHTML = `<iframe src="https://e.widgetbot.io/channels/${guildId}" allow="clipboard-write; fullscreen"></iframe>`;
+      wrap.innerHTML = `<iframe src="https://e.widgetbot.io/channels/${guildId}" allow="clipboard-write; fullscreen" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-forms"></iframe>`;
       chatWidgetLoaded = true;
     });
 }
