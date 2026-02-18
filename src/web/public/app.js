@@ -135,7 +135,12 @@ function showApp() {
   document.getElementById('app-footer').classList.remove('hidden');
 
   // Set user info
-  document.getElementById('user-avatar').src = currentUser.avatar;
+  const avatarEl = document.getElementById('user-avatar');
+  avatarEl.src = currentUser.avatar;
+  avatarEl.onerror = () => {
+    avatarEl.onerror = null;
+    avatarEl.src = `https://cdn.discordapp.com/embed/avatars/0.png`;
+  };
   document.getElementById('user-name').textContent = currentUser.displayName;
 
   // Populate guilds

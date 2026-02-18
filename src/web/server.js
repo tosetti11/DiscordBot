@@ -226,7 +226,7 @@ function createWebServer() {
       // Create JWT
       const avatar = userData.avatar
         ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png`
-        : `https://cdn.discordapp.com/embed/avatars/${parseInt(userData.discriminator || '0') % 5}.png`;
+        : `https://cdn.discordapp.com/embed/avatars/${(BigInt(userData.id) >> 22n) % 6n}.png`;
 
       const jwtPayload = {
         discordId: userData.id,
