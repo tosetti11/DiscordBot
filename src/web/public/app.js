@@ -2001,8 +2001,74 @@ function initRemindersPage() {
     if (dtInput.value) {
       document.getElementById('reminder-time').value = formatDateTimePretty(dtInput.value);
       document.getElementById('reminder-time').dataset.isoValue = dtInput.value;
+      updateReminderPreview();
     }
   });
+
+  // Live preview listeners
+  const msgInput = document.getElementById('reminder-message');
+  const linkInput = document.getElementById('reminder-link');
+  const typeSelect = document.getElementById('reminder-type');
+  const repeatSelect = document.getElementById('reminder-repeat');
+  const charCount = document.getElementById('reminder-char-count');
+
+  msgInput.addEventListener('input', () => {
+    charCount.textContent = msgInput.value.length;
+    updateReminderPreview();
+  });
+  linkInput.addEventListener('input', () => updateReminderPreview());
+  typeSelect.addEventListener('change', () => updateReminderPreview());
+  repeatSelect.addEventListener('change', () => updateReminderPreview());
+
+  document.getElementById('reminder-preview-timestamp').textContent = new Date().toLocaleString();
+}
+
+function updateReminderPreview() {
+  const msg = document.getElementById('reminder-message').value || 'Your reminder will appear here...';
+  const link = document.getElementById('reminder-link').value;
+  const typeVal = document.getElementById('reminder-type').value;
+  const typeInfo = REMINDER_TYPES[typeVal] || null;
+  const repeat = document.getElementById('reminder-repeat').value;
+  const timeInput = document.getElementById('reminder-time');
+
+  // Update type badge
+  const typeEl = document.getElementById('reminder-preview-type');
+  if (typeInfo) {
+    typeEl.textContent = `${typeInfo.emoji} ${typeInfo.label}`;
+  } else {
+    typeEl.textContent = '';
+  }
+
+  // Update message
+  document.getElementById('reminder-preview-description').textContent = msg;
+
+  // Update link
+  const linkField = document.getElementById('reminder-preview-link-field');
+  const linkValue = document.getElementById('reminder-preview-link-value');
+  if (link) {
+    linkField.classList.remove('hidden');
+    linkValue.textContent = link;
+    linkValue.href = link;
+  } else {
+    linkField.classList.add('hidden');
+  }
+
+  // Update meta (time + repeat)
+  const metaEl = document.getElementById('reminder-preview-meta');
+  let metaHtml = '';
+  if (timeInput.value) {
+    metaHtml += `<span>📅 ${esc(timeInput.value)}</span>`;
+  }
+  const chSel = document.getElementById('reminder-channel');
+  if (chSel.value && chSel.selectedOptions[0]) {
+    metaHtml += `<span>${esc(chSel.selectedOptions[0].textContent)}</span>`;
+  }
+  if (repeat && repeat !== 'none') {
+    metaHtml += `<span>🔁 ${repeat}</span>`;
+  }
+  metaEl.innerHTML = metaHtml;
+
+  document.getElementById('reminder-preview-timestamp').textContent = new Date().toLocaleString();
 }
 
 function openReminderCalendar() {
@@ -2093,13 +2159,15 @@ async function loadReminders() {
 }
 
 async function submitReminder(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
 
   const guildId = document.getElementById('reminder-guild').value;
   const channelId = document.getElementById('reminder-channel').value;
   const type = document.getElementById('reminder-type').value;
   const message = document.getElementById('reminder-message').value.trim();
   const repeat = document.getElementById('reminder-repeat').value;
+  const statusDiv = document.getElementById('reminder-status');
+  const sendBtn = document.getElementById('reminder-send-btn');
 
   // Get time — either from ISO (calendar) or raw text
   const timeInput = document.getElementById('reminder-time');
@@ -2110,22 +2178,32 @@ async function submitReminder(e) {
   } else {
     // Pass raw text — server will need to handle it or we convert here
     const raw = timeInput.value.trim();
-    if (!raw) { alert('Please set a time'); return; }
+    if (!raw) {
+      statusDiv.className = 'announce-status announce-error';
+      statusDiv.textContent = 'Please set a time.';
+      statusDiv.classList.remove('hidden');
+      return;
+    }
     // Try to parse client-side
     scheduledAt = parseTimeClient(raw);
     if (!scheduledAt) {
-      alert('Could not parse time. Use the calendar picker or formats like "in 2h", "tomorrow 9pm"');
+      statusDiv.className = 'announce-status announce-error';
+      statusDiv.textContent = 'Could not parse time. Use the calendar picker or formats like "in 2h", "tomorrow 9pm".';
+      statusDiv.classList.remove('hidden');
       return;
     }
   }
 
   if (!guildId || !channelId || !type || !message) {
-    alert('Please fill all required fields');
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = 'Please fill all required fields.';
+    statusDiv.classList.remove('hidden');
     return;
   }
 
-  const successEl = document.getElementById('reminder-success');
-  successEl.classList.add('hidden');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '⏳ Creating...';
+  statusDiv.classList.add('hidden');
 
   try {
     const res = await fetch(`/api/guilds/${guildId}/reminders`, {
@@ -2135,24 +2213,37 @@ async function submitReminder(e) {
     });
     const data = await res.json();
     if (data.error) {
-      alert('Error: ' + data.error);
+      statusDiv.className = 'announce-status announce-error';
+      statusDiv.textContent = '❌ ' + data.error;
+      statusDiv.classList.remove('hidden');
+      sendBtn.disabled = false;
+      sendBtn.textContent = '⏰ Create';
       return;
     }
 
     // Success
-    successEl.classList.remove('hidden');
-    setTimeout(() => successEl.classList.add('hidden'), 3000);
+    statusDiv.className = 'announce-status announce-success';
+    statusDiv.textContent = '✅ Reminder created!';
+    statusDiv.classList.remove('hidden');
 
     // Reset form
     document.getElementById('reminder-message').value = '';
+    document.getElementById('reminder-link').value = '';
     document.getElementById('reminder-time').value = '';
+    document.getElementById('reminder-char-count').textContent = '0';
     delete document.getElementById('reminder-time').dataset.isoValue;
     document.getElementById('reminder-datetime').value = '';
+    updateReminderPreview();
 
     loadReminders();
   } catch (e) {
-    alert('Failed to create reminder');
+    statusDiv.className = 'announce-status announce-error';
+    statusDiv.textContent = '❌ Failed to create reminder.';
+    statusDiv.classList.remove('hidden');
   }
+
+  sendBtn.disabled = false;
+  sendBtn.textContent = '⏰ Create';
 }
 
 // Client-side time parser (mirrors server parseTime)

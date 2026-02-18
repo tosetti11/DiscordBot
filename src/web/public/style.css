@@ -2076,34 +2076,44 @@ textarea {
    REMINDERS PAGE
    ════════════════════════════════════════════════════════════ */
 
-.reminders-container {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 32px 24px;
+.reminder-compose-layout {
+  margin-top: 16px;
 }
 
-.reminders-header {
-  margin-bottom: 24px;
+.reminder-list-section {
+  margin-top: 28px;
 }
 
-.reminders-header h2 {
-  font-size: 28px;
-  font-weight: 800;
-}
-
-.reminders-layout {
-  display: grid;
-  grid-template-columns: 380px 1fr;
-  gap: 24px;
-  align-items: start;
-}
-
-.reminder-create-card,
 .reminder-list-card {
   background: var(--bg-card);
-  border-radius: var(--radius);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  padding: 24px;
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  padding: 20px;
+}
+
+.reminder-preview-type {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #FFD700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.reminder-preview-meta {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: #b9bbbe;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+
+.reminder-preview-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .card-title {
@@ -2438,7 +2448,7 @@ textarea {
 
 /* ── Responsive additions ── */
 @media (max-width: 768px) {
-  .reminders-layout {
+  .reminder-compose-layout {
     grid-template-columns: 1fr;
   }
 
