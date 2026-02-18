@@ -115,10 +115,12 @@ function createWebServer() {
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "https://cdn.discordapp.com", "data:"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", "https://e.widgetbot.io", "https://widgetbot.io"],
         frameSrc: ["'self'", "https://e.widgetbot.io", "https://widgetbot.io", "https://discord.com"],
+        childSrc: ["'self'", "https://e.widgetbot.io", "https://widgetbot.io"],
       },
     },
+    crossOriginEmbedderPolicy: false,
   }));
 
   // ─── Rate Limiting ───
