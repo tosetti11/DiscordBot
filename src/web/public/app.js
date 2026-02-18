@@ -1510,7 +1510,8 @@ function renderBetCard(bet, showOwner = false) {
   }
 
   // Note
-  const noteHtml = bet.betNote ? `<div class="ticket-note">📝 ${esc(bet.betNote)}</div>` : '';
+  // Note hidden from card display but still editable
+  const noteHtml = '';
 
   div.innerHTML = `
     <div class="ticket-header">
