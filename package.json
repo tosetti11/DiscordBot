@@ -1,6 +1,6 @@
 {
   "name": "gk-sports-betting-tracker",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "GK | Sports Betting Tracker - Discord bot for community bet tracking",
   "main": "src/index.js",
   "scripts": {
