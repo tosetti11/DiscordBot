@@ -562,9 +562,14 @@ function createWebServer() {
         dailyPnL[day].net = Math.round(dailyPnL[day].net * 100) / 100;
       }
 
-      // Avg odds
+      // Avg odds (convert to decimal, average, convert back to American)
       const allOdds = bets.filter(b => b.odds_american).map(b => b.odds_american);
-      const avgOdds = allOdds.length > 0 ? Math.round(allOdds.reduce((a, b) => a + b, 0) / allOdds.length) : 0;
+      let avgOdds = 0;
+      if (allOdds.length > 0) {
+        const decArr = allOdds.map(o => o >= 0 ? (o / 100) + 1 : (100 / Math.abs(o)) + 1);
+        const avgDec = decArr.reduce((a, b) => a + b, 0) / decArr.length;
+        avgOdds = avgDec >= 2 ? Math.round((avgDec - 1) * 100) : Math.round(-100 / (avgDec - 1));
+      }
 
       // Avg units
       const allUnits = bets.map(b => Number(b.units));
