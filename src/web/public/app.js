@@ -573,8 +573,9 @@ async function handleSubmit(e) {
     const guildId = document.getElementById('guild-select').value;
     const channelId = document.getElementById('channel-select').value;
     const isWhale = document.getElementById('is-whale').checked;
+    const isEditMode = !!submitBtn.dataset.editMode;
 
-    if (!guildId || !channelId) {
+    if (!isEditMode && (!guildId || !channelId)) {
       throw new Error('Please select a server and channel');
     }
 
@@ -769,6 +770,9 @@ async function handleSubmit(e) {
       // Restore slip header
       document.getElementById('slip-title').textContent = '🎟️ New Bet Slip';
       document.getElementById('slip-subtitle').textContent = 'Fill out your bet details below';
+      // Restore hidden rows
+      document.getElementById('server-channel-row').classList.remove('hidden');
+      document.getElementById('whale-row').classList.remove('hidden');
       showToast('Bet updated successfully!');
       switchPage('bets');
       loadBets();
@@ -825,6 +829,12 @@ function resetForm() {
   // Restore slip header
   document.getElementById('slip-title').textContent = '🎟️ New Bet Slip';
   document.getElementById('slip-subtitle').textContent = 'Fill out your bet details below';
+
+  // Restore hidden rows
+  document.getElementById('server-channel-row').classList.remove('hidden');
+  document.getElementById('whale-row').classList.remove('hidden');
+  document.getElementById('guild-select').required = true;
+  document.getElementById('channel-select').required = true;
 
   // Reset dynamic fields
   document.getElementById('team-fields').classList.add('hidden');
@@ -1909,6 +1919,15 @@ async function fetchBetForEdit(betId) {
     // Update header to show slip number
     document.getElementById('slip-title').textContent = `✏️ Edit Slip #${bet.slipNumber || ''}`;
     document.getElementById('slip-subtitle').textContent = 'Edit your bet details below — changes update the ticket on Discord';
+
+    // Hide non-editable fields
+    document.getElementById('server-channel-row').classList.add('hidden');
+    document.getElementById('whale-row').classList.add('hidden');
+    document.getElementById('admin-behalf-row').classList.add('hidden');
+
+    // Remove required from hidden selects so form can submit
+    document.getElementById('guild-select').required = false;
+    document.getElementById('channel-select').required = false;
 
     const isParlay = bet.betType === 'parlay';
 
