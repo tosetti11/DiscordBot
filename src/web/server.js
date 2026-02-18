@@ -145,6 +145,14 @@ function createWebServer() {
   app.use('/api/', apiLimiter);
   app.use('/auth/', authLimiter);
 
+  // Serve service-worker.js with no-cache so browser always checks for updates
+  app.get('/service-worker.js', (req, res) => {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.sendFile(path.join(__dirname, 'public', 'service-worker.js'));
+  });
+
   app.use(express.static(path.join(__dirname, 'public')));
 
   // ─── Auth Middleware ───

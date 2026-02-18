@@ -15,8 +15,12 @@ function esc(str) {
 
 // ── PWA: Register Service Worker ──
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js')
-    .then(reg => console.log('SW registered:', reg.scope))
+  navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
+    .then(reg => {
+      console.log('SW registered:', reg.scope);
+      // Check for updates immediately
+      reg.update();
+    })
     .catch(err => console.log('SW registration failed:', err));
 }
 
