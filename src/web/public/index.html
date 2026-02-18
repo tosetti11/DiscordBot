@@ -34,19 +34,9 @@
     <!-- Header -->
     <header class="app-header">
       <div class="header-left">
+        <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Menu">☰</button>
         <img src="/TheGamblingKing.jpg" alt="TheGamblingKing" class="header-logo-img">
         <span class="header-title">TheGamblingKing</span>
-        <nav class="header-nav">
-          <a href="javascript:void(0)" class="nav-link active" data-page="slip" onclick="switchPage('slip')">🎟️ Slip</a>
-          <a href="javascript:void(0)" class="nav-link" data-page="bets" onclick="switchPage('bets')">📋 Bets</a>
-          <a href="javascript:void(0)" class="nav-link" data-page="stats" onclick="switchPage('stats')">📊 Stats</a>
-          <a href="javascript:void(0)" class="nav-link" data-page="leaderboard" onclick="switchPage('leaderboard')">🏆 Rankings</a>
-          <a href="javascript:void(0)" class="nav-link hidden" data-page="reminders" id="nav-reminders" onclick="switchPage('reminders')">⏰ Reminders</a>
-          <a href="javascript:void(0)" class="nav-link" data-page="tools" onclick="switchPage('tools')">🔧 Tools</a>
-          <a href="javascript:void(0)" class="nav-link" data-page="install" onclick="switchPage('install')">📱 App</a>
-          <a href="javascript:void(0)" class="nav-link hidden" data-page="analytics" id="nav-analytics" onclick="switchPage('analytics')">📈 Analytics</a>
-          <a href="javascript:void(0)" class="nav-link hidden" data-page="announce" id="nav-announce" onclick="switchPage('announce')">📣 Announce</a>
-        </nav>
       </div>
       <div class="header-right">
         <div class="user-info">
@@ -56,6 +46,57 @@
         <a href="/auth/logout" class="btn-logout">Logout</a>
       </div>
     </header>
+
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <img src="/TheGamblingKing.jpg" alt="" class="sidebar-logo">
+        <span class="sidebar-brand">TheGamblingKing</span>
+        <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="javascript:void(0)" class="sidebar-link active" data-page="slip" onclick="switchPage('slip')">
+          <span class="sidebar-icon">🎟️</span> Slip
+        </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="bets" onclick="switchPage('bets')">
+          <span class="sidebar-icon">📋</span> Bets
+        </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="stats" onclick="switchPage('stats')">
+          <span class="sidebar-icon">📊</span> Stats
+        </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="leaderboard" onclick="switchPage('leaderboard')">
+          <span class="sidebar-icon">🏆</span> Rankings
+        </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="tools" onclick="switchPage('tools')">
+          <span class="sidebar-icon">🔧</span> Tools
+        </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="install" onclick="switchPage('install')">
+          <span class="sidebar-icon">📱</span> App
+        </a>
+        <!-- Admin Section -->
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-admin hidden" id="sidebar-admin">
+          <button class="sidebar-admin-toggle" onclick="toggleAdminMenu()">
+            <span class="sidebar-icon">🛡️</span> Admin
+            <span class="sidebar-chevron" id="admin-chevron">▸</span>
+          </button>
+          <div class="sidebar-admin-items hidden" id="admin-items">
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="reminders" id="nav-reminders" onclick="switchPage('reminders')">
+              <span class="sidebar-icon">⏰</span> Reminders
+            </a>
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="analytics" id="nav-analytics" onclick="switchPage('analytics')">
+              <span class="sidebar-icon">📈</span> Analytics
+            </a>
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="announce" id="nav-announce" onclick="switchPage('announce')">
+              <span class="sidebar-icon">📣</span> Announce
+            </a>
+          </div>
+        </div>
+      </nav>
+    </aside>
 
     <!-- Bet Slip Form -->
     <main id="slip-page" class="main-content">

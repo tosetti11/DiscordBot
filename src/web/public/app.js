@@ -753,8 +753,23 @@ function showToast(msg) {
 }
 
 // ═══════════════════════════════════════════════
-//  Page Navigation
+//  Sidebar & Navigation
 // ═══════════════════════════════════════════════
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+function toggleAdminMenu() {
+  document.getElementById('admin-items').classList.toggle('hidden');
+  document.getElementById('admin-chevron').classList.toggle('expanded');
+}
 
 function switchPage(page) {
   // Track page view
@@ -763,9 +778,13 @@ function switchPage(page) {
     trackActivity(trackablePages[page]);
   }
 
-  // Toggle nav links
-  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-  document.querySelector(`.nav-link[data-page="${page}"]`).classList.add('active');
+  // Toggle sidebar links
+  document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+  const activeLink = document.querySelector(`.sidebar-link[data-page="${page}"]`);
+  if (activeLink) activeLink.classList.add('active');
+
+  // Close sidebar
+  closeSidebar();
 
   // All pages
   const pages = {
@@ -2324,6 +2343,12 @@ async function checkOwnerFeatures() {
       }
     } catch (e) {}
   }
+
+  // Show admin section if any admin link is visible
+  const adminSection = document.getElementById('sidebar-admin');
+  const adminLinks = document.querySelectorAll('#admin-items .sidebar-link');
+  const anyVisible = [...adminLinks].some(l => !l.classList.contains('hidden'));
+  if (anyVisible && adminSection) adminSection.classList.remove('hidden');
 }
 
 let analyticsInitialized = false;
