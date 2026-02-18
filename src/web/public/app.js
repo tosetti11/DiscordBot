@@ -167,6 +167,9 @@ function showApp() {
   fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
   setInterval(() => fetch('/api/heartbeat', { method: 'POST' }).catch(() => {}), 30000);
 
+  // Fetch online members count for chat dot
+  setTimeout(() => fetchOnlineMembers(), 1000);
+
   // Populate sports
   const sportSelect = document.getElementById('sport-select');
   SPORTS.forEach(s => {
@@ -885,6 +888,87 @@ function closeSidebar() {
 function toggleAdminMenu() {
   document.getElementById('admin-items').classList.toggle('hidden');
   document.getElementById('admin-chevron').classList.toggle('expanded');
+}
+
+// ═══════════════════════════════════════════════
+//  Chat Drawer (Discord Widgetbot)
+// ═══════════════════════════════════════════════
+
+let chatDrawerOpen = false;
+let chatWidgetLoaded = false;
+let chatOnlineInterval = null;
+
+function toggleChatDrawer() {
+  chatDrawerOpen = !chatDrawerOpen;
+  document.getElementById('chat-drawer').classList.toggle('open', chatDrawerOpen);
+  document.getElementById('chat-drawer-overlay').classList.toggle('open', chatDrawerOpen);
+  closeSidebar();
+
+  if (chatDrawerOpen && !chatWidgetLoaded) {
+    loadChatWidget();
+  }
+  if (chatDrawerOpen) {
+    fetchOnlineMembers();
+    if (!chatOnlineInterval) {
+      chatOnlineInterval = setInterval(fetchOnlineMembers, 60000);
+    }
+  }
+}
+
+function loadChatWidget() {
+  const wrap = document.getElementById('chat-widget-wrap');
+  // Use the first guild the user has access to
+  const guildSel = document.getElementById('guild-select');
+  const guildId = guildSel?.value || '1465176016828895456';
+
+  // Find the chat channel ID from the channels dropdown if available, otherwise use guild default
+  fetch(`/api/guilds/${guildId}/chat-channel`)
+    .then(r => r.json())
+    .then(data => {
+      const channelId = data.channelId || '';
+      const src = channelId
+        ? `https://e.widgetbot.io/channels/${guildId}/${channelId}`
+        : `https://e.widgetbot.io/channels/${guildId}`;
+      wrap.innerHTML = `<iframe src="${src}" allow="clipboard-write; fullscreen"></iframe>`;
+      chatWidgetLoaded = true;
+    })
+    .catch(() => {
+      wrap.innerHTML = `<iframe src="https://e.widgetbot.io/channels/${guildId}" allow="clipboard-write; fullscreen"></iframe>`;
+      chatWidgetLoaded = true;
+    });
+}
+
+async function fetchOnlineMembers() {
+  try {
+    const guildSel = document.getElementById('guild-select');
+    const guildId = guildSel?.value || '1465176016828895456';
+    const res = await fetch(`/api/guilds/${guildId}/online-members`);
+    const data = await res.json();
+    if (!data.members) return;
+
+    const countEl = document.getElementById('chat-online-count');
+    const dotEl = document.getElementById('chat-online-dot');
+    countEl.textContent = `${data.members.length} online`;
+    if (dotEl) dotEl.title = `${data.members.length} online`;
+
+    const listEl = document.getElementById('chat-online-list');
+    listEl.innerHTML = data.members.map(m => `
+      <div class="chat-online-member">
+        <img src="/api/avatar/${m.discordId}" alt="">
+        <span class="member-status-dot ${m.status}"></span>
+        <span>${esc(m.displayName)}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    // silently fail
+  }
+}
+
+function toggleOnlineList() {
+  const list = document.getElementById('chat-online-list');
+  const btn = document.getElementById('chat-online-toggle');
+  list.classList.toggle('hidden');
+  btn.classList.toggle('expanded');
 }
 
 function switchPage(page) {

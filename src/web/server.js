@@ -451,6 +451,57 @@ function createWebServer() {
     }
   });
 
+  // ─── Chat Channel ID (for Widgetbot embed) ───
+  app.get('/api/guilds/:guildId/chat-channel', authMiddleware, async (req, res) => {
+    try {
+      const guild = discordClient?.guilds.cache.get(req.params.guildId);
+      if (!guild) return res.json({ channelId: null });
+
+      // Look for the preferred chat channel
+      const preferred = ['the-kings-money-printer', 'the-crackhouse', 'daily-action-chat', 'general'];
+      const textChannels = guild.channels.cache.filter(c => c.isTextBased() && !c.isThread() && !c.isVoiceBased());
+
+      for (const name of preferred) {
+        const ch = textChannels.find(c => c.name === name);
+        if (ch) return res.json({ channelId: ch.id, channelName: ch.name });
+      }
+
+      // Fallback to first text channel
+      const first = textChannels.first();
+      res.json({ channelId: first?.id || null, channelName: first?.name || null });
+    } catch (err) {
+      console.error('[API] Chat channel error:', err);
+      res.json({ channelId: null });
+    }
+  });
+
+  // ─── Online Members (excludes bots) ───
+  app.get('/api/guilds/:guildId/online-members', authMiddleware, async (req, res) => {
+    try {
+      const guild = discordClient?.guilds.cache.get(req.params.guildId);
+      if (!guild) return res.json({ members: [] });
+
+      // Fetch all members with presence (requires GUILD_PRESENCES intent)
+      const members = guild.members.cache
+        .filter(m => !m.user.bot && m.presence && m.presence.status !== 'offline')
+        .map(m => ({
+          discordId: m.user.id,
+          displayName: m.displayName || m.user.username,
+          status: m.presence.status, // online, idle, dnd
+          avatar: m.user.displayAvatarURL({ size: 32, extension: 'png', forceStatic: true }),
+        }))
+        .sort((a, b) => {
+          const order = { online: 0, idle: 1, dnd: 2 };
+          return (order[a.status] ?? 3) - (order[b.status] ?? 3);
+        });
+
+      res.json({ members });
+    } catch (err) {
+      console.error('[API] Online members error:', err);
+      res.json({ members: [] });
+    }
+  });
+
   // ─── Stats Helper ───
   function calcStats(bets) {
     const total = bets.length;

@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=5">
+  <link rel="stylesheet" href="/style.css?v=6">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -75,6 +75,10 @@
         </a>
         <a href="javascript:void(0)" class="sidebar-link" data-page="install" onclick="switchPage('install')">
           <span class="sidebar-icon">📱</span> App
+        </a>
+        <a href="javascript:void(0)" class="sidebar-link" id="chat-nav-link" onclick="toggleChatDrawer()">
+          <span class="sidebar-icon">💬</span> Chat
+          <span class="chat-online-dot" id="chat-online-dot" title="0 online"></span>
         </a>
         <!-- Admin Section -->
         <div class="sidebar-divider"></div>
@@ -1285,6 +1289,24 @@
   </main>
   </div>
 
+  <!-- Chat Drawer -->
+  <div id="chat-drawer-overlay" class="chat-drawer-overlay" onclick="toggleChatDrawer()"></div>
+  <aside id="chat-drawer" class="chat-drawer">
+    <div class="chat-drawer-header">
+      <h3>💬 Server Chat</h3>
+      <button class="chat-drawer-close" onclick="toggleChatDrawer()">✕</button>
+    </div>
+    <div class="chat-online-bar" id="chat-online-bar">
+      <span class="chat-online-icon">🟢</span>
+      <span id="chat-online-count">0 online</span>
+      <button class="chat-online-toggle" id="chat-online-toggle" onclick="toggleOnlineList()">▸</button>
+    </div>
+    <div class="chat-online-list hidden" id="chat-online-list"></div>
+    <div class="chat-widget-wrap" id="chat-widget-wrap">
+      <!-- Widgetbot iframe inserted by JS -->
+    </div>
+  </aside>
+
   <!-- Site Footer -->
   <footer id="app-footer" class="site-footer hidden">
     <div class="footer-content">
@@ -1293,6 +1315,6 @@
     </div>
   </footer>
 
-  <script src="/app.js?v=5"></script>
+  <script src="/app.js?v=6"></script>
 </body>
 </html>
