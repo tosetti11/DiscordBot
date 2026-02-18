@@ -2007,6 +2007,12 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.modal-card.modal-edit-ticket {
+  max-width: 580px;
+  border-color: rgba(255, 135, 50, 0.2);
+  background: linear-gradient(170deg, #1e1e1e 0%, #161616 100%);
+}
+
 .modal-card.modal-sm {
   max-width: 340px;
 }

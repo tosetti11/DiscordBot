@@ -720,28 +720,60 @@
 
       <!-- Edit Bet Modal -->
       <div id="edit-modal" class="modal-overlay hidden">
-        <div class="modal-card">
+        <div class="modal-card modal-edit-ticket">
           <div class="modal-header">
             <h3>✏️ Edit Bet</h3>
             <button class="modal-close" onclick="closeEditModal()">&times;</button>
           </div>
           <form id="edit-form" onsubmit="submitEditBet(event)">
             <input type="hidden" id="edit-bet-id">
-            <div class="form-group">
-              <label for="edit-odds">Odds</label>
-              <input type="text" id="edit-odds" class="form-input" placeholder="e.g. -110">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="edit-sport">Sport</label>
+                <select id="edit-sport" class="form-input">
+                  <option value="">— keep current —</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="edit-wager-type">Wager Type</label>
+                <select id="edit-wager-type" class="form-input">
+                  <option value="">— keep current —</option>
+                  <option value="spread">Spread</option>
+                  <option value="moneyline">Moneyline</option>
+                  <option value="over_under">Over/Under</option>
+                  <option value="prop">Prop</option>
+                  <option value="futures">Futures</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="edit-units">Units</label>
-              <input type="text" id="edit-units" class="form-input" placeholder="e.g. 2">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="edit-team-a">Team A</label>
+                <input type="text" id="edit-team-a" class="form-input" placeholder="Team A">
+              </div>
+              <div class="form-group">
+                <label for="edit-team-b">Team B</label>
+                <input type="text" id="edit-team-b" class="form-input" placeholder="Team B">
+              </div>
             </div>
             <div class="form-group">
               <label for="edit-pick">Pick</label>
               <input type="text" id="edit-pick" class="form-input" placeholder="e.g. Chiefs -3">
             </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="edit-odds">Odds (American)</label>
+                <input type="text" id="edit-odds" class="form-input" placeholder="e.g. -110">
+              </div>
+              <div class="form-group">
+                <label for="edit-units">Units</label>
+                <input type="text" id="edit-units" class="form-input" placeholder="e.g. 2">
+              </div>
+            </div>
             <div class="form-group">
-              <label for="edit-note">Note</label>
-              <input type="text" id="edit-note" class="form-input" placeholder="Optional note">
+              <label for="edit-note">Note <span class="optional">(optional)</span></label>
+              <textarea id="edit-note" class="form-input" rows="2" placeholder="Add a note..."></textarea>
             </div>
             <div class="modal-actions">
               <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>

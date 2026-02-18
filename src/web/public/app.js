@@ -1781,21 +1781,62 @@ async function closeLeg(betId, legId, status) {
 let editingBetData = null;
 
 function openEditModal(betId) {
-  // Find bet in current list
-  const cards = document.querySelectorAll('.ticket');
+  // Find bet data from rendered cards
+  const allCards = document.querySelectorAll('.ticket');
   editingBetData = null;
+  // Look through currently loaded bets (they're in the DOM via data attributes)
+  // We'll fetch the bet fresh from the API to get all fields
+  fetchBetForEdit(betId);
+}
 
-  // Prefill from the DOM or just open blank
-  document.getElementById('edit-bet-id').value = betId;
-  document.getElementById('edit-odds').value = '';
-  document.getElementById('edit-units').value = '';
-  document.getElementById('edit-pick').value = '';
-  document.getElementById('edit-note').value = '';
-  document.getElementById('edit-modal').classList.remove('hidden');
+async function fetchBetForEdit(betId) {
+  try {
+    const res = await fetch(`/api/bets/${betId}`);
+    const bet = await res.json();
+    if (!bet || bet.error) { alert('Could not load bet data'); return; }
+
+    editingBetData = bet;
+    document.getElementById('edit-bet-id').value = bet.id;
+
+    // Populate sport dropdown
+    const sportSel = document.getElementById('edit-sport');
+    sportSel.innerHTML = '<option value="">— keep current —</option>';
+    const mainSportSel = document.getElementById('sport-select');
+    if (mainSportSel) {
+      [...mainSportSel.options].forEach(o => {
+        if (o.value) {
+          const opt = document.createElement('option');
+          opt.value = o.value;
+          opt.textContent = o.textContent;
+          if (o.value === bet.sport) opt.selected = true;
+          sportSel.appendChild(opt);
+        }
+      });
+    }
+
+    // Prefill wager type
+    const wagerSel = document.getElementById('edit-wager-type');
+    if (bet.wagerType) {
+      [...wagerSel.options].forEach(o => { o.selected = (o.value === bet.wagerType); });
+    }
+
+    // Prefill all fields with current values
+    document.getElementById('edit-team-a').value = bet.teamA || '';
+    document.getElementById('edit-team-b').value = bet.teamB || '';
+    document.getElementById('edit-pick').value = bet.pick || '';
+    document.getElementById('edit-odds').value = bet.oddsAmerican || '';
+    document.getElementById('edit-units').value = bet.units || '';
+    document.getElementById('edit-note').value = bet.betNote || '';
+
+    document.getElementById('edit-modal').classList.remove('hidden');
+  } catch (e) {
+    alert('Failed to load bet for editing');
+  }
 }
 
 function closeEditModal() {
   document.getElementById('edit-modal').classList.add('hidden');
+  editingBetData = null;
 }
 
 async function submitEditBet(e) {
@@ -1803,18 +1844,28 @@ async function submitEditBet(e) {
   const betId = document.getElementById('edit-bet-id').value;
   const fields = {};
 
+  const sport = document.getElementById('edit-sport').value;
+  const wagerType = document.getElementById('edit-wager-type').value;
+  const teamA = document.getElementById('edit-team-a').value.trim();
+  const teamB = document.getElementById('edit-team-b').value.trim();
+  const pick = document.getElementById('edit-pick').value.trim();
   const odds = document.getElementById('edit-odds').value.trim();
   const units = document.getElementById('edit-units').value.trim();
-  const pick = document.getElementById('edit-pick').value.trim();
   const note = document.getElementById('edit-note').value.trim();
 
-  if (odds) fields.odds = odds;
-  if (units) fields.units = units;
-  if (pick) fields.pick = pick;
-  if (note) fields.note = note;
+  // Only send fields that differ from original or are non-empty
+  if (sport) fields.sport = sport;
+  if (wagerType) fields.wagerType = wagerType;
+  if (teamA !== (editingBetData?.teamA || '')) fields.teamA = teamA;
+  if (teamB !== (editingBetData?.teamB || '')) fields.teamB = teamB;
+  if (pick !== (editingBetData?.pick || '')) fields.pick = pick;
+  if (odds && odds !== String(editingBetData?.oddsAmerican || '')) fields.oddsAmerican = odds;
+  if (units && units !== String(editingBetData?.units || '')) fields.units = units;
+  // Always send note if it changed (allow clearing)
+  if (note !== (editingBetData?.betNote || '')) fields.betNote = note;
 
   if (Object.keys(fields).length === 0) {
-    alert('Enter at least one field to update');
+    alert('No changes detected');
     return;
   }
 

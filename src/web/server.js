@@ -1066,11 +1066,23 @@ function createWebServer() {
     }
   });
 
+  // Get a single bet by ID
+  app.get('/api/bets/:betId', authMiddleware, async (req, res) => {
+    try {
+      const bet = await db.getBet(req.params.betId);
+      if (!bet) return res.status(404).json({ error: 'Bet not found' });
+      res.json(formatBetForApi(bet));
+    } catch (err) {
+      console.error('[API] Get bet error:', err);
+      res.status(500).json({ error: 'Failed to fetch bet' });
+    }
+  });
+
   // Edit a bet
   app.patch('/api/bets/:betId', authMiddleware, async (req, res) => {
     try {
       const { betId } = req.params;
-      const { oddsAmerican, units, pick, betNote } = req.body;
+      const { oddsAmerican, units, pick, betNote, sport, wagerType, teamA, teamB } = req.body;
 
       const bet = await db.getBet(betId);
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
@@ -1085,6 +1097,10 @@ function createWebServer() {
       if (units !== undefined) fields.units = parseFloat(units);
       if (pick !== undefined) fields.pick = pick;
       if (betNote !== undefined) fields.bet_note = betNote;
+      if (sport !== undefined) fields.sport = sport;
+      if (wagerType !== undefined) fields.wager_type = wagerType;
+      if (teamA !== undefined) fields.team_a = teamA;
+      if (teamB !== undefined) fields.team_b = teamB;
 
       if (Object.keys(fields).length === 0) return res.status(400).json({ error: 'No fields to update' });
 
@@ -1094,11 +1110,32 @@ function createWebServer() {
       const updatedBet = await db.getBet(betId);
       if (updatedBet.message_id && updatedBet.channel_id) {
         try {
+          // Resolve display name for the embed
+          let embedName = req.user.displayName || req.user.username || 'Unknown';
+          let embedAvatar = req.user.avatar || null;
+          if (updatedBet.discord_id !== req.user.discordId && discordClient) {
+            // Admin editing someone else's bet — get the original user's info
+            const guild = discordClient.guilds.cache.get(updatedBet.guild_id);
+            if (guild) {
+              const member = await guild.members.fetch(updatedBet.discord_id).catch(() => null);
+              if (member) {
+                embedName = member.displayName || member.user.username;
+                embedAvatar = member.user.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+              }
+            }
+          } else if (discordClient) {
+            const dUser = await discordClient.users.fetch(req.user.discordId).catch(() => null);
+            if (dUser) {
+              embedAvatar = dUser.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+            }
+          }
           const channel = await discordClient.channels.fetch(updatedBet.channel_id);
           const message = await channel.messages.fetch(updatedBet.message_id);
-          const embed = buildBetEmbed(updatedBet, null, null);
+          const embed = buildBetEmbed(updatedBet, embedName, embedAvatar);
           await message.edit({ embeds: [embed] });
-        } catch (e) {}
+        } catch (e) {
+          console.error('[API] Discord message update failed:', e.message);
+        }
       }
 
       res.json({ success: true, bet: formatBetForApi(updatedBet) });
