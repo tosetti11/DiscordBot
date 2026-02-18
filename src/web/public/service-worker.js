@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gk-cache-v5';
+const CACHE_NAME = 'gk-cache-v6';
 const ASSETS_TO_CACHE = [
   '/',
   '/style.css',

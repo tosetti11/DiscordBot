@@ -2861,11 +2861,8 @@ function renderOnlineUsers(data) {
       return;
     }
     container.innerHTML = onlineData.users.map(u => {
-      const avatarUrl = u.avatar
-        ? `https://cdn.discordapp.com/avatars/${u.discordId}/${u.avatar}.png?size=64`
-        : `https://cdn.discordapp.com/embed/avatars/${parseInt(u.discordId) % 5}.png`;
       return `<div class="analytics-user-row">
-        <img src="${esc(avatarUrl)}" class="analytics-avatar" alt="">
+        <img src="/api/avatar/${esc(u.discordId)}" class="analytics-avatar" alt="">
         <span class="online-dot"></span>
         <div class="analytics-user-info">
           <strong>${esc(u.displayName || u.username)}</strong>
@@ -2912,7 +2909,7 @@ function renderAnalyticsUsers() {
         ${users.map(u => `
           <tr>
             <td class="analytics-user-cell">
-              <img src="${esc(u.avatar)}" class="analytics-avatar" alt="">
+              <img src="/api/avatar/${esc(u.discord_id)}" class="analytics-avatar" alt="">
               <span>${esc(u.display_name || u.discord_username)}</span>
             </td>
             <td>${u.loginCount}</td>
@@ -2957,7 +2954,7 @@ function renderAnalyticsInstalls() {
         ${users.map(u => `
           <tr>
             <td class="analytics-user-cell">
-              <img src="${esc(u.avatar)}" class="analytics-avatar" alt="">
+              <img src="/api/avatar/${esc(u.discord_id)}" class="analytics-avatar" alt="">
               <span>${esc(u.display_name || u.discord_username)}</span>
             </td>
             <td>${formatDateTimePretty(u.created_at)}</td>
@@ -2992,7 +2989,7 @@ function renderAnalyticsActivity() {
         ${events.map(e => `
           <tr>
             <td class="analytics-user-cell">
-              <img src="${esc(e.avatar)}" class="analytics-avatar" alt="">
+              <img src="/api/avatar/${esc(e.discord_id)}" class="analytics-avatar" alt="">
               <span>${esc(e.display_name || e.discord_username)}</span>
             </td>
             <td><span class="analytics-badge ${badgeClass(e.event_type)}">${eventLabel(e.event_type)}</span></td>
