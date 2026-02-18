@@ -183,7 +183,7 @@ body {
 }
 
 .btn-submit {
-  background: var(--accent);
+  background: #FF8732;
   color: #000;
   width: 100%;
   padding: 16px;
@@ -193,7 +193,7 @@ body {
   margin-top: 8px;
 }
 .btn-submit:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: #e6762a;
   transform: scale(1.01);
 }
 .btn-submit:disabled {
@@ -450,16 +450,24 @@ body {
 .slip-container {
   width: 100%;
   max-width: 640px;
+  background: linear-gradient(170deg, #1e1e1e 0%, #161616 100%);
+  border: 2px solid rgba(255, 135, 50, 0.25);
+  border-radius: 18px;
+  padding: 32px 28px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 }
 
 .slip-header {
   margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px dashed rgba(255, 135, 50, 0.2);
 }
 
 .slip-header h2 {
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.5px;
+  color: #FF8732;
 }
 
 .slip-subtitle {
@@ -514,7 +522,7 @@ input, select, textarea {
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: var(--accent);
+  border-color: #FF8732;
   background: var(--bg-elevated);
 }
 
@@ -563,9 +571,9 @@ textarea {
 }
 
 .toggle-btn.active {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  color: var(--accent);
+  border-color: #FF8732;
+  background: rgba(255, 135, 50, 0.12);
+  color: #FF8732;
 }
 
 .toggle-btn:hover:not(.active) {
@@ -626,7 +634,7 @@ textarea {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--accent);
+  color: #FF8732;
 }
 
 /* ── Parlay Legs ── */
@@ -641,7 +649,7 @@ textarea {
 .parlay-leg-card .leg-header {
   font-size: 14px;
   font-weight: 700;
-  color: var(--accent);
+  color: #FF8732;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -649,7 +657,7 @@ textarea {
 }
 
 .parlay-leg-card .leg-number {
-  background: var(--accent);
+  background: #FF8732;
   color: #000;
   width: 24px;
   height: 24px;
@@ -667,7 +675,7 @@ textarea {
   padding: 48px 24px;
   background: var(--bg-card);
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(29, 185, 84, 0.3);
+  border: 1px solid rgba(255, 135, 50, 0.3);
 }
 
 .success-icon {
