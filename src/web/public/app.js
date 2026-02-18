@@ -136,7 +136,9 @@ function showApp() {
 
   // Set user info
   const avatarEl = document.getElementById('user-avatar');
-  avatarEl.src = currentUser.avatar;
+  // Cache-bust so the browser doesn't serve a stale CDN image
+  const bust = '?_t=' + Date.now();
+  avatarEl.src = currentUser.avatar + (currentUser.avatar.includes('?') ? '&_t=' + Date.now() : bust);
   avatarEl.onerror = () => {
     avatarEl.onerror = null;
     avatarEl.src = `https://cdn.discordapp.com/embed/avatars/0.png`;

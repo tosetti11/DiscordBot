@@ -279,6 +279,7 @@ function createWebServer() {
         }
       } catch (e) {}
     }
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.json(user);
   });
 
