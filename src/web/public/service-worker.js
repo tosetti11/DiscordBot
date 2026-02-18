@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gk-cache-v1';
+const CACHE_NAME = 'gk-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/style.css',
@@ -25,7 +25,7 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch — network first, fallback to cache (skip API/auth requests)
+// Fetch — network first (bypass HTTP cache), fallback to SW cache
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
@@ -35,7 +35,7 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-cache' })
       .then(response => {
         // Cache successful responses
         if (response.ok) {
