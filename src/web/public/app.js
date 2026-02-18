@@ -167,6 +167,16 @@ function showApp() {
   fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
   setInterval(() => fetch('/api/heartbeat', { method: 'POST' }).catch(() => {}), 30000);
 
+  // Detect standalone/PWA mode — proves the user installed the app (works on ALL platforms incl iOS)
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (isStandalone) {
+    fetch('/api/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'pwa_launch' }),
+    }).catch(() => {});
+  }
+
   // Fetch online members count for chat dot
   setTimeout(() => fetchOnlineMembers(), 1000);
 
@@ -2924,7 +2934,7 @@ function renderAnalyticsUsers() {
 
 function renderAnalyticsInstalls() {
   const container = document.getElementById('analytics-installs-list');
-  const installs = analyticsData.events.filter(e => e.event_type === 'pwa_install');
+  const installs = analyticsData.events.filter(e => e.event_type === 'pwa_install' || e.event_type === 'pwa_launch');
 
   // Group by user
   const installMap = new Map();
@@ -3024,6 +3034,7 @@ function eventLabel(type) {
   const labels = {
     login: '🔑 Login',
     pwa_install: '📱 Install',
+    pwa_launch: '📱 App Open',
     bet_placed: '🎰 Bet Placed',
     view_leaderboard: '🏆 Leaderboard',
     view_stats: '📊 Stats',
@@ -3039,6 +3050,7 @@ function badgeClass(type) {
   const classes = {
     login: 'badge-login',
     pwa_install: 'badge-install',
+    pwa_launch: 'badge-install',
     bet_placed: 'badge-bet',
     view_leaderboard: 'badge-leaderboard',
   };

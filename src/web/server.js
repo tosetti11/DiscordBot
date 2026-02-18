@@ -1728,7 +1728,7 @@ function createWebServer() {
   });
 
   // Generic activity tracking endpoint
-  const ALLOWED_EVENTS = ['page_view', 'bet_placed', 'view_leaderboard', 'view_stats', 'view_bets', 'view_tools', 'view_reminders'];
+  const ALLOWED_EVENTS = ['page_view', 'bet_placed', 'view_leaderboard', 'view_stats', 'view_bets', 'view_tools', 'view_reminders', 'pwa_launch'];
   app.post('/api/analytics/track', authMiddleware, async (req, res) => {
     try {
       const { event, metadata } = req.body;
@@ -1809,7 +1809,7 @@ function createWebServer() {
           if (!uniqueLogins.has(e.discord_id)) {
             uniqueLogins.set(e.discord_id, e);
           }
-        } else if (e.event_type === 'pwa_install') {
+        } else if (e.event_type === 'pwa_install' || e.event_type === 'pwa_launch') {
           if (!uniqueInstalls.has(e.discord_id)) {
             uniqueInstalls.set(e.discord_id, e);
           }
@@ -1824,7 +1824,7 @@ function createWebServer() {
 
       res.json({
         totalLogins: events.filter(e => e.event_type === 'login').length,
-        totalInstalls: events.filter(e => e.event_type === 'pwa_install').length,
+        totalInstalls: events.filter(e => e.event_type === 'pwa_install' || e.event_type === 'pwa_launch').length,
         uniqueUsers: uniqueLogins.size,
         uniqueInstallers: uniqueInstalls.size,
         betsPlaced,
