@@ -1286,57 +1286,72 @@ async function loadTailedBets() {
 
 function renderTailedBetCard(bet) {
   const div = document.createElement('div');
-  div.className = `bet-card tailed-card status-${bet.status || 'open'}`;
+  div.className = `ticket tailed-card status-${bet.status || 'open'}`;
 
-  const statusEmoji = STATUS_EMOJI[bet.status] || '🟡';
+  const statusMap = { open: 'PENDING', win: 'WON', loss: 'LOST', push: 'PUSH', void: 'VOID' };
+  const statusText = statusMap[bet.status] || 'PENDING';
   const sportName = bet.sportName || SPORT_NAMES[bet.sport] || bet.sport || '';
   const wagerLabel = bet.wagerType ? (bet.wagerType.charAt(0).toUpperCase() + bet.wagerType.slice(1)) : '';
-  const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString() : '';
+  const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
   const isParlay = bet.betType === 'parlay';
+  let pickText = esc(bet.pick) || (isParlay ? `${bet.legs?.length || 0}-Leg Parlay` : '—');
+  const whaleTag = bet.isWhale ? '<span class="ticket-tag tag-whale">🐋 WHALE</span>' : '';
 
-  let pickText = esc(bet.pick) || (isParlay ? 'Parlay' : '—');
-  let whaleHtml = bet.isWhale ? '<span class="bet-whale-badge">🐋</span>' : '';
+  const oddsDisplay = bet.oddsAmerican ? (bet.oddsAmerican > 0 ? `+${bet.oddsAmerican}` : `${bet.oddsAmerican}`) : '—';
+  const unitsDisplay = bet.units || '—';
 
-  // Parlay legs (read-only)
-  let legsHtml = '';
-  if (isParlay && bet.legs && bet.legs.length > 0) {
-    legsHtml = '<div class="bet-legs">' +
-      bet.legs.map((leg, i) => {
-        const legStatus = STATUS_EMOJI[leg.status] || '⬜';
-        const legSport = esc(leg.sportName || leg.sport || '');
-        return `<div class="bet-leg">
-          <span class="bet-leg-status">${legStatus}</span>
-          <span class="bet-leg-num">Leg ${i + 1}</span>
-          <span class="bet-leg-pick">${esc(leg.pick) || '—'}</span>
-          <span class="bet-leg-sport">${legSport}</span>
-        </div>`;
-      }).join('') +
-    '</div>';
+  let toWin = '—';
+  if (bet.units && bet.oddsAmerican) {
+    const u = Number(bet.units); const o = Number(bet.oddsAmerican);
+    const w = o >= 0 ? u * (o / 100) : u * (100 / Math.abs(o));
+    toWin = `+${fmtU(w)}u`;
   }
 
-  const oddsDisplay = bet.oddsAmerican || '—';
-  const unitsDisplay = bet.units || '—';
-  const slipDisplay = bet.slipNumber ? `<span>#${bet.slipNumber}</span>` : '';
+  let legsHtml = '';
+  if (isParlay && bet.legs && bet.legs.length > 0) {
+    const legsContent = bet.legs.map(leg => {
+      const legStatusEmoji = STATUS_EMOJI[leg.status] || '⬜';
+      const legSport = esc(leg.sportName || leg.sport || '');
+      return `<div class="ticket-leg">
+        <div class="ticket-leg-header"><span class="ticket-leg-status">${legStatusEmoji}</span><span class="ticket-leg-sport">${legSport}</span></div>
+        <div class="ticket-leg-pick">${esc(leg.pick) || '—'}</div>
+      </div>`;
+    }).join('');
+    legsHtml = `<div class="ticket-legs-section">
+      <div class="ticket-legs-toggle" onclick="event.stopPropagation();toggleTicketLegs(this)">
+        <span>Show ${bet.legs.length} Legs</span><span class="legs-chevron">▸</span>
+      </div>
+      <div class="ticket-legs-body">${legsContent}</div>
+    </div>`;
+  }
 
   div.innerHTML = `
-    <span class="bet-status-icon">${statusEmoji}</span>
-    <div class="bet-info">
-      <div class="bet-owner-row"><span class="bet-tailed-badge">🔗 Tailing ${esc(bet.displayName) || 'Unknown'}</span></div>
-      <div class="bet-pick-row">
-        <span class="bet-pick-text">${pickText}</span>
-        ${whaleHtml}
+    <div class="ticket-header">
+      <div class="ticket-brand"><span class="ticket-brand-icon">👑</span><span class="ticket-brand-name">TheGamblingKing</span></div>
+      <div class="ticket-status ticket-status-${bet.status}">${statusText}</div>
+    </div>
+    <div class="ticket-divider"></div>
+    <div class="ticket-body">
+      <div class="ticket-sport-row">
+        <span class="ticket-sport-badge">${esc(sportName)}</span>
+        ${wagerLabel ? `<span class="ticket-wager-type">${esc(wagerLabel)}</span>` : ''}
+        ${whaleTag}
+        <span class="ticket-tag" style="background:rgba(100,181,246,0.12);color:#64b5f6;">🔗 Tailing ${esc(bet.displayName) || 'Unknown'}</span>
       </div>
-      <div class="bet-meta">
-        <span>🏟️ ${esc(sportName)}</span>
-        <span>🎯 ${esc(wagerLabel)}</span>
-        <span>📅 ${esc(date)}</span>
-        ${slipDisplay}
-      </div>
+      <div class="ticket-pick">${pickText}</div>
+      ${bet.teamA && bet.teamB ? `<div class="ticket-matchup">${esc(bet.teamA)} vs ${esc(bet.teamB)}</div>` : ''}
       ${legsHtml}
     </div>
-    <div class="bet-odds-col">
-      <div class="bet-odds">${oddsDisplay >= 0 ? '+' : ''}${esc(oddsDisplay)}</div>
-      <div class="bet-units">${esc(unitsDisplay)}u</div>
+    <div class="ticket-divider"></div>
+    <div class="ticket-stats">
+      <div class="ticket-stat"><div class="ticket-stat-label">ODDS</div><div class="ticket-stat-value">${esc(oddsDisplay)}</div></div>
+      <div class="ticket-stat"><div class="ticket-stat-label">WAGER</div><div class="ticket-stat-value">${esc(unitsDisplay)}u</div></div>
+      <div class="ticket-stat"><div class="ticket-stat-label">TO WIN</div><div class="ticket-stat-value ticket-stat-payout">${toWin}</div></div>
+    </div>
+    <div class="ticket-divider"></div>
+    <div class="ticket-footer">
+      <div class="ticket-footer-left"><span class="ticket-user">👤 ${esc(bet.displayName) || 'Unknown'}</span></div>
+      <div class="ticket-footer-right"><span class="ticket-date">${esc(date)}</span></div>
     </div>
   `;
 
@@ -1389,150 +1404,192 @@ async function loadBets() {
 
 function renderBetCard(bet, showOwner = false) {
   const div = document.createElement('div');
-  div.className = `bet-card status-${bet.status || 'open'}`;
+  div.className = `ticket status-${bet.status || 'open'}`;
   div.dataset.betId = bet.id;
 
-  const statusEmoji = STATUS_EMOJI[bet.status] || '🟡';
+  const statusMap = { open: 'PENDING', win: 'WON', loss: 'LOST', push: 'PUSH', void: 'VOID' };
+  const statusText = statusMap[bet.status] || 'PENDING';
   const sportName = bet.sportName || SPORT_NAMES[bet.sport] || bet.sport || '';
   const wagerLabel = bet.wagerType ? (bet.wagerType.charAt(0).toUpperCase() + bet.wagerType.slice(1)) : '';
-  const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+  const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const time = bet.createdAt ? new Date(bet.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
   const isParlay = bet.betType === 'parlay';
 
-  let pickText = esc(bet.pick) || (isParlay ? `Parlay (${bet.legs?.length || 0} legs)` : '—');
-  let whaleHtml = bet.isWhale ? '<span class="bet-whale-badge">🐋</span>' : '';
-  let retroHtml = bet.isRetro ? '<span class="bet-retro-badge">RETRO</span>' : '';
-  let ownerHtml = showOwner && bet.displayName ? `<span class="bet-owner-badge">👤 ${esc(bet.displayName)}</span>` : '';
+  let pickText = esc(bet.pick) || (isParlay ? `${bet.legs?.length || 0}-Leg Parlay` : '—');
+  const whaleTag = bet.isWhale ? '<span class="ticket-tag tag-whale">🐋 WHALE</span>' : '';
+  const retroTag = bet.isRetro ? '<span class="ticket-tag tag-retro">RETRO</span>' : '';
+
+  const displayName = showOwner && bet.displayName ? esc(bet.displayName) : (currentUser?.displayName || currentUser?.username || '');
 
   const isOwnBet = bet.discordId === currentUser?.discordId;
   const canManage = isOwnBet || betsGuildPerms.isAdmin;
+
+  // Odds formatting
+  const oddsDisplay = bet.oddsAmerican ? (bet.oddsAmerican > 0 ? `+${bet.oddsAmerican}` : `${bet.oddsAmerican}`) : '—';
+  const unitsDisplay = bet.units || '—';
+  const slipDisplay = bet.slipNumber || '';
+
+  // Calculate potential payout
+  let toWin = '—';
+  if (bet.units && bet.oddsAmerican) {
+    const u = Number(bet.units);
+    const o = Number(bet.oddsAmerican);
+    const w = o >= 0 ? u * (o / 100) : u * (100 / Math.abs(o));
+    toWin = `+${fmtU(w)}u`;
+  }
 
   // Actions
   let actionsHtml = '';
   if (canManage && bet.status === 'open') {
     actionsHtml = `
-      <div class="bet-actions-bar">
-        <div class="close-dropdown">
-          <button class="btn-action btn-win" onclick="event.stopPropagation();closeBet('${bet.id}','win')" title="Win">✅ Win</button>
-          <button class="btn-action btn-loss" onclick="event.stopPropagation();closeBet('${bet.id}','loss')" title="Loss">❌ Loss</button>
-          <button class="btn-action btn-push" onclick="event.stopPropagation();closeBet('${bet.id}','push')" title="Push">🔄 Push</button>
-        </div>
-        <button class="btn-action btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')" title="Edit">✏️</button>
-        <button class="btn-action btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
+      <div class="ticket-actions">
+        <button class="ticket-btn ticket-btn-win" onclick="event.stopPropagation();closeBet('${bet.id}','win')">✅ Win</button>
+        <button class="ticket-btn ticket-btn-loss" onclick="event.stopPropagation();closeBet('${bet.id}','loss')">❌ Loss</button>
+        <button class="ticket-btn ticket-btn-push" onclick="event.stopPropagation();closeBet('${bet.id}','push')">🔄 Push</button>
+        <button class="ticket-btn ticket-btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')">✏️</button>
+        <button class="ticket-btn ticket-btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')">🗑️</button>
       </div>`;
   } else if (betsGuildPerms.isAdmin && ['win', 'loss', 'push', 'void'].includes(bet.status)) {
     actionsHtml = `
-      <div class="bet-actions-bar">
-        <button class="btn-action btn-reopen" onclick="event.stopPropagation();reopenBet('${bet.id}')" title="Reopen Bet">🔓 Reopen</button>
+      <div class="ticket-actions">
+        <button class="ticket-btn ticket-btn-reopen" onclick="event.stopPropagation();reopenBet('${bet.id}')">🔓 Reopen</button>
       </div>`;
   } else if (canManage && isParlay && bet.legs?.some(l => l.status === 'open')) {
     actionsHtml = `
-      <div class="bet-actions-bar">
-        <button class="btn-action btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')" title="Edit">✏️</button>
-        <button class="btn-action btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
+      <div class="ticket-actions">
+        <button class="ticket-btn ticket-btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')">✏️</button>
+        <button class="ticket-btn ticket-btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')">🗑️</button>
       </div>`;
   }
 
-  // Parlay legs
+  // Parlay legs (collapsible)
   let legsHtml = '';
   if (isParlay && bet.legs && bet.legs.length > 0) {
-    legsHtml = '<div class="bet-legs">' +
-      bet.legs.map((leg, i) => {
-        const legStatus = STATUS_EMOJI[leg.status] || '⬜';
-        const legSport = esc(leg.sportName || leg.sport || '');
-        const legActions = (leg.status === 'open' && canManage)
-          ? `<span class="leg-actions">
-               <button class="leg-btn leg-win" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','win')" title="Win">✅</button>
-               <button class="leg-btn leg-loss" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','loss')" title="Loss">❌</button>
-               <button class="leg-btn leg-push" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','push')" title="Push">🔄</button>
-               <button class="leg-btn leg-void" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','void')" title="Void">⛔</button>
-             </span>`
-          : '';
-        return `<div class="bet-leg">
-          <span class="bet-leg-status">${legStatus}</span>
-          <span class="bet-leg-num">Leg ${i + 1}</span>
-          <span class="bet-leg-pick">${esc(leg.pick) || '—'}</span>
-          <span class="bet-leg-sport">${legSport}</span>
-          ${legActions}
-        </div>`;
-      }).join('') +
-    '</div>';
+    const legsContent = bet.legs.map((leg, i) => {
+      const legStatusEmoji = STATUS_EMOJI[leg.status] || '⬜';
+      const legSport = esc(leg.sportName || leg.sport || '');
+      const legActions = (leg.status === 'open' && canManage)
+        ? `<span class="leg-actions">
+             <button class="leg-btn leg-win" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','win')">✅</button>
+             <button class="leg-btn leg-loss" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','loss')">❌</button>
+             <button class="leg-btn leg-push" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','push')">🔄</button>
+             <button class="leg-btn leg-void" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','void')">⛔</button>
+           </span>`
+        : '';
+      return `<div class="ticket-leg">
+        <div class="ticket-leg-header">
+          <span class="ticket-leg-status">${legStatusEmoji}</span>
+          <span class="ticket-leg-sport">${legSport}</span>
+        </div>
+        <div class="ticket-leg-pick">${esc(leg.pick) || '—'}</div>
+        ${leg.teamA && leg.teamB ? `<div class="ticket-leg-matchup">${esc(leg.teamA)} vs ${esc(leg.teamB)}</div>` : ''}
+        ${legActions}
+      </div>`;
+    }).join('');
+    legsHtml = `
+      <div class="ticket-legs-section">
+        <div class="ticket-legs-toggle" onclick="event.stopPropagation();toggleTicketLegs(this)">
+          <span>Show ${bet.legs.length} Legs</span>
+          <span class="legs-chevron">▸</span>
+        </div>
+        <div class="ticket-legs-body">
+          ${legsContent}
+        </div>
+      </div>`;
   }
 
-  const oddsDisplay = bet.oddsAmerican ? (bet.oddsAmerican > 0 ? `+${bet.oddsAmerican}` : bet.oddsAmerican) : '—';
-  const unitsDisplay = bet.units || '—';
-  const slipDisplay = bet.slipNumber || '';
+  // Matchup / prop info for singles
+  let matchupHtml = '';
+  if (!isParlay) {
+    if (bet.teamA && bet.teamB) {
+      matchupHtml = `<div class="ticket-matchup">${esc(bet.teamA)} vs ${esc(bet.teamB)}</div>`;
+    }
+    if (bet.playerName) {
+      matchupHtml += `<div class="ticket-player">${esc(bet.playerName)}${bet.propDescription ? ' — ' + esc(bet.propDescription) : ''}</div>`;
+    }
+  }
 
-  // Build detail rows
-  let detailRows = '';
-  if (bet.teamA && bet.teamB) {
-    detailRows += `<div class="detail-row"><span class="detail-label">Matchup</span><span class="detail-value">${esc(bet.teamA)} vs ${esc(bet.teamB)}</span></div>`;
-  }
-  if (wagerLabel) {
-    detailRows += `<div class="detail-row"><span class="detail-label">Wager Type</span><span class="detail-value">${esc(wagerLabel)}</span></div>`;
-  }
-  detailRows += `<div class="detail-row"><span class="detail-label">Odds</span><span class="detail-value">${esc(oddsDisplay)}</span></div>`;
-  detailRows += `<div class="detail-row"><span class="detail-label">Units</span><span class="detail-value">${esc(unitsDisplay)}u</span></div>`;
-  if (slipDisplay) {
-    detailRows += `<div class="detail-row"><span class="detail-label">Slip</span><span class="detail-value">#${esc(slipDisplay)}</span></div>`;
-  }
-  if (bet.playerName) {
-    detailRows += `<div class="detail-row"><span class="detail-label">Player</span><span class="detail-value">${esc(bet.playerName)}</span></div>`;
-  }
-  if (bet.propDescription) {
-    detailRows += `<div class="detail-row"><span class="detail-label">Prop</span><span class="detail-value">${esc(bet.propDescription)}</span></div>`;
-  }
-  if (bet.betNote) {
-    detailRows += `<div class="detail-row"><span class="detail-label">Note</span><span class="detail-value">${esc(bet.betNote)}</span></div>`;
-  }
-  if (bet.status !== 'open') {
-    detailRows += `<div class="detail-row"><span class="detail-label">Result</span><span class="detail-value detail-status-${bet.status}">${bet.status.toUpperCase()}</span></div>`;
-  }
+  // Note
+  const noteHtml = bet.betNote ? `<div class="ticket-note">📝 ${esc(bet.betNote)}</div>` : '';
 
   div.innerHTML = `
-    <div class="bet-summary" onclick="toggleBetExpand(this)">
-      <span class="bet-status-icon">${statusEmoji}</span>
-      <span class="bet-date">${esc(date)}</span>
-      <span class="bet-sport-tag">${esc(sportName)}</span>
-      <div class="bet-pick-col">
-        ${ownerHtml ? `<span class="bet-owner-inline">${ownerHtml}</span>` : ''}
-        <span class="bet-pick-text">${pickText}</span>
-        ${whaleHtml}${retroHtml}
+    <div class="ticket-header">
+      <div class="ticket-brand">
+        <span class="ticket-brand-icon">👑</span>
+        <span class="ticket-brand-name">TheGamblingKing</span>
       </div>
-      <span class="bet-odds-pill">${esc(oddsDisplay)}</span>
-      <span class="bet-units-pill">${esc(unitsDisplay)}u</span>
-      <span class="bet-expand-icon">▸</span>
+      <div class="ticket-status ticket-status-${bet.status}">${statusText}</div>
     </div>
-    <div class="bet-detail-panel">
-      <div class="bet-detail-grid">
-        ${detailRows}
+
+    <div class="ticket-divider"></div>
+
+    <div class="ticket-body">
+      <div class="ticket-sport-row">
+        <span class="ticket-sport-badge">${esc(sportName)}</span>
+        ${wagerLabel ? `<span class="ticket-wager-type">${esc(wagerLabel)}</span>` : ''}
+        ${whaleTag}${retroTag}
       </div>
+
+      <div class="ticket-pick">${pickText}</div>
+      ${matchupHtml}
       ${legsHtml}
-      ${actionsHtml}
+      ${noteHtml}
     </div>
+
+    <div class="ticket-divider"></div>
+
+    <div class="ticket-stats">
+      <div class="ticket-stat">
+        <div class="ticket-stat-label">ODDS</div>
+        <div class="ticket-stat-value">${esc(oddsDisplay)}</div>
+      </div>
+      <div class="ticket-stat">
+        <div class="ticket-stat-label">WAGER</div>
+        <div class="ticket-stat-value">${esc(unitsDisplay)}u</div>
+      </div>
+      <div class="ticket-stat">
+        <div class="ticket-stat-label">TO WIN</div>
+        <div class="ticket-stat-value ticket-stat-payout">${toWin}</div>
+      </div>
+    </div>
+
+    <div class="ticket-divider"></div>
+
+    <div class="ticket-footer">
+      <div class="ticket-footer-left">
+        <span class="ticket-user">👤 ${esc(displayName)}</span>
+        ${slipDisplay ? `<span class="ticket-slip">#${esc(slipDisplay)}</span>` : ''}
+      </div>
+      <div class="ticket-footer-right">
+        <span class="ticket-date">${esc(date)} ${esc(time)}</span>
+      </div>
+    </div>
+
+    ${actionsHtml}
   `;
 
   return div;
 }
 
-function toggleBetExpand(summaryEl) {
-  const card = summaryEl.closest('.bet-card');
-  const panel = card.querySelector('.bet-detail-panel');
-  const icon = card.querySelector('.bet-expand-icon');
-  const isOpen = panel.classList.contains('expanded');
-  
+function toggleTicketLegs(toggleEl) {
+  const section = toggleEl.closest('.ticket-legs-section');
+  const body = section.querySelector('.ticket-legs-body');
+  const chevron = section.querySelector('.legs-chevron');
+  const isOpen = body.classList.contains('legs-open');
+
   if (isOpen) {
-    panel.style.maxHeight = panel.scrollHeight + 'px';
-    requestAnimationFrame(() => {
-      panel.style.maxHeight = '0';
-    });
-    panel.classList.remove('expanded');
-    icon.textContent = '▸';
+    body.style.maxHeight = body.scrollHeight + 'px';
+    requestAnimationFrame(() => { body.style.maxHeight = '0'; });
+    body.classList.remove('legs-open');
+    chevron.textContent = '▸';
+    toggleEl.querySelector('span:first-child').textContent = `Show ${section.querySelectorAll('.ticket-leg').length} Legs`;
   } else {
-    panel.classList.add('expanded');
-    panel.style.maxHeight = panel.scrollHeight + 'px';
-    icon.textContent = '▾';
-    panel.addEventListener('transitionend', () => {
-      if (panel.classList.contains('expanded')) panel.style.maxHeight = 'none';
+    body.classList.add('legs-open');
+    body.style.maxHeight = body.scrollHeight + 'px';
+    chevron.textContent = '▾';
+    toggleEl.querySelector('span:first-child').textContent = `Hide Legs`;
+    body.addEventListener('transitionend', () => {
+      if (body.classList.contains('legs-open')) body.style.maxHeight = 'none';
     }, { once: true });
   }
 }
@@ -1597,7 +1654,7 @@ let editingBetData = null;
 
 function openEditModal(betId) {
   // Find bet in current list
-  const cards = document.querySelectorAll('.bet-card');
+  const cards = document.querySelectorAll('.ticket');
   editingBetData = null;
 
   // Prefill from the DOM or just open blank
