@@ -702,11 +702,8 @@ function createWebServer() {
       let tailUsers = [];
       try {
         const tailedBetsDb = require('../database/tailedBets');
-        // Get all users who have tailed in this guild
-        const { data: tailData } = await require('../config/supabase').from('tailed_bets')
-          .select('discord_id')
-          .eq('guild_id', guildId);
-        const tailUserIds = [...new Set((tailData || []).map(t => t.discord_id))];
+        // Use the proper getTailersInGuild which joins through bets table
+        const tailUserIds = await tailedBetsDb.getTailersInGuild(guildId);
         for (const tid of tailUserIds) {
           try {
             const ts = await tailedBetsDb.getTailStatsInGuild(tid, guildId);
@@ -730,9 +727,41 @@ function createWebServer() {
             }
           } catch (e) {}
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('[API] Tail leaderboard error:', e.message);
+      }
 
-      res.json({ users, tailUsers });
+      // Whale 🐋 leaderboard (from bets with is_whale = true)
+      const whaleMap = {};
+      for (const b of allBets) {
+        if (!b.is_whale || b.status === 'void' || b.status === 'open') continue;
+        if (!whaleMap[b.discord_id]) {
+          whaleMap[b.discord_id] = { discordId: b.discord_id, displayName: userMap[b.discord_id]?.displayName || b.discord_id, wins: 0, losses: 0, pushes: 0, netUnits: 0, unitsWagered: 0, totalBets: 0 };
+        }
+        const w = whaleMap[b.discord_id];
+        w.totalBets++;
+        w.unitsWagered += Number(b.units) || 0;
+        if (b.status === 'win') {
+          w.wins++;
+          const odds = Number(b.odds_american);
+          w.netUnits += odds >= 0 ? (b.units * odds / 100) : (b.units * 100 / Math.abs(odds));
+        } else if (b.status === 'loss') {
+          w.losses++;
+          w.netUnits -= Number(b.units);
+        } else if (b.status === 'push') {
+          w.pushes++;
+        }
+      }
+      const whaleUsers = Object.values(whaleMap).map(w => {
+        w.netUnits = Math.round(w.netUnits * 100) / 100;
+        w.unitsWagered = Math.round(w.unitsWagered * 100) / 100;
+        const decided = w.wins + w.losses;
+        w.winPct = decided > 0 ? Math.round((w.wins / decided) * 1000) / 10 : 0;
+        w.roi = w.unitsWagered > 0 ? Math.round((w.netUnits / w.unitsWagered) * 1000) / 10 : 0;
+        return w;
+      }).filter(w => w.totalBets >= 1);
+
+      res.json({ users, tailUsers, whaleUsers });
     } catch (err) {
       console.error('[API] Full leaderboard error:', err);
       res.status(500).json({ error: 'Failed to fetch leaderboard' });

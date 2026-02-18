@@ -1169,7 +1169,7 @@ async function loadFullLeaderboard() {
     lbData = await res.json();
     document.getElementById('lb-loading').classList.add('hidden');
 
-    if ((!lbData.users || lbData.users.length === 0) && (!lbData.tailUsers || lbData.tailUsers.length === 0)) {
+    if ((!lbData.users || lbData.users.length === 0) && (!lbData.tailUsers || lbData.tailUsers.length === 0) && (!lbData.whaleUsers || lbData.whaleUsers.length === 0)) {
       document.getElementById('lb-empty').classList.remove('hidden');
       return;
     }
@@ -1187,7 +1187,7 @@ function renderLeaderboard() {
 
   const type = document.getElementById('lb-type').value;
   const category = document.getElementById('lb-category').value;
-  const list = type === 'tailing' ? (lbData.tailUsers || []) : (lbData.users || []);
+  const list = type === 'tailing' ? (lbData.tailUsers || []) : type === 'whale' ? (lbData.whaleUsers || []) : (lbData.users || []);
 
   // Sort by selected category descending
   const sorted = [...list].sort((a, b) => {
