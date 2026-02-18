@@ -116,7 +116,7 @@ function createWebServer() {
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "https://cdn.discordapp.com", "data:"],
         connectSrc: ["'self'"],
-        frameSrc: ["'self'", "https://e.widgetbot.io"],
+        frameSrc: ["'self'", "https://e.widgetbot.io", "https://widgetbot.io", "https://discord.com"],
       },
     },
   }));
