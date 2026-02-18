@@ -923,22 +923,14 @@ function loadChatWidget() {
     .then(r => r.json())
     .then(data => {
       const channelId = data.channelId || '';
-      const wb = document.createElement('widgetbot');
-      wb.setAttribute('server', guildId);
-      if (channelId) wb.setAttribute('channel', channelId);
-      wb.style.width = '100%';
-      wb.style.height = '100%';
-      wrap.innerHTML = '';
-      wrap.appendChild(wb);
+      const src = channelId
+        ? `https://e.widgetbot.io/channels/${guildId}/${channelId}`
+        : `https://e.widgetbot.io/channels/${guildId}`;
+      wrap.innerHTML = `<iframe src="${src}" allow="clipboard-write; fullscreen"></iframe>`;
       chatWidgetLoaded = true;
     })
     .catch(() => {
-      const wb = document.createElement('widgetbot');
-      wb.setAttribute('server', guildId);
-      wb.style.width = '100%';
-      wb.style.height = '100%';
-      wrap.innerHTML = '';
-      wrap.appendChild(wb);
+      wrap.innerHTML = `<iframe src="https://e.widgetbot.io/channels/${guildId}" allow="clipboard-write; fullscreen"></iframe>`;
       chatWidgetLoaded = true;
     });
 }
