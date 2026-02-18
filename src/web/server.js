@@ -482,13 +482,12 @@ function createWebServer() {
       const guild = discordClient?.guilds.cache.get(req.params.guildId);
       if (!guild) return res.json({ members: [] });
 
-      // Fetch all members with presence (requires GUILD_PRESENCES intent)
       const members = guild.members.cache
         .filter(m => !m.user.bot && m.presence && m.presence.status !== 'offline')
         .map(m => ({
           discordId: m.user.id,
           displayName: m.displayName || m.user.username,
-          status: m.presence.status, // online, idle, dnd
+          status: m.presence.status,
           avatar: m.user.displayAvatarURL({ size: 32, extension: 'png', forceStatic: true }),
         }))
         .sort((a, b) => {
