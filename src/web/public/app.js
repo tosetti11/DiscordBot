@@ -766,6 +766,9 @@ async function handleSubmit(e) {
       document.getElementById('guild-select').disabled = false;
       document.getElementById('channel-select').disabled = false;
       document.getElementById('bet-type').disabled = false;
+      // Restore slip header
+      document.getElementById('slip-title').textContent = '🎟️ New Bet Slip';
+      document.getElementById('slip-subtitle').textContent = 'Fill out your bet details below';
       showToast('Bet updated successfully!');
       switchPage('bets');
       loadBets();
@@ -818,6 +821,10 @@ function resetForm() {
   document.getElementById('guild-select').disabled = false;
   document.getElementById('channel-select').disabled = false;
   document.getElementById('bet-type').disabled = false;
+
+  // Restore slip header
+  document.getElementById('slip-title').textContent = '🎟️ New Bet Slip';
+  document.getElementById('slip-subtitle').textContent = 'Fill out your bet details below';
 
   // Reset dynamic fields
   document.getElementById('team-fields').classList.add('hidden');
@@ -1898,6 +1905,10 @@ async function fetchBetForEdit(betId) {
     const submitBtn = document.getElementById('submit-btn');
     submitBtn.querySelector('.btn-text').textContent = 'Save Changes ✏️';
     submitBtn.dataset.editMode = betId;
+
+    // Update header to show slip number
+    document.getElementById('slip-title').textContent = `✏️ Edit Slip #${bet.slipNumber || ''}`;
+    document.getElementById('slip-subtitle').textContent = 'Edit your bet details below — changes update the ticket on Discord';
 
     const isParlay = bet.betType === 'parlay';
 
