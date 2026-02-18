@@ -115,7 +115,7 @@ function formatDateTimePretty(datetimeStr) {
 // ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const res = await fetch('/api/me');
+    const res = await fetch('/api/me', { cache: 'no-store' });
     if (res.ok) {
       currentUser = await res.json();
       showApp();
