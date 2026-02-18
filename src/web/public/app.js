@@ -1395,44 +1395,41 @@ function renderBetCard(bet, showOwner = false) {
   const statusEmoji = STATUS_EMOJI[bet.status] || '🟡';
   const sportName = bet.sportName || SPORT_NAMES[bet.sport] || bet.sport || '';
   const wagerLabel = bet.wagerType ? (bet.wagerType.charAt(0).toUpperCase() + bet.wagerType.slice(1)) : '';
-  const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString() : '';
+  const date = bet.createdAt ? new Date(bet.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
   const isParlay = bet.betType === 'parlay';
 
-  let pickText = esc(bet.pick) || (isParlay ? 'Parlay' : '—');
+  let pickText = esc(bet.pick) || (isParlay ? `Parlay (${bet.legs?.length || 0} legs)` : '—');
   let whaleHtml = bet.isWhale ? '<span class="bet-whale-badge">🐋</span>' : '';
   let retroHtml = bet.isRetro ? '<span class="bet-retro-badge">RETRO</span>' : '';
   let ownerHtml = showOwner && bet.displayName ? `<span class="bet-owner-badge">👤 ${esc(bet.displayName)}</span>` : '';
 
-  // Can this user manage this bet? Own bets always, admin can manage others'
   const isOwnBet = bet.discordId === currentUser?.discordId;
   const canManage = isOwnBet || betsGuildPerms.isAdmin;
 
-  // Actions (only for open bets and if user can manage)
+  // Actions
   let actionsHtml = '';
   if (canManage && bet.status === 'open') {
     actionsHtml = `
-      <div class="bet-actions">
+      <div class="bet-actions-bar">
         <div class="close-dropdown">
-          <button class="btn-action btn-win" onclick="closeBet('${bet.id}','win')" title="Win">✅</button>
-          <button class="btn-action btn-loss" onclick="closeBet('${bet.id}','loss')" title="Loss">❌</button>
-          <button class="btn-action btn-push" onclick="closeBet('${bet.id}','push')" title="Push">🔄</button>
+          <button class="btn-action btn-win" onclick="event.stopPropagation();closeBet('${bet.id}','win')" title="Win">✅ Win</button>
+          <button class="btn-action btn-loss" onclick="event.stopPropagation();closeBet('${bet.id}','loss')" title="Loss">❌ Loss</button>
+          <button class="btn-action btn-push" onclick="event.stopPropagation();closeBet('${bet.id}','push')" title="Push">🔄 Push</button>
         </div>
-        <button class="btn-action btn-edit" onclick="openEditModal('${bet.id}')" title="Edit">✏️</button>
-        <button class="btn-action btn-del" onclick="confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
+        <button class="btn-action btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')" title="Edit">✏️</button>
+        <button class="btn-action btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
       </div>`;
   } else if (betsGuildPerms.isAdmin && ['win', 'loss', 'push', 'void'].includes(bet.status)) {
-    // Admin can reopen closed bets
     actionsHtml = `
-      <div class="bet-actions">
-        <button class="btn-action btn-reopen" onclick="reopenBet('${bet.id}')" title="Reopen Bet">🔓</button>
+      <div class="bet-actions-bar">
+        <button class="btn-action btn-reopen" onclick="event.stopPropagation();reopenBet('${bet.id}')" title="Reopen Bet">🔓 Reopen</button>
       </div>`;
   } else if (canManage && isParlay && bet.legs?.some(l => l.status === 'open')) {
-    // Parlay with some legs still open — show edit/delete only
     actionsHtml = `
-      <div class="bet-actions">
-        <button class="btn-action btn-edit" onclick="openEditModal('${bet.id}')" title="Edit">✏️</button>
-        <button class="btn-action btn-del" onclick="confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
-      </div>`;  
+      <div class="bet-actions-bar">
+        <button class="btn-action btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')" title="Edit">✏️</button>
+        <button class="btn-action btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')" title="Delete">🗑️</button>
+      </div>`;
   }
 
   // Parlay legs
@@ -1444,10 +1441,10 @@ function renderBetCard(bet, showOwner = false) {
         const legSport = esc(leg.sportName || leg.sport || '');
         const legActions = (leg.status === 'open' && canManage)
           ? `<span class="leg-actions">
-               <button class="leg-btn leg-win" onclick="closeLeg('${bet.id}','${leg.id}','win')" title="Win">✅</button>
-               <button class="leg-btn leg-loss" onclick="closeLeg('${bet.id}','${leg.id}','loss')" title="Loss">❌</button>
-               <button class="leg-btn leg-push" onclick="closeLeg('${bet.id}','${leg.id}','push')" title="Push">🔄</button>
-               <button class="leg-btn leg-void" onclick="closeLeg('${bet.id}','${leg.id}','void')" title="Void">⛔</button>
+               <button class="leg-btn leg-win" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','win')" title="Win">✅</button>
+               <button class="leg-btn leg-loss" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','loss')" title="Loss">❌</button>
+               <button class="leg-btn leg-push" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','push')" title="Push">🔄</button>
+               <button class="leg-btn leg-void" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','void')" title="Void">⛔</button>
              </span>`
           : '';
         return `<div class="bet-leg">
@@ -1461,34 +1458,83 @@ function renderBetCard(bet, showOwner = false) {
     '</div>';
   }
 
-  const oddsDisplay = bet.oddsAmerican || '—';
+  const oddsDisplay = bet.oddsAmerican ? (bet.oddsAmerican > 0 ? `+${bet.oddsAmerican}` : bet.oddsAmerican) : '—';
   const unitsDisplay = bet.units || '—';
-  const slipDisplay = bet.slipNumber ? `<span>#${bet.slipNumber}</span>` : '';
+  const slipDisplay = bet.slipNumber || '';
+
+  // Build detail rows
+  let detailRows = '';
+  if (bet.teamA && bet.teamB) {
+    detailRows += `<div class="detail-row"><span class="detail-label">Matchup</span><span class="detail-value">${esc(bet.teamA)} vs ${esc(bet.teamB)}</span></div>`;
+  }
+  if (wagerLabel) {
+    detailRows += `<div class="detail-row"><span class="detail-label">Wager Type</span><span class="detail-value">${esc(wagerLabel)}</span></div>`;
+  }
+  detailRows += `<div class="detail-row"><span class="detail-label">Odds</span><span class="detail-value">${esc(oddsDisplay)}</span></div>`;
+  detailRows += `<div class="detail-row"><span class="detail-label">Units</span><span class="detail-value">${esc(unitsDisplay)}u</span></div>`;
+  if (slipDisplay) {
+    detailRows += `<div class="detail-row"><span class="detail-label">Slip</span><span class="detail-value">#${esc(slipDisplay)}</span></div>`;
+  }
+  if (bet.playerName) {
+    detailRows += `<div class="detail-row"><span class="detail-label">Player</span><span class="detail-value">${esc(bet.playerName)}</span></div>`;
+  }
+  if (bet.propDescription) {
+    detailRows += `<div class="detail-row"><span class="detail-label">Prop</span><span class="detail-value">${esc(bet.propDescription)}</span></div>`;
+  }
+  if (bet.betNote) {
+    detailRows += `<div class="detail-row"><span class="detail-label">Note</span><span class="detail-value">${esc(bet.betNote)}</span></div>`;
+  }
+  if (bet.status !== 'open') {
+    detailRows += `<div class="detail-row"><span class="detail-label">Result</span><span class="detail-value detail-status-${bet.status}">${bet.status.toUpperCase()}</span></div>`;
+  }
 
   div.innerHTML = `
-    <span class="bet-status-icon">${statusEmoji}</span>
-    <div class="bet-info">
-      ${ownerHtml ? `<div class="bet-owner-row">${ownerHtml}</div>` : ''}
-      <div class="bet-pick-row">
+    <div class="bet-summary" onclick="toggleBetExpand(this)">
+      <span class="bet-status-icon">${statusEmoji}</span>
+      <span class="bet-date">${esc(date)}</span>
+      <span class="bet-sport-tag">${esc(sportName)}</span>
+      <div class="bet-pick-col">
+        ${ownerHtml ? `<span class="bet-owner-inline">${ownerHtml}</span>` : ''}
         <span class="bet-pick-text">${pickText}</span>
         ${whaleHtml}${retroHtml}
       </div>
-      <div class="bet-meta">
-        <span>🏟️ ${esc(sportName)}</span>
-        <span>🎯 ${esc(wagerLabel)}</span>
-        <span>📅 ${esc(date)}</span>
-        ${slipDisplay}
+      <span class="bet-odds-pill">${esc(oddsDisplay)}</span>
+      <span class="bet-units-pill">${esc(unitsDisplay)}u</span>
+      <span class="bet-expand-icon">▸</span>
+    </div>
+    <div class="bet-detail-panel">
+      <div class="bet-detail-grid">
+        ${detailRows}
       </div>
       ${legsHtml}
+      ${actionsHtml}
     </div>
-    <div class="bet-odds-col">
-      <div class="bet-odds-val">${esc(oddsDisplay)}</div>
-      <div class="bet-units-val">${esc(unitsDisplay)}u</div>
-    </div>
-    ${actionsHtml}
   `;
 
   return div;
+}
+
+function toggleBetExpand(summaryEl) {
+  const card = summaryEl.closest('.bet-card');
+  const panel = card.querySelector('.bet-detail-panel');
+  const icon = card.querySelector('.bet-expand-icon');
+  const isOpen = panel.classList.contains('expanded');
+  
+  if (isOpen) {
+    panel.style.maxHeight = panel.scrollHeight + 'px';
+    requestAnimationFrame(() => {
+      panel.style.maxHeight = '0';
+    });
+    panel.classList.remove('expanded');
+    icon.textContent = '▸';
+  } else {
+    panel.classList.add('expanded');
+    panel.style.maxHeight = panel.scrollHeight + 'px';
+    icon.textContent = '▾';
+    panel.addEventListener('transitionend', () => {
+      if (panel.classList.contains('expanded')) panel.style.maxHeight = 'none';
+    }, { once: true });
+  }
 }
 
 // ─── Close Bet ─────────

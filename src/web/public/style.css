@@ -1148,10 +1148,7 @@ textarea {
   background: var(--bg-card);
   border-radius: var(--radius);
   border: 1px solid rgba(255, 255, 255, 0.04);
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  overflow: hidden;
   transition: border-color 0.2s;
 }
 
@@ -1164,29 +1161,143 @@ textarea {
 .bet-card.status-push  { border-left: 3px solid #808080; }
 .bet-card.status-open  { border-left: 3px solid #FFD700; }
 
+/* ── Summary Row (always visible, clickable) ── */
+.bet-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.bet-summary:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .bet-status-icon {
-  font-size: 22px;
+  font-size: 20px;
   flex-shrink: 0;
 }
 
-.bet-info {
-  flex: 1;
-  min-width: 0;
+.bet-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 48px;
 }
 
-.bet-pick-row {
+.bet-sport-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(245, 197, 24, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.bet-pick-col {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 6px;
 }
 
 .bet-pick-text {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.bet-owner-inline {
+  flex-shrink: 0;
+}
+
+.bet-odds-pill {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px 10px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.bet-units-pill {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 32px;
+  text-align: right;
+}
+
+.bet-expand-icon {
+  font-size: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.2s;
+  width: 16px;
+  text-align: center;
+}
+
+/* ── Expandable Detail Panel ── */
+.bet-detail-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.bet-detail-panel.expanded {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bet-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 14px 18px 8px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.detail-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.detail-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.detail-status-win   { color: var(--accent); }
+.detail-status-loss  { color: var(--text-danger); }
+.detail-status-push  { color: #808080; }
+
+/* ── Actions Bar (centered at bottom) ── */
+.bet-actions-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  margin-top: 4px;
 }
 
 .bet-whale-badge {
@@ -1200,10 +1311,6 @@ textarea {
   padding: 1px 6px;
   border-radius: 4px;
   font-weight: 600;
-}
-
-.bet-owner-row {
-  margin-bottom: 4px;
 }
 
 .bet-owner-badge {
@@ -1226,43 +1333,6 @@ textarea {
 
 .tailed-card {
   opacity: 0.95;
-}
-
-.bet-meta {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.bet-meta span {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.bet-odds-col {
-  text-align: right;
-  flex-shrink: 0;
-  min-width: 80px;
-}
-
-.bet-odds-val {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
-.bet-units-val {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.bet-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
 }
 
 .btn-action {
@@ -1816,12 +1886,25 @@ textarea {
   }
 
   .bet-card {
-    flex-wrap: wrap;
+    /* No special overrides needed — summary is scrollable */
   }
 
-  .bet-actions {
-    width: 100%;
-    justify-content: flex-end;
+  .bet-summary {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .bet-pick-col {
+    flex-basis: 100%;
+    order: 10;
+  }
+
+  .bet-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bet-actions-bar {
+    flex-wrap: wrap;
   }
 
   .bets-filters {
@@ -1830,16 +1913,22 @@ textarea {
 }
 
 @media (max-width: 600px) {
-  .bet-card {
-    padding: 12px 14px;
-    gap: 10px;
+  .bet-summary {
+    padding: 10px 12px;
+    gap: 6px;
   }
 
-  .bet-odds-col {
-    min-width: auto;
+  .bet-sport-tag {
+    font-size: 10px;
+    padding: 1px 6px;
   }
 
-  .bet-actions .btn-action {
+  .bet-odds-pill {
+    padding: 2px 7px;
+    font-size: 12px;
+  }
+
+  .bet-actions-bar .btn-action {
     padding: 5px 8px;
     font-size: 11px;
   }
