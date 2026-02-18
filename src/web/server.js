@@ -268,8 +268,18 @@ function createWebServer() {
   });
 
   // Get current user info
-  app.get('/api/me', authMiddleware, (req, res) => {
-    res.json(req.user);
+  app.get('/api/me', authMiddleware, async (req, res) => {
+    const user = { ...req.user };
+    // Refresh avatar from Discord bot cache if available
+    if (discordClient) {
+      try {
+        const dUser = await discordClient.users.fetch(user.discordId).catch(() => null);
+        if (dUser) {
+          user.avatar = dUser.displayAvatarURL({ size: 128 });
+        }
+      } catch (e) {}
+    }
+    res.json(user);
   });
 
   // Logout
