@@ -91,10 +91,9 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE parlay_legs ENABLE ROW LEVEL SECURITY;
 
--- Policies: Service role can do everything (bot uses service key)
-CREATE POLICY "Service role full access" ON users FOR ALL USING (true);
-CREATE POLICY "Service role full access" ON bets FOR ALL USING (true);
-CREATE POLICY "Service role full access" ON parlay_legs FOR ALL USING (true);
+-- No RLS policies needed: the bot connects with the service_role key,
+-- which bypasses RLS entirely. This means the anon role gets zero access
+-- (which is correct — there is no direct client-side Supabase usage).
 
 -- Tailed bets table (tracks who tailed/faded a bet)
 CREATE TABLE IF NOT EXISTS tailed_bets (
@@ -110,7 +109,6 @@ CREATE INDEX IF NOT EXISTS idx_tailed_bets_bet_id ON tailed_bets(bet_id);
 CREATE INDEX IF NOT EXISTS idx_tailed_bets_tailer ON tailed_bets(tailer_discord_id);
 
 ALTER TABLE tailed_bets ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Service role full access" ON tailed_bets FOR ALL USING (true);
 
 -- Function to auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -119,7 +117,7 @@ BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ LANGUAGE plpgsql SET search_path = public;
 
 CREATE TRIGGER update_users_updated_at
   BEFORE UPDATE ON users
@@ -129,8 +127,10 @@ CREATE TRIGGER update_bets_updated_at
   BEFORE UPDATE ON bets
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- View for user stats
-CREATE OR REPLACE VIEW user_stats AS
+-- View for user stats (security_invoker = runs as querying user, not view owner)
+CREATE OR REPLACE VIEW user_stats
+WITH (security_invoker = true)
+AS
 SELECT
   u.discord_id,
   u.discord_username,
@@ -186,6 +186,8 @@ CREATE INDEX IF NOT EXISTS idx_reminders_active_scheduled
   ON reminders (scheduled_at)
   WHERE is_active = true;
 
+ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
+
 -- Web analytics table (login / install tracking)
 CREATE TABLE IF NOT EXISTS web_analytics (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -205,6 +207,8 @@ CREATE INDEX IF NOT EXISTS idx_web_analytics_event_type
 CREATE INDEX IF NOT EXISTS idx_web_analytics_discord_id
   ON web_analytics (discord_id, event_type);
 
+ALTER TABLE web_analytics ENABLE ROW LEVEL SECURITY;
+
 -- Guild settings (welcome message, etc.)
 CREATE TABLE IF NOT EXISTS guild_settings (
   guild_id TEXT PRIMARY KEY,
@@ -212,3 +216,5 @@ CREATE TABLE IF NOT EXISTS guild_settings (
   welcome_message JSONB DEFAULT '{}',
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE guild_settings ENABLE ROW LEVEL SECURITY;
