@@ -579,20 +579,8 @@ function createWebServer() {
       let tailStats = null;
       try { tailStats = await tailedBetsDb.getTailStatsInGuild(targetDiscordId, guildId); } catch (e) {}
 
-      // Recent bets (last 10)
-      const recentBets = bets.slice(0, 10).map(b => ({
-        id: b.id,
-        slipNumber: b.slip_number,
-        sport: SPORT_NAMES[b.sport] || b.sport,
-        pick: b.pick,
-        odds: b.odds_american,
-        units: b.units,
-        status: b.status,
-        betType: b.bet_type,
-        createdAt: b.created_at,
-        isWhale: b.is_whale,
-        legs: b.parlay_legs?.length || 0,
-      }));
+      // Recent bets (last 10) — full format for ticket rendering
+      const recentBets = bets.slice(0, 10).map(b => formatBetForApi(b));
 
       res.json({
         overview: overall,
@@ -643,6 +631,100 @@ function createWebServer() {
       res.json(leaderboard);
     } catch (err) {
       console.error('[API] Leaderboard error:', err);
+      res.status(500).json({ error: 'Failed to fetch leaderboard' });
+    }
+  });
+
+  // Full leaderboard with categories
+  app.get('/api/guilds/:guildId/leaderboard/full', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      // Personal bets leaderboard
+      const allBets = await db.getAllBetsInGuild(guildId, { limit: 10000 });
+      const guild = discordClient?.guilds.cache.get(guildId);
+
+      // Build per-user stats from bets
+      const userMap = {};
+      for (const b of allBets) {
+        if (b.status === 'void' || b.status === 'open') continue;
+        if (!userMap[b.discord_id]) {
+          userMap[b.discord_id] = { discordId: b.discord_id, displayName: b.discord_id, wins: 0, losses: 0, pushes: 0, netUnits: 0, unitsWagered: 0, totalBets: 0 };
+        }
+        const u = userMap[b.discord_id];
+        u.totalBets++;
+        u.unitsWagered += Number(b.units) || 0;
+        if (b.status === 'win') {
+          u.wins++;
+          const odds = Number(b.odds_american);
+          u.netUnits += odds >= 0 ? (b.units * odds / 100) : (b.units * 100 / Math.abs(odds));
+        } else if (b.status === 'loss') {
+          u.losses++;
+          u.netUnits -= Number(b.units);
+        } else if (b.status === 'push') {
+          u.pushes++;
+        }
+      }
+
+      // Resolve display names
+      for (const uid of Object.keys(userMap)) {
+        try {
+          if (guild) {
+            const member = await fetchMember(guild, uid);
+            userMap[uid].displayName = member.displayName;
+          }
+        } catch (e) {}
+      }
+
+      // Compute derived fields
+      const users = Object.values(userMap).map(u => {
+        u.netUnits = Math.round(u.netUnits * 100) / 100;
+        u.unitsWagered = Math.round(u.unitsWagered * 100) / 100;
+        const decided = u.wins + u.losses;
+        u.winPct = decided > 0 ? Math.round((u.wins / decided) * 1000) / 10 : 0;
+        u.roi = u.unitsWagered > 0 ? Math.round((u.netUnits / u.unitsWagered) * 1000) / 10 : 0;
+        return u;
+      }).filter(u => u.totalBets >= 1);
+
+      // Tail leaderboard
+      let tailUsers = [];
+      try {
+        const tailedBetsDb = require('../database/tailedBets');
+        // Get all users who have tailed in this guild
+        const { data: tailData } = await require('../config/supabase').from('tailed_bets')
+          .select('discord_id')
+          .eq('guild_id', guildId);
+        const tailUserIds = [...new Set((tailData || []).map(t => t.discord_id))];
+        for (const tid of tailUserIds) {
+          try {
+            const ts = await tailedBetsDb.getTailStatsInGuild(tid, guildId);
+            if (ts && ts.total_tails > 0) {
+              let dname = tid;
+              try {
+                if (guild) { const m = await fetchMember(guild, tid); dname = m.displayName; }
+              } catch (e) {}
+              tailUsers.push({
+                discordId: tid,
+                displayName: dname,
+                wins: ts.tail_wins,
+                losses: ts.tail_losses,
+                pushes: ts.tail_pushes,
+                netUnits: ts.tail_net_units,
+                unitsWagered: ts.tail_units_wagered,
+                totalBets: ts.total_tails,
+                winPct: ts.tail_win_pct,
+                roi: ts.tail_roi,
+              });
+            }
+          } catch (e) {}
+        }
+      } catch (e) {}
+
+      res.json({ users, tailUsers });
+    } catch (err) {
+      console.error('[API] Full leaderboard error:', err);
       res.status(500).json({ error: 'Failed to fetch leaderboard' });
     }
   });

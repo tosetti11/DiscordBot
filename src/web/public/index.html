@@ -40,6 +40,7 @@
           <a href="javascript:void(0)" class="nav-link active" data-page="slip" onclick="switchPage('slip')">🎟️ Slip</a>
           <a href="javascript:void(0)" class="nav-link" data-page="bets" onclick="switchPage('bets')">📋 Bets</a>
           <a href="javascript:void(0)" class="nav-link" data-page="stats" onclick="switchPage('stats')">📊 Stats</a>
+          <a href="javascript:void(0)" class="nav-link" data-page="leaderboard" onclick="switchPage('leaderboard')">🏆 Rankings</a>
           <a href="javascript:void(0)" class="nav-link hidden" data-page="reminders" id="nav-reminders" onclick="switchPage('reminders')">⏰ Reminders</a>
           <a href="javascript:void(0)" class="nav-link" data-page="tools" onclick="switchPage('tools')">🔧 Tools</a>
           <a href="javascript:void(0)" class="nav-link" data-page="install" onclick="switchPage('install')">📱 App</a>
@@ -554,20 +555,62 @@
               <span class="sp-panel-chevron">▸</span>
             </div>
             <div class="sp-panel-body">
-              <div class="recent-bets-list" id="recent-bets"></div>
+              <div class="bets-list" id="recent-bets" style="padding:10px 20px 6px;"></div>
             </div>
           </div>
+        </div>
+      </div>
+    </main>
 
-          <!-- ══ Leaderboard (collapsible) ══ -->
-          <div class="sp-panel">
-            <div class="sp-panel-header" onclick="togglePanel(this)">
-              <span class="sp-panel-title">🏆 Leaderboard</span>
-              <span class="sp-panel-chevron">▸</span>
+    <!-- Leaderboard / Rankings Page -->
+    <main id="leaderboard-page" class="main-content hidden">
+      <div class="lb-container">
+        <div class="lb-page-header">
+          <h2>🏆 Rankings</h2>
+          <p class="slip-subtitle">See who's on top</p>
+        </div>
+
+        <div class="lb-controls">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="lb-guild">Server</label>
+              <select id="lb-guild">
+                <option value="" disabled selected>Select server</option>
+              </select>
             </div>
-            <div class="sp-panel-body">
-              <div class="leaderboard-list" id="leaderboard-list"></div>
+            <div class="form-group">
+              <label for="lb-type">Board</label>
+              <select id="lb-type">
+                <option value="personal" selected>📋 Personal Bets</option>
+                <option value="tailing">🔗 Tailing</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="lb-category">Category</label>
+              <select id="lb-category">
+                <option value="netUnits" selected>💰 Most Units Won</option>
+                <option value="winPct">🎯 Best Win %</option>
+                <option value="wins">✅ Most Wins</option>
+                <option value="totalBets">📊 Most Bets</option>
+                <option value="roi">📈 Best ROI</option>
+                <option value="unitsWagered">🎰 Most Wagered</option>
+              </select>
             </div>
           </div>
+        </div>
+
+        <div id="lb-loading" class="stats-loading hidden">
+          <div class="loading-spinner"></div>
+          <p>Loading rankings...</p>
+        </div>
+
+        <div id="lb-empty" class="stats-empty hidden">
+          <div class="empty-icon">📭</div>
+          <p>No data yet for this server.</p>
+        </div>
+
+        <div id="lb-content" class="hidden">
+          <div id="lb-table-wrap"></div>
         </div>
       </div>
     </main>

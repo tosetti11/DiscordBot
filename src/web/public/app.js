@@ -758,7 +758,7 @@ function showToast(msg) {
 
 function switchPage(page) {
   // Track page view
-  const trackablePages = { stats: 'view_stats', bets: 'view_bets', tools: 'view_tools', reminders: 'view_reminders', slip: 'page_view' };
+  const trackablePages = { stats: 'view_stats', bets: 'view_bets', tools: 'view_tools', reminders: 'view_reminders', slip: 'page_view', leaderboard: 'view_leaderboard' };
   if (trackablePages[page]) {
     trackActivity(trackablePages[page]);
   }
@@ -772,6 +772,7 @@ function switchPage(page) {
     slip: document.getElementById('slip-page'),
     stats: document.getElementById('stats-page'),
     bets: document.getElementById('bets-page'),
+    leaderboard: document.getElementById('leaderboard-page'),
     reminders: document.getElementById('reminders-page'),
     tools: document.getElementById('tools-page'),
     install: document.getElementById('install-page'),
@@ -792,6 +793,7 @@ function switchPage(page) {
   if (page === 'reminders') initRemindersPage();
   if (page === 'analytics') initAnalyticsPage();
   if (page === 'announce') initAnnouncePage();
+  if (page === 'leaderboard') initLeaderboardPage();
 }
 
 // ═══════════════════════════════════════════════
@@ -817,7 +819,6 @@ function initStatsPage() {
   statsGuild.addEventListener('change', () => {
     loadStatsUsers(statsGuild.value);
     loadStats();
-    loadLeaderboard();
   });
 
   document.getElementById('stats-period').addEventListener('change', loadStats);
@@ -1059,28 +1060,11 @@ function renderStats(data) {
     tbody.appendChild(tr);
   }
 
-  // Recent bets
+  // Recent bets — render as ticket cards
   const recentEl = document.getElementById('recent-bets');
   recentEl.innerHTML = '';
-  const statusEmoji = { open: '🟡', win: '✅', loss: '❌', push: '🔄' };
   for (const bet of data.recentBets) {
-    const div = document.createElement('div');
-    div.className = 'recent-bet-row';
-    div.innerHTML = `
-      <div class="recent-bet-info">
-        <span class="recent-bet-status">${statusEmoji[bet.status] || '⚪'}</span>
-        <div>
-          <div class="recent-bet-pick">${esc(bet.pick) || '—'}${bet.betType === 'parlay' ? ` (${bet.legs}L parlay)` : ''}</div>
-          <div class="recent-bet-sport">${esc(bet.sport)} • ${esc(bet.slipNumber)}</div>
-        </div>
-      </div>
-      ${bet.isWhale ? '<span class="recent-bet-whale">🐋</span>' : ''}
-      <div class="recent-bet-details">
-        <div class="recent-bet-odds">${bet.odds >= 0 ? '+' : ''}${bet.odds}</div>
-        <div class="recent-bet-units">${bet.units}u</div>
-      </div>
-    `;
-    recentEl.appendChild(div);
+    recentEl.appendChild(renderBetCard(bet, false));
   }
 }
 
@@ -1117,41 +1101,138 @@ function renderBreakdown(containerId, rows, totalBets) {
   }
 }
 
-async function loadLeaderboard() {
-  const guildId = document.getElementById('stats-guild').value;
+// ═══════════════════════════════════════════════
+//  LEADERBOARD / RANKINGS PAGE
+// ═══════════════════════════════════════════════
+
+let lbInitialized = false;
+let lbData = null;
+
+function initLeaderboardPage() {
+  if (lbInitialized) return;
+  lbInitialized = true;
+
+  const lbGuild = document.getElementById('lb-guild');
+  currentUser.guilds.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    lbGuild.appendChild(opt);
+  });
+
+  lbGuild.addEventListener('change', loadFullLeaderboard);
+  document.getElementById('lb-type').addEventListener('change', renderLeaderboard);
+  document.getElementById('lb-category').addEventListener('change', renderLeaderboard);
+
+  if (currentUser.guilds.length === 1) {
+    autoSelectGuild(lbGuild);
+  } else if (currentUser.guilds.length > 1) {
+    lbGuild.value = currentUser.guilds[0].id;
+    lbGuild.dispatchEvent(new Event('change'));
+  }
+}
+
+async function loadFullLeaderboard() {
+  const guildId = document.getElementById('lb-guild').value;
   if (!guildId) return;
 
-  trackActivity('view_leaderboard');
-
-  const container = document.getElementById('leaderboard-list');
-  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">Loading...</div>';
+  document.getElementById('lb-loading').classList.remove('hidden');
+  document.getElementById('lb-content').classList.add('hidden');
+  document.getElementById('lb-empty').classList.add('hidden');
 
   try {
-    const res = await fetch(`/api/guilds/${guildId}/leaderboard`);
-    const data = await res.json();
+    const res = await fetch(`/api/guilds/${guildId}/leaderboard/full`);
+    lbData = await res.json();
+    document.getElementById('lb-loading').classList.add('hidden');
 
-    container.innerHTML = '';
-    if (!data || data.length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">No data yet</div>';
+    if ((!lbData.users || lbData.users.length === 0) && (!lbData.tailUsers || lbData.tailUsers.length === 0)) {
+      document.getElementById('lb-empty').classList.remove('hidden');
       return;
     }
 
-    const medals = ['🥇', '🥈', '🥉'];
-    data.forEach((entry, i) => {
-      const div = document.createElement('div');
-      div.className = 'lb-row';
-      const net = entry.net_units || 0;
-      div.innerHTML = `
-        <span class="lb-rank">${medals[i] || (i + 1)}</span>
-        <span class="lb-name">${esc(entry.discord_username) || 'Unknown'}</span>
-        <span class="lb-record">${entry.wins || 0}W-${entry.losses || 0}L-${entry.pushes || 0}P | ${entry.win_pct || 0}%</span>
-        <span class="lb-net ${net >= 0 ? 'positive' : 'negative'}">${fmtNet(net)}</span>
-      `;
-      container.appendChild(div);
-    });
+    document.getElementById('lb-content').classList.remove('hidden');
+    renderLeaderboard();
   } catch (e) {
-    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-danger)">Failed to load</div>';
+    document.getElementById('lb-loading').classList.add('hidden');
+    document.getElementById('lb-empty').classList.remove('hidden');
   }
+}
+
+function renderLeaderboard() {
+  if (!lbData) return;
+
+  const type = document.getElementById('lb-type').value;
+  const category = document.getElementById('lb-category').value;
+  const list = type === 'tailing' ? (lbData.tailUsers || []) : (lbData.users || []);
+
+  // Sort by selected category descending
+  const sorted = [...list].sort((a, b) => {
+    const va = a[category] ?? 0;
+    const vb = b[category] ?? 0;
+    return vb - va;
+  });
+
+  const wrap = document.getElementById('lb-table-wrap');
+
+  if (sorted.length === 0) {
+    wrap.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-muted)">No data for this board</div>';
+    return;
+  }
+
+  const categoryLabels = {
+    netUnits: 'Net Units', winPct: 'Win %', wins: 'Wins',
+    totalBets: 'Total Bets', roi: 'ROI', unitsWagered: 'Wagered',
+  };
+  const catLabel = categoryLabels[category] || category;
+  const medals = ['🥇', '🥈', '🥉'];
+
+  let html = '<div class="lb-board">';
+  sorted.forEach((entry, i) => {
+    const rankDisplay = medals[i] || `${i + 1}`;
+    const decided = entry.wins + entry.losses;
+    const record = `${entry.wins}W-${entry.losses}L-${entry.pushes}P`;
+
+    let primaryVal = '';
+    let primaryClass = '';
+    switch (category) {
+      case 'netUnits':
+        primaryVal = fmtNet(entry.netUnits);
+        primaryClass = entry.netUnits >= 0 ? 'lb-val-pos' : 'lb-val-neg';
+        break;
+      case 'winPct':
+        primaryVal = `${entry.winPct}%`;
+        primaryClass = entry.winPct >= 50 ? 'lb-val-pos' : 'lb-val-neg';
+        break;
+      case 'wins':
+        primaryVal = `${entry.wins}`;
+        primaryClass = 'lb-val-pos';
+        break;
+      case 'totalBets':
+        primaryVal = `${entry.totalBets}`;
+        primaryClass = '';
+        break;
+      case 'roi':
+        primaryVal = `${entry.roi}%`;
+        primaryClass = entry.roi >= 0 ? 'lb-val-pos' : 'lb-val-neg';
+        break;
+      case 'unitsWagered':
+        primaryVal = `${fmtU(entry.unitsWagered)}u`;
+        primaryClass = '';
+        break;
+    }
+
+    html += `
+      <div class="lb-entry ${i < 3 ? 'lb-entry-top' : ''}">
+        <div class="lb-entry-rank">${rankDisplay}</div>
+        <div class="lb-entry-info">
+          <div class="lb-entry-name">${esc(entry.displayName)}</div>
+          <div class="lb-entry-record">${record} · ${entry.winPct}% · ROI ${entry.roi}%</div>
+        </div>
+        <div class="lb-entry-primary ${primaryClass}">${primaryVal}</div>
+      </div>`;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════

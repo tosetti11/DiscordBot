@@ -1254,6 +1254,132 @@ textarea {
 }
 
 /* ════════════════════════════════════════════════════════════
+   LEADERBOARD / RANKINGS PAGE
+   ════════════════════════════════════════════════════════════ */
+
+.lb-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.lb-page-header {
+  margin-bottom: 24px;
+}
+
+.lb-page-header h2 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.lb-controls {
+  background: linear-gradient(170deg, #1e1e1e 0%, #161616 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 135, 50, 0.12);
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+/* ── Leaderboard Board ── */
+.lb-board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lb-entry {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(170deg, #1e1e1e 0%, #161616 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 135, 50, 0.06);
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.lb-entry:hover {
+  border-color: rgba(255, 135, 50, 0.18);
+  transform: translateY(-1px);
+}
+
+.lb-entry-top {
+  border-color: rgba(255, 135, 50, 0.15);
+  background: linear-gradient(170deg, #231a12 0%, #161616 100%);
+}
+
+.lb-entry-rank {
+  font-size: 22px;
+  font-weight: 800;
+  min-width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.lb-entry-top .lb-entry-rank {
+  color: #FF8732;
+  font-size: 24px;
+}
+
+.lb-entry-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.lb-entry-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lb-entry-record {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.lb-entry-primary {
+  font-size: 20px;
+  font-weight: 800;
+  flex-shrink: 0;
+  text-align: right;
+  min-width: 80px;
+}
+
+.lb-val-pos { color: #43b581; }
+.lb-val-neg { color: #D62300; }
+
+@media (max-width: 600px) {
+  .lb-entry {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .lb-entry-rank {
+    font-size: 18px;
+    min-width: 28px;
+  }
+
+  .lb-entry-name {
+    font-size: 14px;
+  }
+
+  .lb-entry-primary {
+    font-size: 16px;
+    min-width: 60px;
+  }
+
+  .lb-controls .form-row {
+    flex-direction: column;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
    MY BETS PAGE
    ════════════════════════════════════════════════════════════ */
 
