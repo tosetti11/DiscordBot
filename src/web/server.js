@@ -153,7 +153,14 @@ function createWebServer() {
     res.sendFile(path.join(__dirname, 'public', 'service-worker.js'));
   });
 
-  app.use(express.static(path.join(__dirname, 'public')));
+  app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res, filePath) => {
+      // Never let the browser serve stale JS/CSS/HTML
+      if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {
+        res.set('Cache-Control', 'no-cache, must-revalidate');
+      }
+    }
+  }));
 
   // ─── Auth Middleware ───
   function authMiddleware(req, res, next) {
