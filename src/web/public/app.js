@@ -1620,6 +1620,7 @@ function renderTailedBetCard(bet) {
       return `<div class="ticket-leg">
         <div class="ticket-leg-header"><span class="ticket-leg-status">${legStatusEmoji}</span><span class="ticket-leg-sport">${legSport}</span></div>
         <div class="ticket-leg-pick">${esc(leg.pick) || '—'}</div>
+        ${leg.playerName ? `<div class="ticket-leg-player">${esc(leg.playerName)}${leg.propDescription ? ' — ' + esc(leg.propDescription) : ''}</div>` : ''}
       </div>`;
     }).join('');
     legsHtml = `<div class="ticket-legs-section">
@@ -1645,6 +1646,7 @@ function renderTailedBetCard(bet) {
       </div>
       <div class="ticket-pick">${pickText}</div>
       ${bet.teamA && bet.teamB ? `<div class="ticket-matchup">${esc(bet.teamA)} vs ${esc(bet.teamB)}</div>` : ''}
+      ${bet.playerName ? `<div class="ticket-player">${esc(bet.playerName)}${bet.propDescription ? ' — ' + esc(bet.propDescription) : ''}</div>` : ''}
       ${legsHtml}
     </div>
     <div class="ticket-divider"></div>
@@ -1788,6 +1790,7 @@ function renderBetCard(bet, showOwner = false) {
         </div>
         <div class="ticket-leg-pick">${esc(leg.pick) || '—'}</div>
         ${leg.teamA && leg.teamB ? `<div class="ticket-leg-matchup">${esc(leg.teamA)} vs ${esc(leg.teamB)}</div>` : ''}
+        ${leg.playerName ? `<div class="ticket-leg-player">${esc(leg.playerName)}${leg.propDescription ? ' — ' + esc(leg.propDescription) : ''}</div>` : ''}
         ${leg.eventStartTime ? `<div class="ticket-leg-time">⏰ ${esc(leg.eventStartTime)}</div>` : ''}
         ${legActions}
       </div>`;

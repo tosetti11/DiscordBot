@@ -1,4 +1,46 @@
-# Discord Analytics Dashboard — TODO
+# TheGamblingKing — TODO
+
+---
+
+## Priority List
+
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | Public landing page (no login required) | Not started |
+| 2 | Public leaderboard page (shareable, read-only) | Not started |
+| 3 | Sharp/Capper tool (odds API integration) | Not started — options below |
+| 4 | Discord analytics / lurker detection | Not started — spec below |
+
+---
+
+## #3 — Sharp/Capper Tool
+
+### Development Approach (pick one)
+- **Option A (recommended): Git feature branch** — Work on `feature/sharp-tools` branch. Nothing touches `main` or production until merge. Zero risk.
+- **Option B: Hidden page on live site** — Build on `main` behind a hidden route (`/tools/sharp`), not linked in nav. Faster to test live but slightly riskier.
+
+### API Options (pick one)
+- **The Odds API** — 500 free requests/month, covers odds from 40+ bookmakers (DraftKings, FanDuel, BetMGM, etc). Best for odds comparison/line shopping. https://the-odds-api.com
+- **API-Sports** — 100 free requests/day (~3,000/month), broader data (stats, scores, standings + odds). Better if you want stats alongside odds. https://api-sports.io
+
+### Feature Options (pick what to build first)
+1. **Line shopping / odds comparison** — Show best odds across books for each game. "DraftKings has +150, FanDuel has +140" etc.
+2. **Line movement tracker** — Snapshot odds throughout the day, show how lines move over time (opening → current). Sharp money indicator.
+3. **Value finder** — Compare implied probability vs model/consensus. Flag +EV bets.
+4. **All of the above** — Build incrementally: odds comparison first → add movement tracking → add value analysis.
+
+### Sports Coverage (pick scope)
+- Start with 1-2 sports (NBA + NFL/MLB depending on season)
+- Or cover all sports the site currently supports
+
+### Architecture (planned)
+- Background cron fetches odds → stores in Supabase (no API calls during user requests)
+- Frontend reads from cached Supabase data → zero performance impact
+- New page in the web app with its own nav tab
+
+---
+
+## #4 — Discord Analytics Dashboard
 
 ## Overview
 Build a comprehensive Discord engagement analytics dashboard (owner-only, locked to Discord ID `1338301556973633577`). Two views: **Macro** (server-wide overview) and **Micro** (per-user deep dive). Key feature: **lurker pattern detection** — correlating when users come online vs when picks are posted.

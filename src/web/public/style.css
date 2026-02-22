@@ -1964,6 +1964,12 @@ textarea {
   margin-top: 1px;
 }
 
+.ticket-leg-player {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 1px;
+}
+
 .ticket-leg .leg-actions {
   display: flex;
   gap: 4px;
