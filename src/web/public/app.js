@@ -893,7 +893,14 @@ function compressImageForOCR(file) {
       ctx.drawImage(img, 0, 0, w, h);
       resolve(canvas.toDataURL('image/jpeg', 0.85));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      // Fallback: read raw file (handles HEIC and other formats the browser can't render)
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    };
     img.src = url;
   });
 }
