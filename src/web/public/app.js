@@ -974,7 +974,7 @@ function toggleOnlineList() {
 
 function switchPage(page) {
   // Track page view
-  const trackablePages = { stats: 'view_stats', bets: 'view_bets', tools: 'view_tools', reminders: 'view_reminders', slip: 'page_view', leaderboard: 'view_leaderboard' };
+  const trackablePages = { stats: 'view_stats', bets: 'view_bets', closebets: 'view_closebets', tools: 'view_tools', reminders: 'view_reminders', slip: 'page_view', leaderboard: 'view_leaderboard' };
   if (trackablePages[page]) {
     trackActivity(trackablePages[page]);
   }
@@ -992,6 +992,7 @@ function switchPage(page) {
     slip: document.getElementById('slip-page'),
     stats: document.getElementById('stats-page'),
     bets: document.getElementById('bets-page'),
+    closebets: document.getElementById('closebets-page'),
     leaderboard: document.getElementById('leaderboard-page'),
     reminders: document.getElementById('reminders-page'),
     tools: document.getElementById('tools-page'),
@@ -1014,6 +1015,60 @@ function switchPage(page) {
   if (page === 'analytics') initAnalyticsPage();
   if (page === 'announce') initAnnouncePage();
   if (page === 'leaderboard') initLeaderboardPage();
+  if (page === 'closebets') initCloseBetsPage();
+}
+
+// ═══════════════════════════════════════════════
+//  Close Bets (Quick Close Page)
+// ═══════════════════════════════════════════════
+
+let closeBetsInitialized = false;
+
+function initCloseBetsPage() {
+  if (closeBetsInitialized) return;
+  closeBetsInitialized = true;
+
+  const sel = document.getElementById('closebets-guild');
+  sel.innerHTML = '<option value="" disabled selected>Select Server</option>';
+  currentUser.guilds.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    sel.appendChild(opt);
+  });
+
+  sel.addEventListener('change', () => loadCloseBets());
+
+  // Auto-select if only one guild
+  if (currentUser.guilds.length === 1) {
+    sel.value = currentUser.guilds[0].id;
+    loadCloseBets();
+  }
+}
+
+async function loadCloseBets() {
+  const guildId = document.getElementById('closebets-guild').value;
+  if (!guildId) return;
+
+  const container = document.getElementById('closebets-list');
+  container.innerHTML = '<p class="empty-state">Loading...</p>';
+
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/bets?status=open`);
+    const bets = await res.json();
+
+    if (!bets || bets.length === 0) {
+      container.innerHTML = '<p class="empty-state">🎉 No open bets! You\'re all caught up.</p>';
+      return;
+    }
+
+    container.innerHTML = '';
+    bets.forEach(bet => {
+      container.appendChild(renderBetCard(bet, false));
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="empty-state" style="color:var(--text-danger)">Failed to load bets.</p>';
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -2009,7 +2064,8 @@ async function confirmCloseBet() {
     }
     showToast('Bet closed');
     closeCloseBetModal();
-    loadBets(); // Refresh
+    loadBets(); // Refresh bets page
+    if (closeBetsInitialized) loadCloseBets(); // Refresh close bets page too
   } catch (e) {
     showToast('Failed to close bet');
   } finally {

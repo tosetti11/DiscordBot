@@ -66,6 +66,9 @@
         <a href="javascript:void(0)" class="sidebar-link" data-page="bets" onclick="switchPage('bets')">
           <span class="sidebar-icon">📋</span> Bets
         </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="closebets" onclick="switchPage('closebets')">
+          <span class="sidebar-icon">💰</span> Close Bet
+        </a>
         <a href="javascript:void(0)" class="sidebar-link" data-page="stats" onclick="switchPage('stats')">
           <span class="sidebar-icon">📊</span> Stats
         </a>
@@ -992,6 +995,24 @@
       </div>
     </main>
 
+    <!-- Close Bets Page -->
+    <main id="closebets-page" class="main-content hidden">
+      <div class="closebets-container">
+        <div class="closebets-header">
+          <h2>💰 Close Bet</h2>
+          <p class="slip-subtitle">Quickly close your open bets</p>
+        </div>
+        <div class="closebets-controls">
+          <select id="closebets-guild" class="form-select filter-select">
+            <option value="" disabled selected>Select Server</option>
+          </select>
+        </div>
+        <div id="closebets-list" class="bets-list">
+          <p class="empty-state">Select a server to see your open bets.</p>
+        </div>
+      </div>
+    </main>
+
     <!-- Install App Page -->
     <main id="install-page" class="main-content hidden">
       <div class="install-container">
@@ -1404,6 +1425,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=27"></script>
+  <script src="/app.js?v=28"></script>
 </body>
 </html>
