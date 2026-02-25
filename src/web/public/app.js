@@ -3484,15 +3484,14 @@ async function openShareModal(pageType) {
 
   // Capture screenshot
   try {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     const canvas = await html2canvas(wrapper, {
       backgroundColor: '#0d0d0d',
-      scale: isMobile ? 1 : 2,
+      scale: 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
-      width: 520,
-      windowWidth: 520,
+      width: 800,
+      windowWidth: 800,
       imageTimeout: 5000,
       removeContainer: true,
     });
