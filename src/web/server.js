@@ -1456,12 +1456,12 @@ function createWebServer() {
       const safePeriod = (periodLabel || '').replace(/[*_~`|]/g, '');
       let messageText;
       if (pageType === 'stats') {
-        messageText = `Hey Boys! Check out **${safeName}'s** stats for **${safePeriod || 'All Time'}**! 🎰`;
+        messageText = `Hey Boys! Check out **${safeName}'s** stats for **${safePeriod || 'All Time'}**! 💰`;
       } else {
-        messageText = `Hey Boys! Check out the **${safeName}** leaderboard${safePeriod ? ' — **' + safePeriod + '**' : ''}! 🏆`;
+        messageText = `Hey Boys! Check out the **${safeName}** leaderboard${safePeriod ? ' — **' + safePeriod + '**' : ''}! 💰`;
       }
 
-      const title = pageType === 'stats' ? '📊 Statistics' : '🏆 Rankings';
+      const title = pageType === 'stats' ? '� Statistics' : '💰 Rankings';
       const embed = new EmbedBuilder()
         .setColor(0xF5C518)
         .setTitle(title)
