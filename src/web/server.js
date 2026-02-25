@@ -409,46 +409,8 @@ function createWebServer() {
     }
   });
 
-  // Get guild members (admin only) for user picker
-  app.get('/api/guilds/:guildId/members', authMiddleware, async (req, res) => {
-    try {
-      const { guildId } = req.params;
-      const userGuild = req.user.guilds.find(g => g.id === guildId);
-      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
-
-      const admin = await isAdminInGuild(guildId, req.user.discordId);
-      if (!admin) return res.status(403).json({ error: 'Admin only' });
-
-      const guild = discordClient?.guilds.cache.get(guildId);
-      if (!guild) return res.json([]);
-
-      // Fetch members using REST API (paginated, avoids gateway rate limits)
-      const allMembers = [];
-      let after = '0';
-      while (true) {
-        const batch = await guild.members.list({ limit: 1000, after });
-        if (batch.size === 0) break;
-        batch.forEach(m => allMembers.push(m));
-        after = batch.lastKey();
-        if (batch.size < 1000) break;
-      }
-
-      const memberList = allMembers
-        .filter(m => !m.user.bot)
-        .map(m => ({
-          id: m.id,
-          displayName: m.displayName,
-          username: m.user.username,
-          avatar: m.user.displayAvatarURL({ size: 64 }),
-        }))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
-
-      res.json(memberList);
-    } catch (err) {
-      console.error('[API] Members error:', err);
-      res.status(500).json({ error: 'Failed to fetch members' });
-    }
-  });
+  // NOTE: /api/guilds/:guildId/members route is defined further below (Inner Circle page handler).
+  // The admin "behalf" user picker in app.js fetches this same endpoint.
 
   // Get server emojis
   app.get('/api/guilds/:guildId/emojis', authMiddleware, async (req, res) => {

@@ -241,12 +241,13 @@ function setupEventListeners() {
       if (guildPerms.isAdmin) {
         behalfRow.classList.remove('hidden');
         // Fetch guild members in background (non-blocking)
-        fetch(`/api/guilds/${guildId}/members`).then(r => r.json()).then(members => {
+        fetch(`/api/guilds/${guildId}/members`).then(r => r.json()).then(data => {
+          const memberList = data.members || data; // support both formats
           const behalfSelect = document.getElementById('behalf-select');
           behalfSelect.innerHTML = '<option value="">Myself</option>';
-          members.forEach(m => {
+          memberList.forEach(m => {
             const opt = document.createElement('option');
-            opt.value = m.id;
+            opt.value = m.discordId || m.id;
             opt.textContent = m.displayName;
             behalfSelect.appendChild(opt);
           });
@@ -1425,11 +1426,12 @@ function initCloseBetsPage() {
       userSel.classList.remove('hidden');
       try {
         const membersRes = await fetch(`/api/guilds/${guildId}/members`);
-        const members = await membersRes.json();
+        const membersData = await membersRes.json();
+        const memberList = membersData.members || membersData;
         userSel.innerHTML = '<option value="">My Bets</option><option value="all">👑 All Members</option>';
-        members.forEach(m => {
+        memberList.forEach(m => {
           const opt = document.createElement('option');
-          opt.value = m.id;
+          opt.value = m.discordId || m.id;
           opt.textContent = m.displayName;
           userSel.appendChild(opt);
         });
@@ -2221,12 +2223,13 @@ function initBetsPage() {
       // Fetch members for the picker
       try {
         const membersRes = await fetch(`/api/guilds/${guildId}/members`);
-        const members = await membersRes.json();
+        const membersData = await membersRes.json();
+        const memberList = membersData.members || membersData;
         // Keep the first two options (My Bets, All Members), then add members
         userSel.innerHTML = '<option value="">My Bets</option><option value="all">👑 All Members</option>';
-        members.forEach(m => {
+        memberList.forEach(m => {
           const opt = document.createElement('option');
-          opt.value = m.id;
+          opt.value = m.discordId || m.id;
           opt.textContent = m.displayName;
           userSel.appendChild(opt);
         });
@@ -4016,17 +4019,17 @@ async function loadAnnounceMembers(guildId) {
   try {
     const res = await fetch(`/api/guilds/${guildId}/members`);
     const data = await res.json();
+    const memberList = data.members || (Array.isArray(data) ? data : []);
     targetSelect.innerHTML = '<option value="all">📢 All Members</option>';
-    if (res.ok && Array.isArray(data)) {
-      data.forEach(m => {
+    if (res.ok && memberList.length > 0) {
+      memberList.forEach(m => {
         const opt = document.createElement('option');
-        opt.value = m.id;
+        opt.value = m.discordId || m.id;
         opt.textContent = m.displayName;
         targetSelect.appendChild(opt);
       });
-      if (data.length === 0) {
-        targetSelect.innerHTML += '<option disabled>No members found</option>';
-      }
+    } else if (res.ok) {
+      targetSelect.innerHTML += '<option disabled>No members found</option>';
     } else {
       console.error('Members API error:', data);
       targetSelect.innerHTML += `<option disabled>Error: ${data.error || 'Failed to load'}</option>`;
