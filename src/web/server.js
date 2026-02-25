@@ -1470,7 +1470,7 @@ function createWebServer() {
   // ─── Share to Discord API ───
 
   // ─── OCR Bet Slip (OpenAI Vision) ───
-  const ocrJsonParser = express.json({ limit: '10mb' });
+  const ocrJsonParser = express.json({ limit: '20mb' });
 
   app.post('/api/ocr-slip', authMiddleware, ocrJsonParser, postLimiter, async (req, res) => {
     try {

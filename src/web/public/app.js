@@ -872,6 +872,32 @@ function triggerSlipScan() {
   document.getElementById('slip-file-input').click();
 }
 
+// Compress image for OCR — resize to max 2048px and convert to JPEG
+function compressImageForOCR(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 2048;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        const ratio = Math.min(MAX / w, MAX / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+    img.src = url;
+  });
+}
+
 async function handleSlipFile(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -882,13 +908,8 @@ async function handleSlipFile(e) {
   document.getElementById('scan-slip-btn').disabled = true;
 
   try {
-    // Read file as base64 data URL
-    const imageData = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('Failed to read image'));
-      reader.readAsDataURL(file);
-    });
+    // Compress image before sending (resizes large phone screenshots)
+    const imageData = await compressImageForOCR(file);
 
     // Send to OCR endpoint
     const res = await fetch('/api/ocr-slip', {
