@@ -1050,7 +1050,36 @@ function initCloseBetsPage() {
       closeBetsPerms = { isAdmin: false };
     }
 
+    // Show/populate user picker for admins
+    const userSel = document.getElementById('closebets-user');
+    if (closeBetsPerms.isAdmin) {
+      userSel.classList.remove('hidden');
+      try {
+        const membersRes = await fetch(`/api/guilds/${guildId}/members`);
+        const members = await membersRes.json();
+        userSel.innerHTML = '<option value="">My Bets</option><option value="all">👑 All Members</option>';
+        members.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.displayName;
+          userSel.appendChild(opt);
+        });
+      } catch (e) {}
+      userSel.value = ''; // Default to logged-in user
+    } else {
+      userSel.classList.add('hidden');
+      userSel.value = '';
+    }
+
     // Temporarily set betsGuildPerms so renderBetCard picks up admin
+    const savedPerms = betsGuildPerms;
+    betsGuildPerms = closeBetsPerms;
+    await loadCloseBets();
+    betsGuildPerms = savedPerms;
+  });
+
+  // User filter change
+  document.getElementById('closebets-user').addEventListener('change', async () => {
     const savedPerms = betsGuildPerms;
     betsGuildPerms = closeBetsPerms;
     await loadCloseBets();
@@ -1072,8 +1101,19 @@ async function loadCloseBets() {
   container.innerHTML = '<p class="empty-state">Loading...</p>';
 
   const isAdmin = closeBetsPerms.isAdmin;
+  const userFilter = document.getElementById('closebets-user').value;
   const params = new URLSearchParams({ status: 'open' });
-  if (isAdmin) params.set('viewAll', 'true');
+
+  if (isAdmin) {
+    if (userFilter === 'all') {
+      params.set('viewAll', 'true');
+    } else if (userFilter) {
+      params.set('userId', userFilter);
+    }
+    // else empty = logged-in user's bets (default, no extra param)
+  }
+
+  const showOwner = isAdmin && (userFilter === 'all' || (userFilter && userFilter !== ''));
 
   try {
     const res = await fetch(`/api/guilds/${guildId}/bets?${params}`);
@@ -1086,7 +1126,7 @@ async function loadCloseBets() {
 
     container.innerHTML = '';
     bets.forEach(bet => {
-      container.appendChild(renderBetCard(bet, isAdmin));
+      container.appendChild(renderBetCard(bet, showOwner));
     });
   } catch (e) {
     container.innerHTML = '<p class="empty-state" style="color:var(--text-danger)">Failed to load bets.</p>';
