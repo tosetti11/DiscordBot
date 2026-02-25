@@ -1961,6 +1961,11 @@ function selectCloseOutcome(outcome) {
 
 function closeCloseBetModal() {
   document.getElementById('close-bet-modal').classList.add('hidden');
+  // Close any open pickers
+  document.getElementById('emoji-picker').classList.add('hidden');
+  document.getElementById('gif-picker').classList.add('hidden');
+  document.getElementById('emoji-picker-btn').classList.remove('active');
+  document.getElementById('gif-picker-btn').classList.remove('active');
   closeBetPendingId = null;
   closeBetPendingOutcome = null;
 }
@@ -1991,6 +1996,139 @@ async function confirmCloseBet() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Close & Post';
+  }
+}
+
+// ── Emoji Picker ──
+const EMOJI_DATA = {
+  '😀': ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','🤗','🤩','🥳','😎','🤓','🧐','😏','😬','🤪','🫡','🫠'],
+  '💰': ['💰','🤑','💵','💸','🏆','🎰','🎯','🔥','💎','👑','⚡','💪','🙌','👏','🫶','🤝','✅','❌','🔄','📈','📉','🚀'],
+  '⚽': ['⚽','🏀','🏈','⚾','🎾','🏒','🥊','🏌️','🏇','🎳','♠️','♣️','♥️','♦️','🃏','🎲','🎮','🎪','🏅','🥇','🥈','🥉'],
+  '👍': ['👍','👎','🤙','✌️','🤞','🫰','💅','🖕','🤘','👆','👇','👈','👉','🫵','💀','☠️','😈','🐐','🐍','🦁','🐻','🦅'],
+  '❤️': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💯','💢','💥','✨','⭐','🌟','🎉','🎊','🍺','🥃','🍻','🥂','🍾','🎶'],
+};
+
+let emojiActiveTab = null;
+
+function buildEmojiPicker() {
+  const tabsEl = document.getElementById('emoji-tabs');
+  const gridEl = document.getElementById('emoji-grid');
+  if (tabsEl.children.length) return; // already built
+  const cats = Object.keys(EMOJI_DATA);
+  cats.forEach((icon, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'picker-tab' + (i === 0 ? ' active' : '');
+    btn.textContent = icon;
+    btn.onclick = () => showEmojiCategory(icon);
+    tabsEl.appendChild(btn);
+  });
+  showEmojiCategory(cats[0]);
+}
+
+function showEmojiCategory(catIcon) {
+  emojiActiveTab = catIcon;
+  const gridEl = document.getElementById('emoji-grid');
+  gridEl.innerHTML = '';
+  document.querySelectorAll('.picker-tab').forEach(t => t.classList.toggle('active', t.textContent === catIcon));
+  EMOJI_DATA[catIcon].forEach(em => {
+    const span = document.createElement('span');
+    span.className = 'emoji-cell';
+    span.textContent = em;
+    span.onclick = () => insertAtCursor(document.getElementById('close-bet-message'), em);
+    gridEl.appendChild(span);
+  });
+}
+
+function insertAtCursor(textarea, text) {
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const before = textarea.value.substring(0, start);
+  const after = textarea.value.substring(end);
+  textarea.value = before + text + after;
+  textarea.selectionStart = textarea.selectionEnd = start + text.length;
+  textarea.focus();
+}
+
+function toggleEmojiPicker() {
+  const el = document.getElementById('emoji-picker');
+  const gifEl = document.getElementById('gif-picker');
+  const btn = document.getElementById('emoji-picker-btn');
+  gifEl.classList.add('hidden');
+  document.getElementById('gif-picker-btn').classList.remove('active');
+  if (el.classList.contains('hidden')) {
+    buildEmojiPicker();
+    el.classList.remove('hidden');
+    btn.classList.add('active');
+  } else {
+    el.classList.add('hidden');
+    btn.classList.remove('active');
+  }
+}
+
+// ── GIF Picker (GIPHY) ──
+let gifSearchTimeout = null;
+
+function toggleGifPicker() {
+  const el = document.getElementById('gif-picker');
+  const emojiEl = document.getElementById('emoji-picker');
+  const btn = document.getElementById('gif-picker-btn');
+  emojiEl.classList.add('hidden');
+  document.getElementById('emoji-picker-btn').classList.remove('active');
+  if (el.classList.contains('hidden')) {
+    el.classList.remove('hidden');
+    btn.classList.add('active');
+    document.getElementById('gif-search-input').value = '';
+    document.getElementById('gif-grid').innerHTML = '<p class="gif-placeholder">Search for a GIF above</p>';
+    setTimeout(() => document.getElementById('gif-search-input').focus(), 50);
+  } else {
+    el.classList.add('hidden');
+    btn.classList.remove('active');
+  }
+}
+
+// Debounced GIF search
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('gif-search-input');
+  if (inp) {
+    inp.addEventListener('input', () => {
+      clearTimeout(gifSearchTimeout);
+      const q = inp.value.trim();
+      if (!q) {
+        document.getElementById('gif-grid').innerHTML = '<p class="gif-placeholder">Search for a GIF above</p>';
+        return;
+      }
+      gifSearchTimeout = setTimeout(() => searchGifs(q), 400);
+    });
+  }
+});
+
+async function searchGifs(query) {
+  const grid = document.getElementById('gif-grid');
+  grid.innerHTML = '<p class="gif-loading">Searching...</p>';
+  try {
+    const res = await fetch(`/api/giphy-search?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    if (!data.results || !data.results.length) {
+      grid.innerHTML = '<p class="gif-placeholder">No GIFs found</p>';
+      return;
+    }
+    grid.innerHTML = '';
+    data.results.forEach(gif => {
+      const img = document.createElement('img');
+      img.src = gif.preview;
+      img.alt = gif.title || 'GIF';
+      img.loading = 'lazy';
+      img.onclick = () => {
+        // Insert GIF URL into textarea
+        insertAtCursor(document.getElementById('close-bet-message'), gif.url + ' ');
+        // Close picker
+        document.getElementById('gif-picker').classList.add('hidden');
+        document.getElementById('gif-picker-btn').classList.remove('active');
+      };
+      grid.appendChild(img);
+    });
+  } catch (e) {
+    grid.innerHTML = '<p class="gif-placeholder">Failed to search GIFs</p>';
   }
 }
 

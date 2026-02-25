@@ -1339,7 +1339,28 @@
         </div>
         <div class="form-group" style="margin-top:14px;">
           <label for="close-bet-message">Message to the community <span style="color:var(--text-secondary);font-weight:400;">(optional)</span></label>
-          <textarea id="close-bet-message" rows="3" placeholder="Add a message, GIF link, emojis... anything you want posted with the result!" style="width:100%;resize:vertical;"></textarea>
+          <div class="msg-toolbar">
+            <button type="button" class="toolbar-btn" id="emoji-picker-btn" onclick="toggleEmojiPicker()" title="Emojis">😀</button>
+            <button type="button" class="toolbar-btn" id="gif-picker-btn" onclick="toggleGifPicker()" title="GIFs">GIF</button>
+          </div>
+          <div class="picker-anchor">
+            <textarea id="close-bet-message" rows="3" placeholder="Add a message, emojis, or pick a GIF!" style="width:100%;resize:vertical;"></textarea>
+            <!-- Emoji Picker Popover -->
+            <div id="emoji-picker" class="picker-popover hidden">
+              <div class="picker-tabs" id="emoji-tabs"></div>
+              <div class="emoji-grid" id="emoji-grid"></div>
+            </div>
+            <!-- GIF Search Popover -->
+            <div id="gif-picker" class="picker-popover gif-popover hidden">
+              <div class="gif-search-wrap">
+                <input type="text" id="gif-search-input" placeholder="Search GIFs..." autocomplete="off">
+              </div>
+              <div class="gif-grid" id="gif-grid">
+                <p class="gif-placeholder">Search for a GIF above</p>
+              </div>
+              <div class="gif-attribution">Powered by GIPHY</div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-actions">
@@ -1382,6 +1403,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=26"></script>
+  <script src="/app.js?v=27"></script>
 </body>
 </html>

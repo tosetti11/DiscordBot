@@ -122,7 +122,7 @@ function createWebServer() {
         scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        imgSrc: ["'self'", "https://cdn.discordapp.com", "data:"],
+        imgSrc: ["'self'", "https://cdn.discordapp.com", "https://media.giphy.com", "https://media0.giphy.com", "https://media1.giphy.com", "https://media2.giphy.com", "https://media3.giphy.com", "https://media4.giphy.com", "data:"],
         connectSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
         frameSrc: ["'self'", "https://e.widgetbot.io", "https://widgetbot.io", "https://discord.com"],
       },
@@ -1431,6 +1431,33 @@ function createWebServer() {
     } catch (err) {
       console.error('[API] Delete bet error:', err);
       res.status(500).json({ error: 'Failed to delete bet' });
+    }
+  });
+
+  // ─── GIPHY Search Proxy ───
+  const GIPHY_API_KEY = process.env.GIPHY_API_KEY;
+
+  app.get('/api/giphy-search', authMiddleware, apiLimiter, async (req, res) => {
+    try {
+      if (!GIPHY_API_KEY) {
+        return res.status(503).json({ error: 'GIPHY not configured', results: [] });
+      }
+      const q = (req.query.q || '').trim();
+      if (!q) return res.json({ results: [] });
+
+      const url = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(GIPHY_API_KEY)}&q=${encodeURIComponent(q)}&limit=20&rating=r`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      const results = (data.data || []).map(g => ({
+        url: g.images?.original?.url || g.url,
+        preview: g.images?.fixed_width?.url || g.images?.fixed_width_small?.url,
+        title: g.title,
+      }));
+      res.json({ results });
+    } catch (err) {
+      console.error('[API] GIPHY search error:', err);
+      res.status(500).json({ error: 'GIPHY search failed', results: [] });
     }
   });
 
