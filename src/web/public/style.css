@@ -2009,6 +2009,9 @@ textarea {
   justify-content: center;
   z-index: 999;
   backdrop-filter: blur(4px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 0;
 }
 
 .modal-card {
@@ -2018,6 +2021,10 @@ textarea {
   width: 90%;
   max-width: 420px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
 }
 
 .modal-card.modal-edit-ticket {
@@ -3390,6 +3397,10 @@ textarea {
 
 .share-modal-body {
   margin-bottom: 8px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .share-modal-desc {
@@ -3427,4 +3438,6 @@ textarea {
   height: auto;
   display: block;
   border-radius: 6px;
+  max-height: 45vh;
+  object-fit: contain;
 }
