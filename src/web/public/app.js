@@ -13,33 +13,10 @@ function esc(str) {
     .replace(/'/g, '&#39;');
 }
 
-// ── PWA: Register Service Worker ──
+// ── PWA: Unregister old Service Workers ──
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
-    .then(reg => {
-      console.log('SW registered:', reg.scope);
-      reg.update();
-      // If a new SW is waiting, tell it to activate now
-      if (reg.waiting) {
-        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-      }
-      reg.addEventListener('updatefound', () => {
-        const newSW = reg.installing;
-        newSW.addEventListener('statechange', () => {
-          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-            newSW.postMessage({ type: 'SKIP_WAITING' });
-          }
-        });
-      });
-    })
-    .catch(err => console.log('SW registration failed:', err));
-  // Reload when new SW takes over
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!refreshing) {
-      refreshing = true;
-      location.reload();
-    }
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => r.update());
   });
 }
 
