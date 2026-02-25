@@ -1534,9 +1534,11 @@ Rules:
 - If odds shown are decimal, convert to American format
 - For spreads, include the +/- sign (e.g. "-3.5", "+7")
 - For over/under, set overUnder to "Over" or "Under" and put the line number in spreadValue
+- For over/under and total bets, ALWAYS include teamA and teamB from the game the total belongs to. Look at the matchup header above the bet (e.g. "OKC Thunder @ DET Pistons") and use those teams. Never leave teamA/teamB null for total bets.
+- In parlays, if a total/over-under leg appears under the same game header as a moneyline or spread leg, use that game's teams for the total leg too.
 - For player props, set betCategory to "player_prop", wagerType to "prop"
 - For futures, set betCategory to "futures", wagerType to "futures"
-- teamA should be the team/side being bet ON (the pick)
+- teamA should be the team/side being bet ON (the pick). For totals, teamA is the first-listed team in the matchup.
 - If you can detect the wager/stake amount in dollars, put it in wagerAmount (just the number, no $ sign)
 - If the slip has multiple bets/legs, return as parlay
 - Map the sport to the closest value from the valid sports list
