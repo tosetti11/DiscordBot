@@ -733,20 +733,6 @@
       </div>
 
       <!-- Edit Bet Modal (deprecated — editing now uses the main slip form) -->
-
-      <!-- Confirm Modal -->
-      <div id="confirm-modal" class="modal-overlay hidden">
-        <div class="modal-card modal-sm">
-          <div class="modal-header">
-            <h3 id="confirm-title">Confirm</h3>
-          </div>
-          <p id="confirm-message" class="confirm-msg"></p>
-          <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
-            <button id="confirm-action-btn" class="btn btn-danger">Confirm</button>
-          </div>
-        </div>
-      </div>
     </main>
 
     <!-- Reminders Page -->
@@ -1347,6 +1333,20 @@
       <p class="footer-copy">&copy; 2026 TheGamblingKing. All rights reserved.</p>
     </div>
   </footer>
+
+  <!-- Confirm Modal (global) -->
+  <div id="confirm-modal" class="modal-overlay hidden">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h3 id="confirm-title">Confirm</h3>
+      </div>
+      <p id="confirm-message" class="confirm-msg"></p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+        <button id="confirm-action-btn" class="btn btn-danger">Confirm</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Close Bet Modal -->
   <div id="close-bet-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeCloseBetModal()">

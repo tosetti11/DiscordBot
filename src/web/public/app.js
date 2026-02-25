@@ -2538,6 +2538,12 @@ async function executeDeleteBet() {
     }
     closeConfirmModal();
     loadBets();
+    if (closeBetsInitialized) {
+      const savedPerms = betsGuildPerms;
+      betsGuildPerms = closeBetsPerms;
+      loadCloseBets();
+      betsGuildPerms = savedPerms;
+    }
   } catch (e) {
     alert('Failed to delete bet');
   }
