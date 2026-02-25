@@ -120,11 +120,8 @@ function createWebServer() {
         imgSrc: ["'self'", "https://cdn.discordapp.com", "data:"],
         connectSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
         frameSrc: ["'self'", "https://e.widgetbot.io", "https://widgetbot.io", "https://discord.com"],
-        upgradeInsecureRequests: null, // Disable — no HTTPS on this server
       },
     },
-    // Disable HSTS — no HTTPS certificate on this server
-    strictTransportSecurity: false,
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false,
     crossOriginResourcePolicy: false,
