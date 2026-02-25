@@ -1134,7 +1134,7 @@ function createWebServer() {
   app.post('/api/bets/:betId/close', authMiddleware, async (req, res) => {
     try {
       const { betId } = req.params;
-      const { status, resultNote, communityMessage } = req.body;
+      const { status, resultNote, communityMessage, gifUrl } = req.body;
 
       if (!['win', 'loss', 'push'].includes(status)) {
         return res.status(400).json({ error: 'Status must be win, loss, or push' });
@@ -1189,9 +1189,14 @@ function createWebServer() {
           const resultEmoji = status === 'win' ? '✅' : status === 'loss' ? '❌' : '🔄';
           let content = `${resultEmoji} **${displayName}** closed a bet as **${status.toUpperCase()}**`;
 
-          // Append the user's community message (supports GIFs, emojis, etc.)
+          // Append the user's community message
           if (communityMessage && communityMessage.trim()) {
             content += `\n\n${communityMessage.trim()}`;
+          }
+
+          // If a GIF was selected, set it as the embed image so Discord renders it
+          if (gifUrl && gifUrl.trim()) {
+            embed.setImage(gifUrl.trim());
           }
 
           // Post the new message

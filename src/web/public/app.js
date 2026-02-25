@@ -1940,14 +1940,17 @@ async function reopenBet(betId) {
 // ── Close Bet Modal ──
 let closeBetPendingId = null;
 let closeBetPendingOutcome = null;
+let closeBetGifUrl = null;
 
 function closeBet(betId) {
   closeBetPendingId = betId;
   closeBetPendingOutcome = null;
+  closeBetGifUrl = null;
   // Reset UI
   document.querySelectorAll('.close-outcome-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('close-bet-message').value = '';
   document.getElementById('close-bet-confirm-btn').disabled = true;
+  clearGifPreview();
   document.getElementById('close-bet-modal').classList.remove('hidden');
 }
 
@@ -1966,8 +1969,24 @@ function closeCloseBetModal() {
   document.getElementById('gif-picker').classList.add('hidden');
   document.getElementById('emoji-picker-btn').classList.remove('active');
   document.getElementById('gif-picker-btn').classList.remove('active');
+  clearGifPreview();
   closeBetPendingId = null;
   closeBetPendingOutcome = null;
+  closeBetGifUrl = null;
+}
+
+function setGifPreview(url) {
+  closeBetGifUrl = url;
+  const wrap = document.getElementById('gif-preview-wrap');
+  wrap.innerHTML = `<img src="${url}" alt="GIF preview"><button type="button" class="gif-preview-remove" onclick="clearGifPreview()">&times;</button>`;
+  wrap.classList.remove('hidden');
+}
+
+function clearGifPreview() {
+  closeBetGifUrl = null;
+  const wrap = document.getElementById('gif-preview-wrap');
+  wrap.innerHTML = '';
+  wrap.classList.add('hidden');
 }
 
 async function confirmCloseBet() {
@@ -1981,7 +2000,7 @@ async function confirmCloseBet() {
     const res = await fetch(`/api/bets/${closeBetPendingId}/close`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: closeBetPendingOutcome, communityMessage: message || undefined })
+      body: JSON.stringify({ status: closeBetPendingOutcome, communityMessage: message || undefined, gifUrl: closeBetGifUrl || undefined })
     });
     const data = await res.json();
     if (data.error) {
@@ -2119,8 +2138,8 @@ async function searchGifs(query) {
       img.alt = gif.title || 'GIF';
       img.loading = 'lazy';
       img.onclick = () => {
-        // Insert GIF URL into textarea
-        insertAtCursor(document.getElementById('close-bet-message'), gif.url + ' ');
+        // Set GIF preview (don't insert URL into textarea)
+        setGifPreview(gif.url);
         // Close picker
         document.getElementById('gif-picker').classList.add('hidden');
         document.getElementById('gif-picker-btn').classList.remove('active');

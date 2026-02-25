@@ -3678,3 +3678,33 @@ textarea {
   padding: 20px 0;
   color: var(--text-secondary, #888);
 }
+
+/* ── GIF Preview (selected GIF) ── */
+.gif-preview-wrap {
+  position: relative;
+  margin-top: 8px;
+  display: inline-block;
+}
+.gif-preview-wrap.hidden { display: none; }
+.gif-preview-wrap img {
+  max-width: 100%;
+  max-height: 140px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #333);
+}
+.gif-preview-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0,0,0,.7);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+  padding: 0;
+}
