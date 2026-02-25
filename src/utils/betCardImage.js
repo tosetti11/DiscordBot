@@ -334,8 +334,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   }
 
   if (bet.is_whale) {
-    drawPill(ctx, tagX, curY, '🐋 WHALE', 'rgba(245, 197, 24, 0.15)', C.whaleGold, 10, '700', 7, 3);
-    tagX += ctx.measureText('🐋 WHALE').width + 24;
+    drawPill(ctx, tagX, curY, 'WHALE', 'rgba(245, 197, 24, 0.15)', C.whaleGold, 10, '700', 7, 3);
+    tagX += ctx.measureText('WHALE').width + 24;
   }
   if (bet.is_retro) {
     drawPill(ctx, tagX, curY, 'RETRO', 'rgba(255, 153, 0, 0.15)', C.retroOrange, 10, '700', 7, 3);
@@ -370,7 +370,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (bet.event_start_time) {
       ctx.font = '12px ' + FF;
       ctx.fillStyle = C.textMuted;
-      ctx.fillText(`⏰ ${bet.event_start_time}`, LEFT_BAR + PAD, curY + 13);
+      ctx.fillText(bet.event_start_time, LEFT_BAR + PAD, curY + 13);
       curY += 18;
     }
   }
@@ -392,15 +392,16 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
       // Leg header: status emoji + sport
       const legSport = (SPORT_NAMES[leg.sport] || leg.sport || '').toUpperCase();
-      const legStatusMap = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void: '⛔' };
-      const legEmoji = legStatusMap[leg.status] || '🟡';
-
-      ctx.font = '13px ' + FF;
-      ctx.fillStyle = C.textPrimary;
-      ctx.fillText(legEmoji, legX, curY + 13);
+      // Draw colored status dot for leg
+      const legDotColors = { open: C.accent, win: C.win, loss: '#D62300', push: '#808080', void: '#555' };
+      const dotColor = legDotColors[leg.status] || C.accent;
+      ctx.beginPath();
+      ctx.arc(legX + 5, curY + 8, 4, 0, Math.PI * 2);
+      ctx.fillStyle = dotColor;
+      ctx.fill();
       ctx.font = '600 10px ' + FF;
       ctx.fillStyle = C.textMuted;
-      ctx.fillText(legSport, legX + 22, curY + 12);
+      ctx.fillText(legSport, legX + 16, curY + 12);
       curY += 16;
 
       // Leg pick
@@ -432,7 +433,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       if (leg.event_start_time) {
         ctx.font = '11px ' + FF;
         ctx.fillStyle = C.textMuted;
-        ctx.fillText(`⏰ ${leg.event_start_time}`, legX, curY + 12);
+        ctx.fillText(leg.event_start_time, legX, curY + 12);
         curY += 15;
       }
 
@@ -503,7 +504,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     curY += 10;
     ctx.font = 'italic 12px ' + FF;
     ctx.fillStyle = C.textMuted;
-    const noteLines = wrapText(ctx, `📝 ${bet.bet_note}`, INNER - 20);
+    const noteLines = wrapText(ctx, bet.bet_note, INNER - 20);
     for (const nl of noteLines) {
       ctx.fillText(nl, LEFT_BAR + PAD + 10, curY + 12);
       curY += 16;
