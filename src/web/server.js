@@ -886,6 +886,45 @@ function createWebServer() {
     }
   });
 
+  // ─── Follow / Unfollow ───
+  const followsDb = require('../database/bettorFollows');
+
+  // Toggle follow on a bettor
+  app.post('/api/guilds/:guildId/follow', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const { bettorDiscordId } = req.body;
+      const followerDiscordId = req.user.discordId;
+
+      if (!bettorDiscordId) return res.status(400).json({ error: 'Missing bettorDiscordId' });
+      if (bettorDiscordId === followerDiscordId) return res.status(400).json({ error: 'Cannot follow yourself' });
+
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      const result = await followsDb.toggleFollow(followerDiscordId, bettorDiscordId, guildId);
+      res.json(result);
+    } catch (err) {
+      console.error('[API] Follow toggle error:', err);
+      res.status(500).json({ error: 'Failed to toggle follow' });
+    }
+  });
+
+  // Get who the current user follows in a guild
+  app.get('/api/guilds/:guildId/following', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      const following = await followsDb.getFollowing(req.user.discordId, guildId);
+      res.json({ following: following.map(f => f.bettor_discord_id) });
+    } catch (err) {
+      console.error('[API] Get following error:', err);
+      res.status(500).json({ error: 'Failed to get following' });
+    }
+  });
+
   // Get list of users in a guild (for user picker)
   app.get('/api/guilds/:guildId/users', authMiddleware, async (req, res) => {
     try {

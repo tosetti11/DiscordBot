@@ -1485,6 +1485,32 @@ textarea {
 .lb-val-pos { color: #43b581; }
 .lb-val-neg { color: #D62300; }
 
+/* ─── Follow Button ─── */
+.follow-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  line-height: 1;
+}
+.follow-btn:hover {
+  background: rgba(245, 197, 24, 0.15);
+  border-color: var(--gold);
+}
+.follow-btn.following {
+  border-color: var(--gold);
+  background: rgba(245, 197, 24, 0.1);
+}
+.ticket-brand .follow-btn {
+  font-size: 13px;
+  padding: 2px 6px;
+  margin-left: 6px;
+}
+
 @media (max-width: 600px) {
   .lb-entry {
     padding: 12px 14px;

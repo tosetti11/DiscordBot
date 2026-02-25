@@ -1876,6 +1876,10 @@ function renderLeaderboard() {
     return vb - va;
   });
 
+  // Load following set for this guild
+  const lbGuildId = document.getElementById('lb-guild').value;
+  if (lbGuildId && lbGuildId !== followGuildId) loadFollowing(lbGuildId);
+
   const wrap = document.getElementById('lb-table-wrap');
 
   if (sorted.length === 0) {
@@ -1933,6 +1937,7 @@ function renderLeaderboard() {
           <div class="lb-entry-record">${record} · ${entry.winPct}% · ROI ${entry.roi}%</div>
         </div>
         <div class="lb-entry-primary ${primaryClass}">${primaryVal}</div>
+        ${buildFollowBtn(entry.discordId)}
       </div>`;
   });
   html += '</div>';
@@ -1952,6 +1957,56 @@ const SPORT_NAMES = {
 };
 
 const STATUS_EMOJI = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void: '⛔' };
+
+// ─── Follow System ───
+let followedBettors = new Set();
+let followGuildId = null;
+
+async function loadFollowing(guildId) {
+  followGuildId = guildId;
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/following`);
+    const data = await res.json();
+    followedBettors = new Set(data.following || []);
+  } catch (e) {
+    console.error('[Follow] Failed to load following:', e);
+  }
+}
+
+async function toggleFollow(bettorDiscordId, guildId) {
+  if (!guildId) guildId = followGuildId;
+  if (!guildId) { showToast('Select a server first'); return; }
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/follow`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bettorDiscordId }),
+    });
+    const data = await res.json();
+    if (data.followed) {
+      followedBettors.add(bettorDiscordId);
+      showToast('✅ Following!');
+    } else {
+      followedBettors.delete(bettorDiscordId);
+      showToast('🔕 Unfollowed');
+    }
+    // Re-render any visible follow buttons
+    document.querySelectorAll(`.follow-btn[data-discord-id="${bettorDiscordId}"]`).forEach(btn => {
+      btn.textContent = data.followed ? '🔔' : '🔕';
+      btn.title = data.followed ? 'Following — click to unfollow' : 'Follow this bettor';
+      btn.classList.toggle('following', data.followed);
+    });
+  } catch (e) {
+    console.error('[Follow] Toggle error:', e);
+    showToast('Failed to update follow');
+  }
+}
+
+function buildFollowBtn(discordId) {
+  if (!discordId || discordId === currentUser?.discordId) return '';
+  const isFollowing = followedBettors.has(discordId);
+  return `<button class="follow-btn ${isFollowing ? 'following' : ''}" data-discord-id="${discordId}" onclick="event.stopPropagation();toggleFollow('${discordId}')" title="${isFollowing ? 'Following — click to unfollow' : 'Follow this bettor'}">${isFollowing ? '🔔' : '🔕'}</button>`;
+}
 
 let betsInitialized = false;
 let betsGuildPerms = {};
@@ -2149,6 +2204,9 @@ async function loadBets() {
   const guildId = document.getElementById('bets-guild').value;
   if (!guildId) return;
 
+  // Ensure follow set is loaded for this guild
+  if (guildId !== followGuildId) loadFollowing(guildId);
+
   const status = document.getElementById('bets-status').value;
   const sport = document.getElementById('bets-sport').value;
   const search = document.getElementById('bets-search').value.trim();
@@ -2309,6 +2367,7 @@ function renderBetCard(bet, showOwner = false) {
         <img src="/TheGamblingKing.jpg" alt="GK" class="ticket-brand-logo">
         <span class="ticket-brand-sep">│</span>
         <span class="ticket-brand-user">${esc(displayName)}</span>
+        ${!isOwnBet ? buildFollowBtn(bet.discordId) : ''}
       </div>
       <div class="ticket-status ticket-status-${bet.status}">${statusText}</div>
     </div>
