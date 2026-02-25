@@ -4,29 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TheGamblingKing | Bet Slip</title>
-  <script>
-    // Force service worker + cache reset for all users
-    (function() {
-      if (!('serviceWorker' in navigator)) return;
-      var resetKey = 'gk_sw_v9';
-      if (!localStorage.getItem(resetKey)) {
-        // Unregister all old service workers and clear caches
-        navigator.serviceWorker.getRegistrations().then(function(regs) {
-          var hadOld = regs.length > 0;
-          var tasks = regs.map(function(r) { return r.unregister(); });
-          if (typeof caches !== 'undefined') {
-            tasks.push(caches.keys().then(function(keys) {
-              return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-            }));
-          }
-          Promise.all(tasks).then(function() {
-            localStorage.setItem(resetKey, '1');
-            if (hadOld) { location.reload(); }
-          });
-        });
-      }
-    })();
-  </script>
   <link rel="icon" type="image/jpeg" href="/TheGamblingKing.jpg">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#f5c518">
