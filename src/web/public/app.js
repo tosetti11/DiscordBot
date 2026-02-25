@@ -2015,6 +2015,7 @@ function buildFollowBtn(discordId) {
 // ═══════════════════════════════════════════════
 
 let followingInitialized = false;
+let allMembersCache = []; // full list for search filtering
 
 function initFollowingPage() {
   if (followingInitialized) return;
@@ -2029,6 +2030,11 @@ function initFollowingPage() {
   });
 
   sel.addEventListener('change', loadFollowingPage);
+
+  // Live search filter
+  document.getElementById('following-search').addEventListener('input', () => {
+    renderMembersList(allMembersCache);
+  });
 
   if (currentUser.guilds.length === 1) {
     autoSelectGuild(sel);
@@ -2045,40 +2051,31 @@ async function loadFollowingPage() {
   document.getElementById('following-loading').classList.remove('hidden');
   document.getElementById('following-list').classList.add('hidden');
   document.getElementById('following-empty').classList.add('hidden');
+  document.getElementById('following-search').value = '';
 
   try {
-    const res = await fetch(`/api/guilds/${guildId}/following`);
+    const res = await fetch(`/api/guilds/${guildId}/members`);
     const data = await res.json();
-    const details = data.details || [];
+    const members = data.members || [];
+    const followingIds = new Set(data.followingIds || []);
 
-    // Update the global follow set
+    // Update global follow set
     followGuildId = guildId;
-    followedBettors = new Set(data.following || []);
+    followedBettors = followingIds;
 
-    document.getElementById('following-loading').classList.add('hidden');
+    // Tag each member with follow status
+    members.forEach(m => { m.isFollowed = followingIds.has(m.discordId); });
 
-    if (details.length === 0) {
-      document.getElementById('following-empty').classList.remove('hidden');
-      return;
-    }
-
-    const listEl = document.getElementById('following-list');
-    listEl.classList.remove('hidden');
-
-    let html = '';
-    details.forEach(user => {
-      const avatarUrl = user.avatar || '/TheGamblingKing.jpg';
-      html += `
-        <div class="following-card" data-discord-id="${user.discordId}">
-          <img src="${esc(avatarUrl)}" alt="" class="following-avatar">
-          <div class="following-info">
-            <div class="following-name">${esc(user.displayName)}</div>
-            <div class="following-sub">You'll get a DM when they post a bet</div>
-          </div>
-          <button class="btn-unfollow" onclick="unfollowFromPage('${user.discordId}', '${guildId}')">Unfollow</button>
-        </div>`;
+    // Sort: TheKing first, then alphabetical
+    members.sort((a, b) => {
+      if (a.isKing && !b.isKing) return -1;
+      if (!a.isKing && b.isKing) return 1;
+      return a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' });
     });
-    listEl.innerHTML = html;
+
+    allMembersCache = members;
+    document.getElementById('following-loading').classList.add('hidden');
+    renderMembersList(members);
   } catch (e) {
     console.error('[Following] Load error:', e);
     document.getElementById('following-loading').classList.add('hidden');
@@ -2086,7 +2083,49 @@ async function loadFollowingPage() {
   }
 }
 
-async function unfollowFromPage(discordId, guildId) {
+function renderMembersList(members) {
+  const query = (document.getElementById('following-search').value || '').toLowerCase().trim();
+  const filtered = query
+    ? members.filter(m => m.displayName.toLowerCase().includes(query) || (m.username && m.username.toLowerCase().includes(query)))
+    : members;
+
+  const listEl = document.getElementById('following-list');
+
+  if (filtered.length === 0) {
+    listEl.classList.add('hidden');
+    document.getElementById('following-empty').classList.remove('hidden');
+    return;
+  }
+
+  document.getElementById('following-empty').classList.add('hidden');
+  listEl.classList.remove('hidden');
+
+  const guildId = document.getElementById('following-guild').value;
+  let html = '';
+  filtered.forEach(user => {
+    const avatarUrl = user.avatar || '/TheGamblingKing.jpg';
+    const isFollowed = followedBettors.has(user.discordId);
+    const kingBadge = user.isKing ? '<span class="king-badge">👑</span>' : '';
+    const followBtnClass = isFollowed ? 'btn-following-toggle following' : 'btn-following-toggle';
+    const followBtnText = isFollowed ? '🔔 Following' : '🔕 Follow';
+
+    html += `
+      <div class="following-card" data-discord-id="${user.discordId}">
+        <img src="${esc(avatarUrl)}" alt="" class="following-avatar">
+        <div class="following-info">
+          <div class="following-name">${kingBadge}${esc(user.displayName)}</div>
+          <div class="following-sub">@${esc(user.username || user.displayName)}</div>
+        </div>
+        <div class="following-actions">
+          <a href="https://discord.com/users/${user.discordId}" target="_blank" class="btn-dm" title="Message on Discord">💬</a>
+          <button class="${followBtnClass}" data-discord-id="${user.discordId}" onclick="toggleFollowFromPage('${user.discordId}', '${guildId}')">${followBtnText}</button>
+        </div>
+      </div>`;
+  });
+  listEl.innerHTML = html;
+}
+
+async function toggleFollowFromPage(discordId, guildId) {
   try {
     const res = await fetch(`/api/guilds/${guildId}/follow`, {
       method: 'POST',
@@ -2094,34 +2133,35 @@ async function unfollowFromPage(discordId, guildId) {
       body: JSON.stringify({ bettorDiscordId: discordId }),
     });
     const data = await res.json();
-    if (!data.followed) {
+
+    if (data.followed) {
+      followedBettors.add(discordId);
+      showToast('✅ Following!');
+    } else {
       followedBettors.delete(discordId);
-      // Animate removal
-      const card = document.querySelector(`.following-card[data-discord-id="${discordId}"]`);
-      if (card) {
-        card.style.transition = 'opacity 0.3s, transform 0.3s';
-        card.style.opacity = '0';
-        card.style.transform = 'translateX(30px)';
-        setTimeout(() => {
-          card.remove();
-          // Check if list empty
-          const listEl = document.getElementById('following-list');
-          if (!listEl.children.length) {
-            listEl.classList.add('hidden');
-            document.getElementById('following-empty').classList.remove('hidden');
-          }
-        }, 300);
-      }
       showToast('🔕 Unfollowed');
-      // Update any visible follow buttons
-      document.querySelectorAll(`.follow-btn[data-discord-id="${discordId}"]`).forEach(btn => {
-        btn.textContent = '🔕';
-        btn.title = 'Follow this bettor';
-        btn.classList.remove('following');
-      });
     }
+
+    // Update the member cache
+    const member = allMembersCache.find(m => m.discordId === discordId);
+    if (member) member.isFollowed = data.followed;
+
+    // Update the button in-place
+    const card = document.querySelector(`.following-card[data-discord-id="${discordId}"]`);
+    if (card) {
+      const btn = card.querySelector('.btn-following-toggle');
+      btn.classList.toggle('following', data.followed);
+      btn.textContent = data.followed ? '🔔 Following' : '🔕 Follow';
+    }
+
+    // Update any follow buttons on other pages
+    document.querySelectorAll(`.follow-btn[data-discord-id="${discordId}"]`).forEach(btn => {
+      btn.textContent = data.followed ? '🔔' : '🔕';
+      btn.title = data.followed ? 'Following — click to unfollow' : 'Follow this bettor';
+      btn.classList.toggle('following', data.followed);
+    });
   } catch (e) {
-    showToast('Failed to unfollow');
+    showToast('Failed to update follow');
   }
 }
 

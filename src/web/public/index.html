@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=31">
+  <link rel="stylesheet" href="/style.css?v=32">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -702,24 +702,24 @@
       <div class="following-container">
         <div class="following-header">
           <h2>🔔 The Inner Circle</h2>
-          <p class="slip-subtitle">Manage who you follow — get DM'd when they post new bets</p>
+          <p class="slip-subtitle">Follow bettors to get DM'd when they post new bets</p>
         </div>
 
         <div class="following-controls">
           <select id="following-guild" class="form-select">
             <option value="">Select Server</option>
           </select>
+          <input type="text" id="following-search" class="form-input" placeholder="Search members...">
         </div>
 
         <div id="following-loading" class="stats-loading hidden">
           <div class="loading-spinner"></div>
-          <p>Loading...</p>
+          <p>Loading members...</p>
         </div>
 
         <div id="following-empty" class="stats-empty hidden">
-          <div class="empty-icon">📭</div>
-          <p>You're not following anyone in this server yet.</p>
-          <p style="color:var(--text-muted);font-size:13px;margin-top:8px">Follow bettors from the 🏆 Rankings page or from bet cards.</p>
+          <div class="empty-icon">💭</div>
+          <p>No members found.</p>
         </div>
 
         <div id="following-list" class="following-list hidden"></div>
@@ -1485,6 +1485,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=38"></script>
+  <script src="/app.js?v=39"></script>
 </body>
 </html>

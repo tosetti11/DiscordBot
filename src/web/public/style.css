@@ -1527,15 +1527,21 @@ textarea {
   color: var(--gold);
 }
 .following-controls {
+  display: flex;
+  gap: 10px;
   margin-bottom: 20px;
 }
 .following-controls .form-select {
-  width: 100%;
+  flex: 0 0 auto;
+  min-width: 160px;
+}
+.following-controls .form-input {
+  flex: 1;
 }
 .following-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .following-card {
   display: flex;
@@ -1544,12 +1550,12 @@ textarea {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 14px 18px;
+  padding: 12px 16px;
   transition: opacity 0.3s, transform 0.3s;
 }
 .following-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
@@ -1560,32 +1566,86 @@ textarea {
 }
 .following-name {
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.king-badge {
+  font-size: 14px;
 }
 .following-sub {
   font-size: 12px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 1px;
 }
-.btn-unfollow {
-  background: rgba(214, 35, 0, 0.12);
-  color: #D62300;
-  border: 1px solid rgba(214, 35, 0, 0.3);
+.following-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.btn-dm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(88, 101, 242, 0.12);
+  border: 1px solid rgba(88, 101, 242, 0.3);
+  text-decoration: none;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+.btn-dm:hover {
+  background: rgba(88, 101, 242, 0.25);
+  border-color: #5865F2;
+}
+.btn-following-toggle {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  flex-shrink: 0;
+  white-space: nowrap;
 }
-.btn-unfollow:hover {
-  background: rgba(214, 35, 0, 0.25);
+.btn-following-toggle:hover {
+  background: rgba(245, 197, 24, 0.1);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.btn-following-toggle.following {
+  background: rgba(245, 197, 24, 0.12);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.btn-following-toggle.following:hover {
+  background: rgba(214, 35, 0, 0.12);
   border-color: #D62300;
+  color: #D62300;
+}
+
+@media (max-width: 600px) {
+  .following-controls {
+    flex-direction: column;
+  }
+  .following-card {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .btn-following-toggle {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
 }
 
 @media (max-width: 600px) {

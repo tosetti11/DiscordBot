@@ -941,6 +941,40 @@ function createWebServer() {
     }
   });
 
+  // Get all guild members with follow status (for The Inner Circle page)
+  app.get('/api/guilds/:guildId/members', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      const guild = discordClient?.guilds.cache.get(guildId);
+      if (!guild) return res.json({ members: [], followingIds: [] });
+
+      // Fetch all guild members
+      await guild.members.fetch();
+      const members = guild.members.cache
+        .filter(m => !m.user.bot)
+        .filter(m => m.id !== req.user.discordId) // exclude self
+        .map(m => ({
+          discordId: m.id,
+          displayName: m.displayName || m.user.username,
+          username: m.user.username,
+          avatar: m.user.displayAvatarURL({ size: 64 }),
+          isKing: m.id === SITE_OWNER_ID,
+        }));
+
+      // Get who the current user follows
+      const following = await followsDb.getFollowing(req.user.discordId, guildId);
+      const followingIds = following.map(f => f.bettor_discord_id);
+
+      res.json({ members, followingIds });
+    } catch (err) {
+      console.error('[API] Members error:', err);
+      res.status(500).json({ error: 'Failed to fetch members' });
+    }
+  });
+
   // Get list of users in a guild (for user picker)
   app.get('/api/guilds/:guildId/users', authMiddleware, async (req, res) => {
     try {
