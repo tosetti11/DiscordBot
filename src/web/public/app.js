@@ -3602,6 +3602,22 @@ async function sendShareToDiscord() {
   btn.textContent = 'Sending...';
 
   try {
+    // Resolve display info for the Discord message
+    let shareUserName = '';
+    let sharePeriod = '';
+    if (sharePageType === 'stats') {
+      const userSel = document.getElementById('stats-user');
+      shareUserName = (!userSel.value && currentUser) ? currentUser.displayName
+        : (userSel.selectedIndex >= 0 ? userSel.options[userSel.selectedIndex].text : '');
+      const periodSel = document.getElementById('stats-period');
+      sharePeriod = periodSel.selectedIndex >= 0 ? periodSel.options[periodSel.selectedIndex].text : 'All Time';
+    } else if (sharePageType === 'leaderboard') {
+      const typeSel = document.getElementById('lb-type');
+      shareUserName = typeSel.selectedIndex >= 0 ? typeSel.options[typeSel.selectedIndex].text : 'Leaderboard';
+      const catSel = document.getElementById('lb-category');
+      sharePeriod = catSel.selectedIndex >= 0 ? catSel.options[catSel.selectedIndex].text : '';
+    }
+
     const res = await fetch('/api/share-to-discord', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3610,6 +3626,8 @@ async function sendShareToDiscord() {
         channelId,
         pageType: sharePageType,
         imageData: shareCapturedImage,
+        userName: shareUserName,
+        periodLabel: sharePeriod,
       }),
     });
     const text = await res.text();

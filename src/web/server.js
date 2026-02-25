@@ -1405,7 +1405,7 @@ function createWebServer() {
 
   app.post('/api/share-to-discord', authMiddleware, imageJsonParser, postLimiter, async (req, res) => {
     try {
-      const { guildId, channelId, pageType, imageData } = req.body;
+      const { guildId, channelId, pageType, imageData, userName, periodLabel } = req.body;
       if (!guildId || !channelId || !pageType || !imageData) {
         const missing = [];
         if (!guildId) missing.push('guildId');
@@ -1445,17 +1445,31 @@ function createWebServer() {
         displayName = member.displayName;
       } catch (e) {}
 
-      const { AttachmentBuilder } = require('discord.js');
+      const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
       const ext = imgFormat === 'jpeg' ? 'jpg' : 'png';
       const filename = pageType === 'stats' ? `stats.${ext}` : `leaderboard.${ext}`;
       const attachment = new AttachmentBuilder(imgBuffer, { name: filename });
 
-      // Send as direct file attachment (not embed) so Discord shows it full-width
-      await channel.send({
-        content: `*Shared by ${displayName} via TheGamblingKing*`,
-        files: [attachment],
-      });
+      // Build a dynamic message
+      const safeName = (userName || displayName || 'someone').replace(/[*_~`|]/g, '');
+      const safePeriod = (periodLabel || '').replace(/[*_~`|]/g, '');
+      let messageText;
+      if (pageType === 'stats') {
+        messageText = `Hey Boys! Check out **${safeName}'s** stats for **${safePeriod || 'All Time'}**! 🎰`;
+      } else {
+        messageText = `Hey Boys! Check out the **${safeName}** leaderboard${safePeriod ? ' — **' + safePeriod + '**' : ''}! 🏆`;
+      }
+
+      const title = pageType === 'stats' ? '📊 Statistics' : '🏆 Rankings';
+      const embed = new EmbedBuilder()
+        .setColor(0xF5C518)
+        .setTitle(title)
+        .setImage(`attachment://${filename}`)
+        .setTimestamp()
+        .setFooter({ text: `Shared by ${displayName} • TheGamblingKing` });
+
+      await channel.send({ content: messageText, embeds: [embed], files: [attachment] });
 
       res.json({ success: true });
     } catch (err) {
