@@ -3363,3 +3363,199 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+
+// ═══════════════════════════════════════════════
+//   SHARE TO DISCORD
+// ═══════════════════════════════════════════════
+
+let sharePageType = null;
+let shareChannelsCache = {}; // guildId -> channels[]
+
+function openShareModal(pageType) {
+  sharePageType = pageType;
+  const modal = document.getElementById('share-modal');
+  const channelSelect = document.getElementById('share-channel');
+
+  // Figure out which guild is currently selected on the page
+  const guildId = getShareGuildId(pageType);
+  if (!guildId) {
+    showToast('Select a server first');
+    return;
+  }
+
+  // Set description based on page
+  const desc = document.getElementById('share-modal-desc');
+  if (pageType === 'stats') {
+    desc.textContent = 'Post your statistics to a Discord channel';
+  } else if (pageType === 'leaderboard') {
+    desc.textContent = 'Post the current leaderboard to a Discord channel';
+  }
+
+  // Load channels for the guild
+  loadShareChannels(guildId, channelSelect);
+
+  modal.classList.remove('hidden');
+}
+
+function closeShareModal() {
+  document.getElementById('share-modal').classList.add('hidden');
+  sharePageType = null;
+}
+
+function getShareGuildId(pageType) {
+  if (pageType === 'stats') {
+    return document.getElementById('stats-guild').value;
+  } else if (pageType === 'leaderboard') {
+    return document.getElementById('lb-guild').value;
+  }
+  return null;
+}
+
+async function loadShareChannels(guildId, selectEl) {
+  selectEl.innerHTML = '<option value="" disabled selected>Loading...</option>';
+  selectEl.disabled = true;
+
+  try {
+    // Use cache to avoid redundant fetches
+    if (!shareChannelsCache[guildId]) {
+      const res = await fetch(`/api/guilds/${guildId}/channels`);
+      shareChannelsCache[guildId] = await res.json();
+    }
+    const channels = shareChannelsCache[guildId];
+
+    selectEl.innerHTML = '<option value="" disabled selected>Select channel</option>';
+    const grouped = {};
+    channels.forEach(c => {
+      const cat = c.category || 'General';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(c);
+    });
+
+    Object.entries(grouped).forEach(([cat, chs]) => {
+      const group = document.createElement('optgroup');
+      group.label = cat;
+      chs.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `#${c.name}`;
+        group.appendChild(opt);
+      });
+      selectEl.appendChild(group);
+    });
+    selectEl.disabled = false;
+  } catch (e) {
+    selectEl.innerHTML = '<option value="" disabled selected>Error loading channels</option>';
+  }
+}
+
+function gatherStatsPayload() {
+  const period = document.getElementById('stats-period');
+  const periodLabel = period.options[period.selectedIndex]?.textContent || 'All Time';
+
+  // Which user is being viewed
+  const userSelect = document.getElementById('stats-user');
+  const targetName = (userSelect.value && userSelect.selectedIndex > 0)
+    ? userSelect.options[userSelect.selectedIndex].textContent
+    : (currentUser.displayName || currentUser.username);
+
+  const record = document.getElementById('kpi-record')?.textContent || '—';
+  const winPct = document.getElementById('kpi-winpct')?.textContent?.replace('%', '') || '0';
+  const netText = document.getElementById('kpi-net')?.textContent?.replace('u', '') || '0';
+  const roi = document.getElementById('kpi-roi')?.textContent?.replace('%', '') || '0';
+  const total = document.getElementById('kpi-total')?.textContent || '0';
+  const open = document.getElementById('kpi-open')?.textContent || '0';
+
+  // Highlights
+  const streak = document.getElementById('hl-streak')?.textContent || '';
+  const avgOdds = document.getElementById('hl-avg-odds')?.textContent || '';
+  const wagered = document.getElementById('hl-wagered')?.textContent?.replace('u', '') || '';
+
+  // Best / worst
+  const bestVal = document.getElementById('hl-best')?.textContent || '';
+  const bestDetail = document.getElementById('hl-best-detail')?.textContent || '';
+  const worstVal = document.getElementById('hl-worst')?.textContent || '';
+  const worstDetail = document.getElementById('hl-worst-detail')?.textContent || '';
+
+  return {
+    targetName,
+    periodLabel,
+    record,
+    winPct,
+    netUnits: parseFloat(netText) || 0,
+    roi,
+    total,
+    open,
+    streak: streak !== '—' ? streak : null,
+    avgOdds: avgOdds !== '—' ? avgOdds : null,
+    wagered: wagered !== '—' ? wagered : null,
+    bestBet: bestVal && bestVal !== '—' ? `${bestVal} ${bestDetail}` : null,
+    worstBet: worstVal && worstVal !== '—' ? `${worstVal} ${worstDetail}` : null,
+  };
+}
+
+function gatherLeaderboardPayload() {
+  const typeSelect = document.getElementById('lb-type');
+  const catSelect = document.getElementById('lb-category');
+  const boardLabel = typeSelect.options[typeSelect.selectedIndex]?.textContent || 'Personal Bets';
+  const categoryLabel = catSelect.options[catSelect.selectedIndex]?.textContent || 'Net Units';
+  const category = catSelect.value;
+
+  // Read entries from the rendered leaderboard DOM
+  const entries = [];
+  document.querySelectorAll('#lb-table-wrap .lb-entry').forEach(el => {
+    const name = el.querySelector('.lb-entry-name')?.textContent || '?';
+    const record = el.querySelector('.lb-entry-record')?.textContent || '';
+    const value = el.querySelector('.lb-entry-primary')?.textContent || '';
+    entries.push({ name, record, value });
+  });
+
+  return { boardLabel, categoryLabel, entries };
+}
+
+async function sendShareToDiscord() {
+  const channelId = document.getElementById('share-channel').value;
+  if (!channelId) {
+    showToast('Select a channel');
+    return;
+  }
+
+  const guildId = getShareGuildId(sharePageType);
+  if (!guildId) {
+    showToast('No server selected');
+    return;
+  }
+
+  let payload;
+  if (sharePageType === 'stats') {
+    payload = gatherStatsPayload();
+  } else if (sharePageType === 'leaderboard') {
+    payload = gatherLeaderboardPayload();
+  } else {
+    showToast('Nothing to share');
+    return;
+  }
+
+  const btn = document.getElementById('share-send-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  try {
+    const res = await fetch('/api/share-to-discord', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guildId, channelId, pageType: sharePageType, payload }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Shared to Discord!');
+      closeShareModal();
+    } else {
+      showToast(data.error || 'Failed to share');
+    }
+  } catch (e) {
+    showToast('Failed to share');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="12" viewBox="0 0 71 55" fill="currentColor"><path d="M60.1 4.9A58.5 58.5 0 0045.4.2a.2.2 0 00-.2.1 40.8 40.8 0 00-1.8 3.7 54 54 0 00-16.2 0A37.4 37.4 0 0025.4.3a.2.2 0 00-.2-.1A58.4 58.4 0 0010.5 5 59.6 59.6 0 00.4 45.1a.3.3 0 00.1.2 58.7 58.7 0 0017.7 9 .2.2 0 00.3-.1 42 42 0 003.6-5.9.2.2 0 00-.1-.3 38.7 38.7 0 01-5.5-2.6.2.2 0 01 0-.4l1.1-.9a.2.2 0 01.2 0 41.8 41.8 0 0035.6 0 .2.2 0 01.2 0l1.1.9a.2.2 0 010 .4 36.4 36.4 0 01-5.5 2.6.2.2 0 00-.1.3 47.2 47.2 0 003.6 5.9.2.2 0 00.3.1 58.5 58.5 0 0017.7-9 .3.3 0 00.1-.2c1.5-15.5-2.5-29-10.5-40.2zM23.7 37c-3.5 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.2 6.3 7-2.8 7-6.3 7zm23.2 0c-3.5 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.2 6.3 7-2.8 7-6.3 7z"/></svg> Send`;
+  }
+}

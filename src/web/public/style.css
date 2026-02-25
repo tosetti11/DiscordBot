@@ -3329,3 +3329,72 @@ textarea {
   }
   .chat-widget-wrap iframe { border-radius: 0; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   SHARE TO DISCORD BUTTON & MODAL
+   ════════════════════════════════════════════════════════════ */
+
+.btn-share-discord {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #5865F2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  margin-top: 8px;
+}
+
+.btn-share-discord:hover {
+  background: #4752C4;
+  transform: translateY(-1px);
+}
+
+.btn-share-discord:active {
+  transform: translateY(0);
+}
+
+.btn-share-discord svg {
+  flex-shrink: 0;
+}
+
+/* Share send button in modal */
+.btn-share-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #5865F2 !important;
+  color: #fff !important;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-share-send:hover:not(:disabled) {
+  background: #4752C4 !important;
+}
+
+.btn-share-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.share-modal-body {
+  margin-bottom: 8px;
+}
+
+.share-modal-desc {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}

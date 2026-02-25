@@ -1382,6 +1382,115 @@ function createWebServer() {
     }
   });
 
+  // ─── Share to Discord API ───
+
+  app.post('/api/share-to-discord', authMiddleware, postLimiter, async (req, res) => {
+    try {
+      const { guildId, channelId, pageType, payload } = req.body;
+      if (!guildId || !channelId || !pageType || !payload) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Verify user is in guild
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      const guild = discordClient?.guilds.cache.get(guildId);
+      if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+      const channel = await discordClient.channels.fetch(channelId);
+      if (!channel) return res.status(404).json({ error: 'Channel not found' });
+
+      // Resolve display name
+      let displayName = req.user.displayName || req.user.username || 'Unknown';
+      try {
+        const member = await fetchMember(guild, req.user.discordId);
+        displayName = member.displayName;
+      } catch (e) {}
+
+      const { EmbedBuilder } = require('discord.js');
+
+      if (pageType === 'stats') {
+        const d = payload;
+        const targetName = d.targetName || displayName;
+        const periodLabel = d.periodLabel || 'All Time';
+
+        const embed = new EmbedBuilder()
+          .setColor(0xF5C518)
+          .setAuthor({ name: `${targetName}'s Stats`, iconURL: req.user.avatar || undefined })
+          .setTitle(`📊 ${periodLabel} Statistics`)
+          .setThumbnail('https://thegamblingkingapp.com/TheGamblingKing.jpg')
+          .setTimestamp()
+          .setFooter({ text: `Shared by ${displayName} • TheGamblingKing` });
+
+        // Overview
+        const record = d.record || '—';
+        const winPct = d.winPct ?? '—';
+        const netUnits = d.netUnits ?? '—';
+        const roi = d.roi ?? '—';
+        const total = d.total ?? '—';
+        const open = d.open ?? '—';
+
+        embed.addFields(
+          { name: '📋 Record', value: `${record}`, inline: true },
+          { name: '🎯 Win %', value: `${winPct}%`, inline: true },
+          { name: '💰 Net Units', value: `${netUnits >= 0 ? '+' : ''}${netUnits}u`, inline: true },
+          { name: '📈 ROI', value: `${roi}%`, inline: true },
+          { name: '🎟️ Total', value: `${total}`, inline: true },
+          { name: '🟡 Open', value: `${open}`, inline: true },
+        );
+
+        // Highlights
+        if (d.streak) embed.addFields({ name: '🔥 Streak', value: d.streak, inline: true });
+        if (d.avgOdds) embed.addFields({ name: '📊 Avg Odds', value: `${d.avgOdds}`, inline: true });
+        if (d.wagered) embed.addFields({ name: '🎰 Wagered', value: `${d.wagered}u`, inline: true });
+
+        // Best / Worst
+        if (d.bestBet) embed.addFields({ name: '💰 Best Bet', value: d.bestBet, inline: true });
+        if (d.worstBet) embed.addFields({ name: '💸 Worst Bet', value: d.worstBet, inline: true });
+
+        await channel.send({ embeds: [embed] });
+
+      } else if (pageType === 'leaderboard') {
+        const d = payload;
+        const boardLabel = d.boardLabel || 'Personal Bets';
+        const categoryLabel = d.categoryLabel || 'Net Units';
+
+        const embed = new EmbedBuilder()
+          .setColor(0xF5C518)
+          .setTitle(`🏆 Rankings — ${boardLabel}`)
+          .setDescription(`Sorted by **${categoryLabel}**`)
+          .setThumbnail('https://thegamblingkingapp.com/TheGamblingKing.jpg')
+          .setTimestamp()
+          .setFooter({ text: `Shared by ${displayName} • TheGamblingKing` });
+
+        // Build rankings string
+        const medals = ['🥇', '🥈', '🥉'];
+        let rankings = '';
+        (d.entries || []).slice(0, 10).forEach((entry, i) => {
+          const rank = medals[i] || `**${i + 1}.**`;
+          rankings += `${rank} **${entry.name}** — ${entry.value} (${entry.record})\n`;
+        });
+
+        if (rankings) {
+          embed.addFields({ name: `Top ${Math.min(d.entries.length, 10)}`, value: rankings.trim() });
+        } else {
+          embed.addFields({ name: 'Rankings', value: 'No data available' });
+        }
+
+        await channel.send({ embeds: [embed] });
+
+      } else {
+        return res.status(400).json({ error: 'Unknown page type' });
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[API] Share to Discord error:', err);
+      res.status(500).json({ error: 'Failed to share to Discord' });
+    }
+  });
+
   // ─── Reminders API ───
 
   app.get('/api/guilds/:guildId/reminders', authMiddleware, async (req, res) => {
