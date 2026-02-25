@@ -157,7 +157,16 @@ function createWebServer() {
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
+    res.set('Service-Worker-Allowed', '/');
     res.sendFile(path.join(__dirname, 'public', 'service-worker.js'));
+  });
+
+  // One-time cache nuke: serve the main page with Clear-Site-Data to reset all caches/SW
+  // The query param ?_sw_reset=1 triggers it; the inline script adds it if needed
+  app.get('/', (req, res, next) => {
+    // Clear old service worker caches for all users  
+    res.set('Clear-Site-Data', '"cache"');
+    next();
   });
 
   app.use(express.static(path.join(__dirname, 'public'), {
