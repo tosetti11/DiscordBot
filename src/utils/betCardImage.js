@@ -151,7 +151,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   let y = 0;
 
   // Header height
-  const HEADER_H = 48;
+  const isWhale = bet.is_whale || false;
+  const HEADER_H = isWhale ? 72 : 48;
   y += HEADER_H;
   y += 1; // divider
 
@@ -215,6 +216,10 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   const FOOTER_H = 38;
   y += FOOTER_H;
 
+  // Whale bottom decoration
+  const WHALE_BOTTOM_H = isWhale ? 30 : 0;
+  y += WHALE_BOTTOM_H;
+
   const H = y + 4; // small bottom padding
   const LEFT_BAR = 5; // status accent bar width
 
@@ -258,10 +263,11 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   ctx.fillRect(LEFT_BAR, 0, W - LEFT_BAR, HEADER_H);
   ctx.restore();
 
-  // Brand logo
+  // Brand logo — position within top 48px of header
+  const HDR_CONTENT = 48;
   const logoSize = 28;
   const logoX = LEFT_BAR + PAD;
-  const logoY = (HEADER_H - logoSize) / 2;
+  const logoY = (HDR_CONTENT - logoSize) / 2;
   if (brandLogo) {
     ctx.save();
     ctx.beginPath();
@@ -282,14 +288,14 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   const sepX = logoX + logoSize + 8;
   ctx.font = '300 18px ' + FF;
   ctx.fillStyle = 'rgba(255, 135, 50, 0.3)';
-  ctx.fillText('│', sepX, HEADER_H / 2 + 6);
+  ctx.fillText('│', sepX, HDR_CONTENT / 2 + 6);
 
   // Username
   const nameX = sepX + 14;
   ctx.font = 'bold 13px ' + FF;
   ctx.fillStyle = C.textSecondary;
   const truncName = displayName.length > 20 ? displayName.slice(0, 18) + '…' : displayName;
-  ctx.fillText(truncName, nameX, HEADER_H / 2 + 5);
+  ctx.fillText(truncName, nameX, HDR_CONTENT / 2 + 5);
 
   // Status badge (right side)
   const badgeText = statusLabel;
@@ -297,13 +303,22 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   const badgeW = ctx.measureText(badgeText).width + 20;
   const badgeH = 22;
   const badgeX = W - PAD - badgeW;
-  const badgeY = (HEADER_H - badgeH) / 2;
+  const badgeY = (HDR_CONTENT - badgeH) / 2;
   roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 4);
   ctx.fillStyle = sc.bgBadge;
   ctx.fill();
   ctx.fillStyle = sc.text;
   ctx.font = '800 11px ' + FF;
   ctx.fillText(badgeText, badgeX + 10, badgeY + 15);
+
+  // Whale decoration row (header)
+  if (isWhale) {
+    const decoText = '\u{1F6A8}\u{1F6A8}\u{1F40B}\u{1F346}\u{1F40B}\u{1F346}\u{1F40B}\u{1F346}\u{1F346}\u{1F40B}\u{1F346}\u{1F40B}\u{1F346}\u{1F40B}\u{1F6A8}\u{1F6A8}';
+    ctx.font = '14px ' + FF;
+    const decoW = ctx.measureText(decoText).width;
+    ctx.fillStyle = C.whaleGold;
+    ctx.fillText(decoText, (W - decoW) / 2, HEADER_H - 10);
+  }
 
   curY = HEADER_H;
 
@@ -532,6 +547,15 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   ctx.fillStyle = C.textMuted;
   const dateW = ctx.measureText(dateStr).width;
   ctx.fillText(dateStr, W - PAD - dateW, curY + 24);
+
+  // Whale bottom decoration row
+  if (isWhale) {
+    const decoText = '\u{1F6A8}\u{1F6A8}\u{1F40B}\u{1F346}\u{1F40B}\u{1F346}\u{1F40B}\u{1F346}\u{1F346}\u{1F40B}\u{1F346}\u{1F40B}\u{1F346}\u{1F40B}\u{1F6A8}\u{1F6A8}';
+    ctx.font = '14px ' + FF;
+    const decoW = ctx.measureText(decoText).width;
+    ctx.fillStyle = C.whaleGold;
+    ctx.fillText(decoText, (W - decoW) / 2, curY + FOOTER_H + 18);
+  }
 
   // ── Export PNG ──
   return canvas.toBuffer('image/png');

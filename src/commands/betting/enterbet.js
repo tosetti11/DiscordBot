@@ -97,7 +97,7 @@ const {
 const { PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
 const { SPORTS } = require('../../config/constants');
 const { americanToDecimal, decimalToAmerican } = require('../../utils/odds');
-const { buildBetEmbed, buildWhaleBetEmbed } = require('../../utils/embeds');
+const { buildBetEmbed } = require('../../utils/embeds');
 const { generateBetCardImage } = require('../../utils/betCardImage');
 const db = require('../../database/queries');
 
@@ -1296,22 +1296,18 @@ async function saveParlayBet(interaction, session) {
 
     const isWhale = session.isWhale || false;
 
-    // Build image attachment for non-whale bets, embed for whale bets
-    let sendPayload;
-    if (isWhale) {
-      const embed = buildWhaleBetEmbed(fullBet, displayName, bettor.displayAvatarURL());
-      sendPayload = { embeds: [embed] };
-    } else {
-      const imgBuffer = await generateBetCardImage(fullBet, displayName, bettor.displayAvatarURL());
-      const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
-      sendPayload = { files: [attachment] };
-    }
+    // Build image attachment
+    const imgBuffer = await generateBetCardImage(fullBet, displayName, bettor.displayAvatarURL());
+    const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+    const sendPayload = { files: [attachment] };
 
     // Post to channel (channel already resolved above)
     if (session.isRetro) {
       // Retro — post without tail poll
       const retroLabel = `📋 **RETRO SLIP** — ${session.retroResult.toUpperCase()}`;
-      sendPayload.content = isWhale ? `🚨🐋 **WHALE DICK RETRO** 🐋🚨\n${retroLabel}` : retroLabel;
+      sendPayload.content = isWhale
+        ? `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\n${retroLabel}\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`
+        : retroLabel;
       const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     } else {
@@ -1328,7 +1324,7 @@ async function saveParlayBet(interaction, session) {
           .setStyle(ButtonStyle.Danger)
       );
 
-      const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
+      const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
       sendPayload.components = [pollRow];
       sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
       const message = await channel.send(sendPayload);
@@ -1392,22 +1388,18 @@ async function saveSingleBet(interaction, legData, units, betNote) {
 
     const isWhale = session?.isWhale || false;
 
-    // Build image attachment for non-whale bets, embed for whale bets
-    let sendPayload;
-    if (isWhale) {
-      const embed = buildWhaleBetEmbed(bet, displayName, bettor.displayAvatarURL());
-      sendPayload = { embeds: [embed] };
-    } else {
-      const imgBuffer = await generateBetCardImage(bet, displayName, bettor.displayAvatarURL());
-      const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
-      sendPayload = { files: [attachment] };
-    }
+    // Build image attachment
+    const imgBuffer = await generateBetCardImage(bet, displayName, bettor.displayAvatarURL());
+    const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+    const sendPayload = { files: [attachment] };
 
     // Post to channel
     if (session?.isRetro) {
       // Retro — post without tail poll
       const retroLabel = `📋 **RETRO SLIP** — ${session.retroResult.toUpperCase()}`;
-      sendPayload.content = isWhale ? `🚨🐋 **WHALE DICK RETRO** 🐋🚨\n${retroLabel}` : retroLabel;
+      sendPayload.content = isWhale
+        ? `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\n${retroLabel}\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`
+        : retroLabel;
       const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     } else {
@@ -1424,7 +1416,7 @@ async function saveSingleBet(interaction, legData, units, betNote) {
           .setStyle(ButtonStyle.Danger)
       );
 
-      const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
+      const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
       sendPayload.components = [pollRow];
       sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
       const message = await channel.send(sendPayload);

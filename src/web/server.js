@@ -16,7 +16,7 @@ const db = require('../database/queries');
 const tailedBetsDb = require('../database/tailedBets');
 const { americanToDecimal, decimalToAmerican, formatOdds } = require('../utils/odds');
 const { SPORT_NAMES, WAGER_TYPES, STATUS_EMOJI } = require('../config/constants');
-const { buildBetEmbed, buildWhaleBetEmbed } = require('../utils/embeds');
+const { buildBetEmbed } = require('../utils/embeds');
 const { generateBetCardImage } = require('../utils/betCardImage');
 const remindersDb = require('../database/reminders');
 const { notifyFollowers } = require('../utils/notifications');
@@ -1240,15 +1240,10 @@ function createWebServer() {
           const channel = await discordClient.channels.fetch(bet.channel_id);
           const message = await channel.messages.fetch(bet.message_id);
           const updatedBet = await db.getBet(betId);
-          if (bet.is_whale) {
-            const embed = buildWhaleBetEmbed(updatedBet, null, null);
-            await message.edit({ embeds: [embed] });
-          } else {
-            const { AttachmentBuilder: ABLeg } = require('discord.js');
-            const imgBuffer = await generateBetCardImage(updatedBet, null, null);
-            const attachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
-            await message.edit({ files: [attachment], embeds: [], attachments: [] });
-          }
+          const { AttachmentBuilder: ABLeg } = require('discord.js');
+          const imgBuffer = await generateBetCardImage(updatedBet, null, null);
+          const attachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
+          await message.edit({ files: [attachment], embeds: [], attachments: [] });
         } catch (e) {}
       }
 
@@ -1322,22 +1317,13 @@ function createWebServer() {
           }
 
           let sendPayload;
-          if (updatedBet.is_whale) {
-            const embed = buildWhaleBetEmbed(updatedBet, null, null);
-            // If a GIF was selected, set it as the embed image so Discord renders it
-            if (gifUrl && gifUrl.trim()) {
-              embed.setImage(gifUrl.trim());
-            }
-            sendPayload = { content, embeds: [embed] };
-          } else {
-            const { AttachmentBuilder: ABClose } = require('discord.js');
-            const imgBuffer = await generateBetCardImage(updatedBet, displayName, null);
-            const attachment = new ABClose(imgBuffer, { name: 'bet-card.png' });
-            sendPayload = { content, files: [attachment] };
-            // Append GIF URL to content so Discord auto-embeds it
-            if (gifUrl && gifUrl.trim()) {
-              sendPayload.content += `\n${gifUrl.trim()}`;
-            }
+          const { AttachmentBuilder: ABClose } = require('discord.js');
+          const imgBuffer = await generateBetCardImage(updatedBet, displayName, null);
+          const attachment = new ABClose(imgBuffer, { name: 'bet-card.png' });
+          sendPayload = { content, files: [attachment] };
+          // Append GIF URL to content so Discord auto-embeds it
+          if (gifUrl && gifUrl.trim()) {
+            sendPayload.content += `\n${gifUrl.trim()}`;
           }
 
           // Post the new message
@@ -1385,15 +1371,10 @@ function createWebServer() {
           const channel = await discordClient.channels.fetch(bet.channel_id);
           const message = await channel.messages.fetch(bet.message_id);
           const updatedBet = await db.getBet(betId);
-          if (updatedBet.is_whale) {
-            const embed = buildWhaleBetEmbed(updatedBet, null, null);
-            await message.edit({ embeds: [embed], components: [] });
-          } else {
-            const { AttachmentBuilder: ABReopen } = require('discord.js');
-            const imgBuffer = await generateBetCardImage(updatedBet, null, null);
-            const attachment = new ABReopen(imgBuffer, { name: 'bet-card.png' });
-            await message.edit({ files: [attachment], embeds: [], attachments: [], components: [] });
-          }
+          const { AttachmentBuilder: ABReopen } = require('discord.js');
+          const imgBuffer = await generateBetCardImage(updatedBet, null, null);
+          const attachment = new ABReopen(imgBuffer, { name: 'bet-card.png' });
+          await message.edit({ files: [attachment], embeds: [], attachments: [], components: [] });
         } catch (e) {}
       }
 
@@ -1543,15 +1524,10 @@ function createWebServer() {
           }
           const channel = await discordClient.channels.fetch(updatedBet.channel_id);
           const message = await channel.messages.fetch(updatedBet.message_id);
-          if (updatedBet.is_whale) {
-            const embed = buildWhaleBetEmbed(updatedBet, embedName, embedAvatar);
-            await message.edit({ embeds: [embed] });
-          } else {
-            const { AttachmentBuilder: ABEdit } = require('discord.js');
-            const imgBuffer = await generateBetCardImage(updatedBet, embedName, embedAvatar);
-            const attachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
-            await message.edit({ files: [attachment], embeds: [], attachments: [] });
-          }
+          const { AttachmentBuilder: ABEdit } = require('discord.js');
+          const imgBuffer = await generateBetCardImage(updatedBet, embedName, embedAvatar);
+          const attachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
+          await message.edit({ files: [attachment], embeds: [], attachments: [] });
         } catch (e) {
           console.error('[API] Discord message update failed:', e.message);
         }
@@ -2460,26 +2436,20 @@ Rules:
         await db.createParlayLegs(legRecords);
         const fullBet = await db.getBet(bet.id);
 
-        // Post to Discord — image for non-whale, embed for whale
+        // Post to Discord
         const channel = await discordClient.channels.fetch(channelId);
         const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder: AB } = require('discord.js');
 
-        let sendPayload;
-        if (isWhale) {
-          const embed = buildWhaleBetEmbed(fullBet, displayName, req.user.avatar);
-          sendPayload = { embeds: [embed] };
-        } else {
-          const imgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
-          const attachment = new AB(imgBuffer, { name: 'bet-card.png' });
-          sendPayload = { files: [attachment] };
-        }
+        const imgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
+        const attachment = new AB(imgBuffer, { name: 'bet-card.png' });
+        const sendPayload = { files: [attachment] };
 
         const pollRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('No').setStyle(ButtonStyle.Danger),
         );
 
-        const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
+        const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${targetDiscordId}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
         sendPayload.components = [pollRow];
         sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
         const message = await channel.send(sendPayload);
@@ -2536,26 +2506,20 @@ Rules:
 
         const bet = await db.createBet(betData, displayName);
 
-        // Post to Discord — image for non-whale, embed for whale
+        // Post to Discord
         const channel = await discordClient.channels.fetch(channelId);
         const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder: AB2 } = require('discord.js');
 
-        let sendPayload;
-        if (isWhale) {
-          const embed = buildWhaleBetEmbed(bet, displayName, req.user.avatar);
-          sendPayload = { embeds: [embed] };
-        } else {
-          const imgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
-          const attachment = new AB2(imgBuffer, { name: 'bet-card.png' });
-          sendPayload = { files: [attachment] };
-        }
+        const imgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
+        const attachment = new AB2(imgBuffer, { name: 'bet-card.png' });
+        const sendPayload = { files: [attachment] };
 
         const pollRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('No').setStyle(ButtonStyle.Danger),
         );
 
-        const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
+        const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${targetDiscordId}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
         sendPayload.components = [pollRow];
         sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
         const message = await channel.send(sendPayload);

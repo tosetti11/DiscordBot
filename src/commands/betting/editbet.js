@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder, PermissionFlagsBits } = require('discord.js');
 const db = require('../../database/queries');
-const { buildBetEmbed, buildWhaleBetEmbed } = require('../../utils/embeds');
+const { buildBetEmbed } = require('../../utils/embeds');
 const { generateBetCardImage } = require('../../utils/betCardImage');
 
 const command = new SlashCommandBuilder()
@@ -95,15 +95,10 @@ async function handleEditBetModal(interaction) {
       try {
         const channel = await interaction.client.channels.fetch(bet.channel_id);
         const message = await channel.messages.fetch(bet.message_id);
-        if (bet.is_whale) {
-          const embed = buildWhaleBetEmbed(bet, null, null);
-          await message.edit({ embeds: [embed] });
-        } else {
-          const { AttachmentBuilder } = require('discord.js');
-          const imgBuffer = await generateBetCardImage(bet, null, null);
-          const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
-          await message.edit({ files: [attachment], embeds: [], attachments: [] });
-        }
+        const { AttachmentBuilder } = require('discord.js');
+        const imgBuffer = await generateBetCardImage(bet, null, null);
+        const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+        await message.edit({ files: [attachment], embeds: [], attachments: [] });
       } catch (e) {
         // ignore
       }
