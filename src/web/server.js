@@ -102,7 +102,7 @@ function createWebServer() {
   // Global JSON parser – skip the share endpoint so its own larger parser handles it
   const globalJsonParser = express.json({ limit: '100kb' });
   app.use((req, res, next) => {
-    if (req.path === '/api/share-to-discord') return next();
+    if (req.path === '/api/share-to-discord' || req.path === '/api/ocr-slip') return next();
     globalJsonParser(req, res, next);
   });
 
@@ -1441,6 +1441,7 @@ function createWebServer() {
 
   // ─── GIPHY Search Proxy ───
   const GIPHY_API_KEY = process.env.GIPHY_API_KEY;
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
   app.get('/api/giphy-search', authMiddleware, apiLimiter, async (req, res) => {
     try {
@@ -1467,6 +1468,130 @@ function createWebServer() {
   });
 
   // ─── Share to Discord API ───
+
+  // ─── OCR Bet Slip (OpenAI Vision) ───
+  const ocrJsonParser = express.json({ limit: '10mb' });
+
+  app.post('/api/ocr-slip', authMiddleware, ocrJsonParser, postLimiter, async (req, res) => {
+    try {
+      if (!OPENAI_API_KEY) {
+        return res.status(503).json({ error: 'OCR not configured. OPENAI_API_KEY missing.' });
+      }
+
+      const { imageData } = req.body;
+      if (!imageData) return res.status(400).json({ error: 'No image data provided' });
+
+      const validSports = ['nfl','nba','mlb','nhl','ncaa_football','ncaa_mbb','ncaa_wbb','mls','epl','la_liga','ucl','ufc','boxing','tennis','golf','nascar','wnba','esports','other'];
+
+      const prompt = `You are an expert at reading sports betting slips/screenshots from sportsbooks like DraftKings, FanDuel, BetMGM, Caesars, Kalshi, ESPN Bet, etc.
+
+Analyze this bet slip image and extract the bet details. Return a JSON object with this exact structure:
+
+For a SINGLE bet:
+{
+  "betType": "single",
+  "sport": "<one of: ${validSports.join(', ')}>",
+  "betCategory": "<one of: team_game, player_prop, futures>",
+  "wagerType": "<one of: moneyline, spread, total, prop, futures>",
+  "teamA": "<your pick team or null>",
+  "teamB": "<opponent team or null>",
+  "spreadValue": "<spread or total line value like -1.5, 220.5, or null>",
+  "overUnder": "<Over or Under or null>",
+  "playerName": "<player name or null>",
+  "propDescription": "<full prop like 'Over 25.5 Points' or null>",
+  "futuresMarket": "<market name or null>",
+  "futuresSelection": "<selection or null>",
+  "oddsAmerican": "<American odds like -110, +150>",
+  "units": "<wager amount as a number, or null if not visible>",
+  "eventStartTime": "<game time if visible, or null>"
+}
+
+For a PARLAY (multiple legs):
+{
+  "betType": "parlay",
+  "oddsAmerican": "<total parlay odds in American format>",
+  "units": "<wager amount or null>",
+  "legs": [
+    {
+      "sport": "<sport value>",
+      "betCategory": "<team_game, player_prop, or futures>",
+      "wagerType": "<moneyline, spread, total, prop, or futures>",
+      "teamA": "<pick team or null>",
+      "teamB": "<opponent or null>",
+      "spreadValue": "<spread/line or null>",
+      "overUnder": "<Over or Under or null>",
+      "playerName": "<player name or null>",
+      "propDescription": "<prop description or null>",
+      "futuresMarket": "<market or null>",
+      "futuresSelection": "<selection or null>",
+      "eventStartTime": "<game time or null>"
+    }
+  ]
+}
+
+Rules:
+- American odds: negative for favorites (e.g. -110), positive for underdogs (e.g. +150)
+- If odds shown are decimal, convert to American format
+- For spreads, include the +/- sign (e.g. "-3.5", "+7")
+- For over/under, set overUnder to "Over" or "Under" and put the line number in spreadValue
+- For player props, set betCategory to "player_prop", wagerType to "prop"
+- For futures, set betCategory to "futures", wagerType to "futures"
+- teamA should be the team/side being bet ON (the pick)
+- If you can detect the wager/stake amount, put it in units (just the number)
+- If the slip has multiple bets/legs, return as parlay
+- Map the sport to the closest value from the valid sports list
+- Return ONLY valid JSON, no markdown or explanation`;
+
+      const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                { type: 'image_url', image_url: { url: imageData, detail: 'high' } },
+              ],
+            },
+          ],
+          max_tokens: 2000,
+          temperature: 0.1,
+        }),
+      });
+
+      const oaiData = await oaiRes.json();
+
+      if (oaiData.error) {
+        console.error('[API] OpenAI error:', oaiData.error);
+        return res.status(500).json({ error: 'AI analysis failed: ' + (oaiData.error.message || 'Unknown error') });
+      }
+
+      const content = oaiData.choices?.[0]?.message?.content;
+      if (!content) {
+        return res.status(500).json({ error: 'No response from AI' });
+      }
+
+      // Parse JSON from response (strip markdown code fences if present)
+      let parsed;
+      try {
+        const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        parsed = JSON.parse(jsonStr);
+      } catch (e) {
+        console.error('[API] Failed to parse OCR response:', content);
+        return res.status(500).json({ error: 'Could not parse bet details from image. Try a clearer screenshot.' });
+      }
+
+      res.json({ success: true, data: parsed });
+    } catch (err) {
+      console.error('[API] OCR slip error:', err);
+      res.status(500).json({ error: 'Failed to analyze bet slip' });
+    }
+  });
 
   app.post('/api/share-to-discord', authMiddleware, imageJsonParser, postLimiter, async (req, res) => {
     try {

@@ -3710,6 +3710,65 @@ textarea {
 }
 
 /* ── Close Bets Page ── */
+
+/* ── OCR Scan Slip ── */
+.slip-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.btn-scan-slip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #FF8732, #e06b1e);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-scan-slip:hover {
+  background: linear-gradient(135deg, #e06b1e, #c45a12);
+  transform: translateY(-1px);
+}
+.btn-scan-slip:active { transform: translateY(0); }
+.btn-scan-slip .scan-icon { font-size: 16px; }
+
+.scan-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--accent-dim);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.scan-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(29, 185, 84, 0.3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: scanSpin 0.8s linear infinite;
+}
+
+@keyframes scanSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Close Bets Page ── */
 .closebets-container {
   max-width: 960px;
   margin: 0 auto;

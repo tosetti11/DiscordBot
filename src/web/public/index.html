@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=26">
+  <link rel="stylesheet" href="/style.css?v=27">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -107,8 +107,21 @@
     <main id="slip-page" class="main-content">
       <div class="slip-container">
         <div class="slip-header">
-          <h2 id="slip-title">🎟️ New Bet Slip</h2>
-          <p id="slip-subtitle" class="slip-subtitle">Fill out your bet details below</p>
+          <div class="slip-header-row">
+            <div>
+              <h2 id="slip-title">🎟️ New Bet Slip</h2>
+              <p id="slip-subtitle" class="slip-subtitle">Fill out your bet details below</p>
+            </div>
+            <button type="button" class="btn-scan-slip" id="scan-slip-btn" onclick="triggerSlipScan()" title="Upload a screenshot to auto-fill">
+              <span class="scan-icon">📸</span>
+              <span class="scan-text">Scan Slip</span>
+            </button>
+          </div>
+          <input type="file" id="slip-file-input" accept="image/*" capture="environment" class="hidden" onchange="handleSlipFile(event)">
+          <div id="scan-status" class="scan-status hidden">
+            <div class="scan-spinner"></div>
+            <span>Analyzing bet slip...</span>
+          </div>
         </div>
 
         <form id="bet-form" autocomplete="off">
@@ -1429,6 +1442,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=28"></script>
+  <script src="/app.js?v=29"></script>
 </body>
 </html>

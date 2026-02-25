@@ -864,6 +864,238 @@ function resetForm() {
   });
 }
 
+// ═══════════════════════════════════════════════
+//  OCR Bet Slip Scanner
+// ═══════════════════════════════════════════════
+
+function triggerSlipScan() {
+  document.getElementById('slip-file-input').click();
+}
+
+async function handleSlipFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  // Show scanning status
+  const scanStatus = document.getElementById('scan-status');
+  scanStatus.classList.remove('hidden');
+  document.getElementById('scan-slip-btn').disabled = true;
+
+  try {
+    // Read file as base64 data URL
+    const imageData = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read image'));
+      reader.readAsDataURL(file);
+    });
+
+    // Send to OCR endpoint
+    const res = await fetch('/api/ocr-slip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageData }),
+    });
+
+    const result = await res.json();
+
+    if (!res.ok || !result.success) {
+      throw new Error(result.error || 'Failed to analyze bet slip');
+    }
+
+    // Apply parsed data to form
+    applyOcrData(result.data);
+    showToast('Bet slip scanned! Review and adjust the fields below.');
+    trackActivity('ocr_scan');
+
+  } catch (err) {
+    showToast(err.message || 'Failed to scan bet slip');
+  } finally {
+    scanStatus.classList.add('hidden');
+    document.getElementById('scan-slip-btn').disabled = false;
+    // Reset file input so same file can be re-selected
+    e.target.value = '';
+  }
+}
+
+function applyOcrData(data) {
+  if (!data) return;
+
+  const betTypeSelect = document.getElementById('bet-type');
+  const isParlay = data.betType === 'parlay';
+
+  // Set bet type and trigger visibility
+  betTypeSelect.value = isParlay ? 'parlay' : 'single';
+  betTypeSelect.dispatchEvent(new Event('change'));
+
+  if (isParlay && data.legs && data.legs.length > 0) {
+    applyParlayData(data);
+  } else {
+    applySingleData(data);
+  }
+}
+
+function applySingleData(data) {
+  // Sport
+  if (data.sport) {
+    const sportEl = document.getElementById('sport-select');
+    sportEl.value = data.sport;
+  }
+
+  // Category
+  if (data.betCategory) {
+    const catEl = document.getElementById('bet-category');
+    catEl.value = data.betCategory;
+    updateCategoryFields(data.betCategory);
+  }
+
+  // Wager type (for team_game)
+  if (data.betCategory === 'team_game' && data.wagerType) {
+    const wagerEl = document.getElementById('wager-type');
+    wagerEl.value = data.wagerType;
+    updateWagerFields(data.wagerType);
+  }
+
+  // Over/Under toggle
+  if (data.overUnder) {
+    const dir = data.overUnder === 'Under' ? 'Under' : 'Over';
+    document.querySelectorAll('#over-under-row .toggle-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.value === dir);
+    });
+  }
+
+  // Team fields
+  if (data.teamA) document.getElementById('team-a').value = data.teamA;
+  if (data.teamB) document.getElementById('team-b').value = data.teamB;
+  if (data.spreadValue) document.getElementById('spread-value').value = data.spreadValue;
+
+  // Player prop fields
+  if (data.playerName) document.getElementById('player-name').value = data.playerName;
+  if (data.propDescription) document.getElementById('prop-desc').value = data.propDescription;
+
+  // Futures fields
+  if (data.futuresMarket) document.getElementById('futures-market').value = data.futuresMarket;
+  if (data.futuresSelection) document.getElementById('futures-selection').value = data.futuresSelection;
+
+  // Odds & Units
+  if (data.oddsAmerican) document.getElementById('odds').value = data.oddsAmerican;
+  if (data.units) document.getElementById('units').value = data.units;
+
+  // Event time
+  if (data.eventStartTime) document.getElementById('event-time').value = data.eventStartTime;
+}
+
+function applyParlayData(data) {
+  const legs = data.legs || [];
+  const legCount = Math.min(Math.max(legs.length, 2), 10);
+
+  // Set leg count and build legs
+  const legCountEl = document.getElementById('parlay-legs-count');
+  legCountEl.value = legCount;
+  buildParlayLegs();
+
+  // Fill each leg
+  legs.forEach((leg, idx) => {
+    const i = idx + 1;
+    if (i > legCount) return;
+
+    // Sport
+    if (leg.sport) {
+      const sportEl = document.querySelector(`.leg-sport[data-leg="${i}"]`);
+      if (sportEl) sportEl.value = leg.sport;
+    }
+
+    // Category
+    if (leg.betCategory) {
+      const catEl = document.querySelector(`.leg-category[data-leg="${i}"]`);
+      if (catEl) {
+        catEl.value = leg.betCategory;
+        // Trigger visibility
+        document.querySelector(`.leg-team-fields-${i}`).classList.toggle('hidden', leg.betCategory !== 'team_game');
+        document.querySelector(`.leg-prop-fields-${i}`).classList.toggle('hidden', leg.betCategory !== 'player_prop');
+        document.querySelector(`.leg-futures-fields-${i}`).classList.toggle('hidden', leg.betCategory !== 'futures');
+        document.querySelector(`.leg-wager-row-${i}`).classList.toggle('hidden', leg.betCategory !== 'team_game');
+      }
+    }
+
+    // Wager type
+    if (leg.betCategory === 'team_game' && leg.wagerType) {
+      const wagerEl = document.querySelector(`.leg-wager-type[data-leg="${i}"]`);
+      if (wagerEl) {
+        wagerEl.value = leg.wagerType;
+        const spreadRow = document.querySelector(`.leg-spread-row-${i}`);
+        const ouRow = document.querySelector(`.leg-ou-row-${i}`);
+        const spreadLabel = document.querySelector(`.leg-spread-label-${i}`);
+
+        if (leg.wagerType === 'spread') {
+          spreadRow.classList.remove('hidden');
+          ouRow.classList.add('hidden');
+          if (spreadLabel) spreadLabel.textContent = 'Spread';
+        } else if (leg.wagerType === 'total') {
+          spreadRow.classList.remove('hidden');
+          ouRow.classList.remove('hidden');
+          if (spreadLabel) spreadLabel.textContent = 'Total Line';
+        } else {
+          spreadRow.classList.add('hidden');
+          ouRow.classList.add('hidden');
+        }
+      }
+    }
+
+    // Over/Under direction
+    if (leg.overUnder) {
+      const dir = leg.overUnder === 'Under' ? 'Under' : 'Over';
+      document.querySelectorAll(`.leg-ou-btn[data-leg="${i}"]`).forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === dir);
+      });
+    }
+
+    // Team fields
+    if (leg.teamA) {
+      const el = document.querySelector(`.leg-team-a[data-leg="${i}"]`);
+      if (el) el.value = leg.teamA;
+    }
+    if (leg.teamB) {
+      const el = document.querySelector(`.leg-team-b[data-leg="${i}"]`);
+      if (el) el.value = leg.teamB;
+    }
+    if (leg.spreadValue) {
+      const el = document.querySelector(`.leg-spread-value[data-leg="${i}"]`);
+      if (el) el.value = leg.spreadValue;
+    }
+
+    // Player prop fields
+    if (leg.playerName) {
+      const el = document.querySelector(`.leg-player-name[data-leg="${i}"]`);
+      if (el) el.value = leg.playerName;
+    }
+    if (leg.propDescription) {
+      const el = document.querySelector(`.leg-prop-desc[data-leg="${i}"]`);
+      if (el) el.value = leg.propDescription;
+    }
+
+    // Futures fields
+    if (leg.futuresMarket) {
+      const el = document.querySelector(`.leg-futures-market[data-leg="${i}"]`);
+      if (el) el.value = leg.futuresMarket;
+    }
+    if (leg.futuresSelection) {
+      const el = document.querySelector(`.leg-futures-selection[data-leg="${i}"]`);
+      if (el) el.value = leg.futuresSelection;
+    }
+
+    // Event time
+    if (leg.eventStartTime) {
+      const el = document.querySelector(`.leg-event-time[data-leg="${i}"]`);
+      if (el) el.value = leg.eventStartTime;
+    }
+  });
+
+  // Parlay totals
+  if (data.oddsAmerican) document.getElementById('parlay-odds').value = data.oddsAmerican;
+  if (data.units) document.getElementById('parlay-units').value = data.units;
+}
+
 // ── Toast ──
 function showToast(msg) {
   const existing = document.querySelector('.toast');
