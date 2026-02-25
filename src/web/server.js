@@ -948,11 +948,41 @@ function createWebServer() {
       const userGuild = req.user.guilds.find(g => g.id === guildId);
       if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
 
+      console.log('[Members] discordClient exists:', !!discordClient);
+      console.log('[Members] guilds cached:', discordClient?.guilds.cache.size);
       const guild = discordClient?.guilds.cache.get(guildId);
-      if (!guild) return res.json({ members: [], followingIds: [] });
+      console.log('[Members] guild found:', !!guild, 'guildId:', guildId);
+      if (!guild) {
+        // Fallback: try fetching the guild
+        try {
+          const fetchedGuild = await discordClient?.guilds.fetch(guildId);
+          console.log('[Members] fetched guild:', !!fetchedGuild);
+          if (!fetchedGuild) return res.json({ members: [], followingIds: [] });
+          // Use fetched guild
+          await fetchedGuild.members.fetch();
+          const members = fetchedGuild.members.cache
+            .filter(m => !m.user.bot)
+            .filter(m => m.id !== req.user.discordId)
+            .map(m => ({
+              discordId: m.id,
+              displayName: m.displayName || m.user.username,
+              username: m.user.username,
+              avatar: m.user.displayAvatarURL({ size: 64 }),
+              isKing: m.id === SITE_OWNER_ID,
+            }));
+          const following = await followsDb.getFollowing(req.user.discordId, guildId);
+          const followingIds = following.map(f => f.bettor_discord_id);
+          console.log('[Members] Returning', members.length, 'members (via fetch fallback)');
+          return res.json({ members, followingIds });
+        } catch (e) {
+          console.error('[Members] Fallback fetch failed:', e.message);
+          return res.json({ members: [], followingIds: [] });
+        }
+      }
 
       // Fetch all guild members
       await guild.members.fetch();
+      console.log('[Members] members cached after fetch:', guild.members.cache.size);
       const members = guild.members.cache
         .filter(m => !m.user.bot)
         .filter(m => m.id !== req.user.discordId) // exclude self
@@ -968,9 +998,10 @@ function createWebServer() {
       const following = await followsDb.getFollowing(req.user.discordId, guildId);
       const followingIds = following.map(f => f.bettor_discord_id);
 
+      console.log('[Members] Returning', members.length, 'members');
       res.json({ members, followingIds });
     } catch (err) {
-      console.error('[API] Members error:', err);
+      console.error('[API] Members error:', err.message);
       res.status(500).json({ error: 'Failed to fetch members' });
     }
   });
