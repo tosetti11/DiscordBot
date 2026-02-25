@@ -3398,3 +3398,33 @@ textarea {
   margin-bottom: 16px;
   line-height: 1.4;
 }
+
+.share-preview-wrap {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-preview-loading {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.share-preview-loading .loading-spinner {
+  margin: 0 auto 8px;
+}
+
+.share-preview-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+}

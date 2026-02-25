@@ -100,6 +100,9 @@ function createWebServer() {
   const HEARTBEAT_TIMEOUT = 60000; // 60s — offline if no ping
 
   app.use(express.json({ limit: '100kb' }));
+
+  // Larger limit specifically for image share endpoint
+  const imageJsonParser = express.json({ limit: '10mb' });
   app.use(cookieParser());
 
   // Trust nginx reverse proxy (needed for rate limiting behind proxy)
@@ -1394,11 +1397,21 @@ function createWebServer() {
 
   // ─── Share to Discord API ───
 
-  app.post('/api/share-to-discord', authMiddleware, postLimiter, async (req, res) => {
+  app.post('/api/share-to-discord', authMiddleware, imageJsonParser, postLimiter, async (req, res) => {
     try {
-      const { guildId, channelId, pageType, payload } = req.body;
-      if (!guildId || !channelId || !pageType || !payload) {
+      const { guildId, channelId, pageType, imageData } = req.body;
+      if (!guildId || !channelId || !pageType || !imageData) {
         return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Validate base64 image
+      const match = imageData.match(/^data:image\/png;base64,(.+)$/);
+      if (!match) return res.status(400).json({ error: 'Invalid image data' });
+
+      const imgBuffer = Buffer.from(match[1], 'base64');
+      // Limit to 8MB (Discord file size limit)
+      if (imgBuffer.length > 8 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Image too large (max 8MB)' });
       }
 
       // Verify user is in guild
@@ -1418,86 +1431,24 @@ function createWebServer() {
         displayName = member.displayName;
       } catch (e) {}
 
-      const { EmbedBuilder } = require('discord.js');
+      const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
-      if (pageType === 'stats') {
-        const d = payload;
-        const targetName = d.targetName || displayName;
-        const periodLabel = d.periodLabel || 'All Time';
+      const filename = pageType === 'stats' ? 'stats.png' : 'leaderboard.png';
+      const attachment = new AttachmentBuilder(imgBuffer, { name: filename });
 
-        const embed = new EmbedBuilder()
-          .setColor(0xF5C518)
-          .setAuthor({ name: `${targetName}'s Stats`, iconURL: req.user.avatar || undefined })
-          .setTitle(`📊 ${periodLabel} Statistics`)
-          .setThumbnail('https://thegamblingkingapp.com/TheGamblingKing.jpg')
-          .setTimestamp()
-          .setFooter({ text: `Shared by ${displayName} • TheGamblingKing` });
+      const title = pageType === 'stats' ? '📊 Statistics' : '🏆 Rankings';
+      const embed = new EmbedBuilder()
+        .setColor(0xF5C518)
+        .setTitle(title)
+        .setImage(`attachment://${filename}`)
+        .setTimestamp()
+        .setFooter({ text: `Shared by ${displayName} • TheGamblingKing` });
 
-        // Overview
-        const record = d.record || '—';
-        const winPct = d.winPct ?? '—';
-        const netUnits = d.netUnits ?? '—';
-        const roi = d.roi ?? '—';
-        const total = d.total ?? '—';
-        const open = d.open ?? '—';
-
-        embed.addFields(
-          { name: '📋 Record', value: `${record}`, inline: true },
-          { name: '🎯 Win %', value: `${winPct}%`, inline: true },
-          { name: '💰 Net Units', value: `${netUnits >= 0 ? '+' : ''}${netUnits}u`, inline: true },
-          { name: '📈 ROI', value: `${roi}%`, inline: true },
-          { name: '🎟️ Total', value: `${total}`, inline: true },
-          { name: '🟡 Open', value: `${open}`, inline: true },
-        );
-
-        // Highlights
-        if (d.streak) embed.addFields({ name: '🔥 Streak', value: d.streak, inline: true });
-        if (d.avgOdds) embed.addFields({ name: '📊 Avg Odds', value: `${d.avgOdds}`, inline: true });
-        if (d.wagered) embed.addFields({ name: '🎰 Wagered', value: `${d.wagered}u`, inline: true });
-
-        // Best / Worst
-        if (d.bestBet) embed.addFields({ name: '💰 Best Bet', value: d.bestBet, inline: true });
-        if (d.worstBet) embed.addFields({ name: '💸 Worst Bet', value: d.worstBet, inline: true });
-
-        await channel.send({ embeds: [embed] });
-
-      } else if (pageType === 'leaderboard') {
-        const d = payload;
-        const boardLabel = d.boardLabel || 'Personal Bets';
-        const categoryLabel = d.categoryLabel || 'Net Units';
-
-        const embed = new EmbedBuilder()
-          .setColor(0xF5C518)
-          .setTitle(`🏆 Rankings — ${boardLabel}`)
-          .setDescription(`Sorted by **${categoryLabel}**`)
-          .setThumbnail('https://thegamblingkingapp.com/TheGamblingKing.jpg')
-          .setTimestamp()
-          .setFooter({ text: `Shared by ${displayName} • TheGamblingKing` });
-
-        // Build rankings string
-        const medals = ['🥇', '🥈', '🥉'];
-        let rankings = '';
-        (d.entries || []).slice(0, 10).forEach((entry, i) => {
-          const rank = medals[i] || `**${i + 1}.**`;
-          rankings += `${rank} **${entry.name}** — ${entry.value} (${entry.record})\n`;
-        });
-
-        if (rankings) {
-          embed.addFields({ name: `Top ${Math.min(d.entries.length, 10)}`, value: rankings.trim() });
-        } else {
-          embed.addFields({ name: 'Rankings', value: 'No data available' });
-        }
-
-        await channel.send({ embeds: [embed] });
-
-      } else {
-        return res.status(400).json({ error: 'Unknown page type' });
-      }
+      await channel.send({ embeds: [embed], files: [attachment] });
 
       res.json({ success: true });
     } catch (err) {
       console.error('[API] Share to Discord error:', err);
-      // Return helpful error messages for common Discord API errors
       if (err.code === 50001) {
         return res.status(403).json({ error: 'Bot doesn\'t have access to that channel. Check channel permissions.' });
       }

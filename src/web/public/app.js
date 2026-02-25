@@ -3370,44 +3370,77 @@ document.addEventListener('DOMContentLoaded', function() {
 
 let sharePageType = null;
 let shareChannelsCache = {}; // guildId -> channels[]
+let shareCapturedImage = null; // base64 data URL of the captured screenshot
 
-function openShareModal(pageType) {
+function getShareCaptureTarget(pageType) {
+  if (pageType === 'stats') return document.getElementById('stats-content');
+  if (pageType === 'leaderboard') return document.getElementById('lb-content');
+  return null;
+}
+
+async function openShareModal(pageType) {
   sharePageType = pageType;
-  const modal = document.getElementById('share-modal');
-  const channelSelect = document.getElementById('share-channel');
+  shareCapturedImage = null;
 
-  // Figure out which guild is currently selected on the page
   const guildId = getShareGuildId(pageType);
   if (!guildId) {
     showToast('Select a server first');
     return;
   }
 
-  // Set description based on page
-  const desc = document.getElementById('share-modal-desc');
-  if (pageType === 'stats') {
-    desc.textContent = 'Post your statistics to a Discord channel';
-  } else if (pageType === 'leaderboard') {
-    desc.textContent = 'Post the current leaderboard to a Discord channel';
+  const target = getShareCaptureTarget(pageType);
+  if (!target || target.classList.contains('hidden')) {
+    showToast('Load data first before sharing');
+    return;
   }
 
-  // Load channels for the guild
+  const desc = document.getElementById('share-modal-desc');
+  desc.textContent = pageType === 'stats'
+    ? 'Post your statistics screenshot to a Discord channel'
+    : 'Post the leaderboard screenshot to a Discord channel';
+
+  // Show modal with loading state
+  const modal = document.getElementById('share-modal');
+  const previewImg = document.getElementById('share-preview-img');
+  const previewLoading = document.getElementById('share-preview-loading');
+  previewImg.classList.add('hidden');
+  previewLoading.classList.remove('hidden');
+  document.getElementById('share-send-btn').disabled = true;
+  modal.classList.remove('hidden');
+
+  // Load channels in parallel with screenshot capture
+  const channelSelect = document.getElementById('share-channel');
   loadShareChannels(guildId, channelSelect);
 
-  modal.classList.remove('hidden');
+  // Capture screenshot
+  try {
+    const canvas = await html2canvas(target, {
+      backgroundColor: '#121212',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      windowWidth: target.scrollWidth,
+    });
+    shareCapturedImage = canvas.toDataURL('image/png');
+    previewImg.src = shareCapturedImage;
+    previewImg.classList.remove('hidden');
+    previewLoading.classList.add('hidden');
+    document.getElementById('share-send-btn').disabled = false;
+  } catch (e) {
+    console.error('Screenshot capture failed:', e);
+    previewLoading.innerHTML = '<p style="color:var(--text-danger)">Failed to capture screenshot</p>';
+  }
 }
 
 function closeShareModal() {
   document.getElementById('share-modal').classList.add('hidden');
   sharePageType = null;
+  shareCapturedImage = null;
 }
 
 function getShareGuildId(pageType) {
-  if (pageType === 'stats') {
-    return document.getElementById('stats-guild').value;
-  } else if (pageType === 'leaderboard') {
-    return document.getElementById('lb-guild').value;
-  }
+  if (pageType === 'stats') return document.getElementById('stats-guild').value;
+  if (pageType === 'leaderboard') return document.getElementById('lb-guild').value;
   return null;
 }
 
@@ -3416,7 +3449,6 @@ async function loadShareChannels(guildId, selectEl) {
   selectEl.disabled = true;
 
   try {
-    // Use cache to avoid redundant fetches
     if (!shareChannelsCache[guildId]) {
       const res = await fetch(`/api/guilds/${guildId}/channels?sendable=1`);
       shareChannelsCache[guildId] = await res.json();
@@ -3448,92 +3480,14 @@ async function loadShareChannels(guildId, selectEl) {
   }
 }
 
-function gatherStatsPayload() {
-  const period = document.getElementById('stats-period');
-  const periodLabel = period.options[period.selectedIndex]?.textContent || 'All Time';
-
-  // Which user is being viewed
-  const userSelect = document.getElementById('stats-user');
-  const targetName = (userSelect.value && userSelect.selectedIndex > 0)
-    ? userSelect.options[userSelect.selectedIndex].textContent
-    : (currentUser.displayName || currentUser.username);
-
-  const record = document.getElementById('kpi-record')?.textContent || '—';
-  const winPct = document.getElementById('kpi-winpct')?.textContent?.replace('%', '') || '0';
-  const netText = document.getElementById('kpi-net')?.textContent?.replace('u', '') || '0';
-  const roi = document.getElementById('kpi-roi')?.textContent?.replace('%', '') || '0';
-  const total = document.getElementById('kpi-total')?.textContent || '0';
-  const open = document.getElementById('kpi-open')?.textContent || '0';
-
-  // Highlights
-  const streak = document.getElementById('hl-streak')?.textContent || '';
-  const avgOdds = document.getElementById('hl-avg-odds')?.textContent || '';
-  const wagered = document.getElementById('hl-wagered')?.textContent?.replace('u', '') || '';
-
-  // Best / worst
-  const bestVal = document.getElementById('hl-best')?.textContent || '';
-  const bestDetail = document.getElementById('hl-best-detail')?.textContent || '';
-  const worstVal = document.getElementById('hl-worst')?.textContent || '';
-  const worstDetail = document.getElementById('hl-worst-detail')?.textContent || '';
-
-  return {
-    targetName,
-    periodLabel,
-    record,
-    winPct,
-    netUnits: parseFloat(netText) || 0,
-    roi,
-    total,
-    open,
-    streak: streak !== '—' ? streak : null,
-    avgOdds: avgOdds !== '—' ? avgOdds : null,
-    wagered: wagered !== '—' ? wagered : null,
-    bestBet: bestVal && bestVal !== '—' ? `${bestVal} ${bestDetail}` : null,
-    worstBet: worstVal && worstVal !== '—' ? `${worstVal} ${worstDetail}` : null,
-  };
-}
-
-function gatherLeaderboardPayload() {
-  const typeSelect = document.getElementById('lb-type');
-  const catSelect = document.getElementById('lb-category');
-  const boardLabel = typeSelect.options[typeSelect.selectedIndex]?.textContent || 'Personal Bets';
-  const categoryLabel = catSelect.options[catSelect.selectedIndex]?.textContent || 'Net Units';
-  const category = catSelect.value;
-
-  // Read entries from the rendered leaderboard DOM
-  const entries = [];
-  document.querySelectorAll('#lb-table-wrap .lb-entry').forEach(el => {
-    const name = el.querySelector('.lb-entry-name')?.textContent || '?';
-    const record = el.querySelector('.lb-entry-record')?.textContent || '';
-    const value = el.querySelector('.lb-entry-primary')?.textContent || '';
-    entries.push({ name, record, value });
-  });
-
-  return { boardLabel, categoryLabel, entries };
-}
-
 async function sendShareToDiscord() {
   const channelId = document.getElementById('share-channel').value;
-  if (!channelId) {
-    showToast('Select a channel');
-    return;
-  }
+  if (!channelId) { showToast('Select a channel'); return; }
 
   const guildId = getShareGuildId(sharePageType);
-  if (!guildId) {
-    showToast('No server selected');
-    return;
-  }
+  if (!guildId) { showToast('No server selected'); return; }
 
-  let payload;
-  if (sharePageType === 'stats') {
-    payload = gatherStatsPayload();
-  } else if (sharePageType === 'leaderboard') {
-    payload = gatherLeaderboardPayload();
-  } else {
-    showToast('Nothing to share');
-    return;
-  }
+  if (!shareCapturedImage) { showToast('Screenshot not ready'); return; }
 
   const btn = document.getElementById('share-send-btn');
   btn.disabled = true;
@@ -3543,7 +3497,12 @@ async function sendShareToDiscord() {
     const res = await fetch('/api/share-to-discord', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ guildId, channelId, pageType: sharePageType, payload }),
+      body: JSON.stringify({
+        guildId,
+        channelId,
+        pageType: sharePageType,
+        imageData: shareCapturedImage,
+      }),
     });
     const data = await res.json();
     if (data.success) {
