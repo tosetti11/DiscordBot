@@ -3718,8 +3718,13 @@ textarea {
 .closebets-header { margin-bottom: 24px; }
 .closebets-header h2 { font-size: 28px; font-weight: 800; }
 .closebets-controls {
-  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
 }
 .closebets-controls select {
-  min-width: 200px;
+  min-width: 140px;
+  flex: 1;
 }
