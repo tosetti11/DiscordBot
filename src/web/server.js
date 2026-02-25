@@ -1400,13 +1400,24 @@ function createWebServer() {
   app.post('/api/share-to-discord', authMiddleware, imageJsonParser, postLimiter, async (req, res) => {
     try {
       const { guildId, channelId, pageType, imageData } = req.body;
+      const bodyKeys = Object.keys(req.body || {});
+      console.log(`[API] Share request: keys=[${bodyKeys}] guildId=${!!guildId} channelId=${!!channelId} pageType=${pageType || 'null'} imageData=${imageData ? imageData.substring(0, 40) + '...(len=' + imageData.length + ')' : 'null'}`);
       if (!guildId || !channelId || !pageType || !imageData) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        const missing = [];
+        if (!guildId) missing.push('guildId');
+        if (!channelId) missing.push('channelId');
+        if (!pageType) missing.push('pageType');
+        if (!imageData) missing.push('imageData');
+        console.log(`[API] Share missing fields: ${missing.join(', ')}`);
+        return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}` });
       }
 
       // Validate base64 image (PNG or JPEG)
       const match = imageData.match(/^data:image\/(png|jpeg);base64,(.+)$/);
-      if (!match) return res.status(400).json({ error: 'Invalid image data' });
+      if (!match) {
+        console.log(`[API] Share invalid image format, starts with: ${imageData.substring(0, 50)}`);
+        return res.status(400).json({ error: 'Invalid image data format' });
+      }
 
       const imgFormat = match[1]; // 'png' or 'jpeg'
       const imgBuffer = Buffer.from(match[2], 'base64');
