@@ -409,8 +409,46 @@ function createWebServer() {
     }
   });
 
-  // NOTE: /api/guilds/:guildId/members route is defined further below (Inner Circle page handler).
-  // The admin "behalf" user picker in app.js fetches this same endpoint.
+  // Get guild members (admin only) for user picker
+  app.get('/api/guilds/:guildId/members', authMiddleware, async (req, res) => {
+    try {
+      const { guildId } = req.params;
+      const userGuild = req.user.guilds.find(g => g.id === guildId);
+      if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
+
+      const admin = await isAdminInGuild(guildId, req.user.discordId);
+      if (!admin) return res.status(403).json({ error: 'Admin only' });
+
+      const guild = discordClient?.guilds.cache.get(guildId);
+      if (!guild) return res.json([]);
+
+      // Fetch members using REST API (paginated, avoids gateway rate limits)
+      const allMembers = [];
+      let after = '0';
+      while (true) {
+        const batch = await guild.members.list({ limit: 1000, after });
+        if (batch.size === 0) break;
+        batch.forEach(m => allMembers.push(m));
+        after = batch.lastKey();
+        if (batch.size < 1000) break;
+      }
+
+      const memberList = allMembers
+        .filter(m => !m.user.bot)
+        .map(m => ({
+          id: m.id,
+          displayName: m.displayName,
+          username: m.user.username,
+          avatar: m.user.displayAvatarURL({ size: 64 }),
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+      res.json(memberList);
+    } catch (err) {
+      console.error('[API] Members error:', err);
+      res.status(500).json({ error: 'Failed to fetch members' });
+    }
+  });
 
   // Get server emojis
   app.get('/api/guilds/:guildId/emojis', authMiddleware, async (req, res) => {
@@ -904,23 +942,17 @@ function createWebServer() {
   });
 
   // Get all guild members with follow status (for The Inner Circle page)
-  app.get('/api/guilds/:guildId/members', authMiddleware, async (req, res) => {
+  app.get('/api/guilds/:guildId/circle-members', authMiddleware, async (req, res) => {
     try {
       const { guildId } = req.params;
       const userGuild = req.user.guilds.find(g => g.id === guildId);
       if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
 
-      console.log('[Members] discordClient exists:', !!discordClient);
-      console.log('[Members] guilds cached:', discordClient?.guilds.cache.size);
       const guild = discordClient?.guilds.cache.get(guildId);
-      console.log('[Members] guild found:', !!guild, 'guildId:', guildId);
       if (!guild) {
-        // Fallback: try fetching the guild
         try {
           const fetchedGuild = await discordClient?.guilds.fetch(guildId);
-          console.log('[Members] fetched guild:', !!fetchedGuild);
           if (!fetchedGuild) return res.json({ members: [], followingIds: [] });
-          // Use fetched guild
           await fetchedGuild.members.fetch();
           const members = fetchedGuild.members.cache
             .filter(m => !m.user.bot)
@@ -934,20 +966,27 @@ function createWebServer() {
             }));
           const following = await followsDb.getFollowing(req.user.discordId, guildId);
           const followingIds = following.map(f => f.bettor_discord_id);
-          console.log('[Members] Returning', members.length, 'members (via fetch fallback)');
           return res.json({ members, followingIds });
         } catch (e) {
-          console.error('[Members] Fallback fetch failed:', e.message);
+          console.error('[Circle] Fallback fetch failed:', e.message);
           return res.json({ members: [], followingIds: [] });
         }
       }
 
-      // Fetch all guild members
-      await guild.members.fetch();
-      console.log('[Members] members cached after fetch:', guild.members.cache.size);
-      const members = guild.members.cache
+      // Use paginated list to avoid gateway rate limits
+      const allMembers = [];
+      let after = '0';
+      while (true) {
+        const batch = await guild.members.list({ limit: 1000, after });
+        if (batch.size === 0) break;
+        batch.forEach(m => allMembers.push(m));
+        after = batch.lastKey();
+        if (batch.size < 1000) break;
+      }
+
+      const members = allMembers
         .filter(m => !m.user.bot)
-        .filter(m => m.id !== req.user.discordId) // exclude self
+        .filter(m => m.id !== req.user.discordId)
         .map(m => ({
           discordId: m.id,
           displayName: m.displayName || m.user.username,
@@ -956,14 +995,12 @@ function createWebServer() {
           isKing: m.id === SITE_OWNER_ID,
         }));
 
-      // Get who the current user follows
       const following = await followsDb.getFollowing(req.user.discordId, guildId);
       const followingIds = following.map(f => f.bettor_discord_id);
 
-      console.log('[Members] Returning', members.length, 'members');
       res.json({ members, followingIds });
     } catch (err) {
-      console.error('[API] Members error:', err.message);
+      console.error('[API] Circle members error:', err.message);
       res.status(500).json({ error: 'Failed to fetch members' });
     }
   });

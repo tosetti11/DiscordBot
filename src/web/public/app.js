@@ -241,13 +241,12 @@ function setupEventListeners() {
       if (guildPerms.isAdmin) {
         behalfRow.classList.remove('hidden');
         // Fetch guild members in background (non-blocking)
-        fetch(`/api/guilds/${guildId}/members`).then(r => r.json()).then(data => {
-          const memberList = data.members || data; // support both formats
+        fetch(`/api/guilds/${guildId}/members`).then(r => r.json()).then(members => {
           const behalfSelect = document.getElementById('behalf-select');
           behalfSelect.innerHTML = '<option value="">Myself</option>';
-          memberList.forEach(m => {
+          members.forEach(m => {
             const opt = document.createElement('option');
-            opt.value = m.discordId || m.id;
+            opt.value = m.id;
             opt.textContent = m.displayName;
             behalfSelect.appendChild(opt);
           });
@@ -1426,12 +1425,11 @@ function initCloseBetsPage() {
       userSel.classList.remove('hidden');
       try {
         const membersRes = await fetch(`/api/guilds/${guildId}/members`);
-        const membersData = await membersRes.json();
-        const memberList = membersData.members || membersData;
+        const members = await membersRes.json();
         userSel.innerHTML = '<option value="">My Bets</option><option value="all">👑 All Members</option>';
-        memberList.forEach(m => {
+        members.forEach(m => {
           const opt = document.createElement('option');
-          opt.value = m.discordId || m.id;
+          opt.value = m.id;
           opt.textContent = m.displayName;
           userSel.appendChild(opt);
         });
@@ -2056,7 +2054,7 @@ async function loadFollowingPage() {
   document.getElementById('following-search').value = '';
 
   try {
-    const res = await fetch(`/api/guilds/${guildId}/members`);
+    const res = await fetch(`/api/guilds/${guildId}/circle-members`);
     const data = await res.json();
     const members = data.members || [];
     const followingIds = new Set(data.followingIds || []);
@@ -2223,13 +2221,12 @@ function initBetsPage() {
       // Fetch members for the picker
       try {
         const membersRes = await fetch(`/api/guilds/${guildId}/members`);
-        const membersData = await membersRes.json();
-        const memberList = membersData.members || membersData;
+        const members = await membersRes.json();
         // Keep the first two options (My Bets, All Members), then add members
         userSel.innerHTML = '<option value="">My Bets</option><option value="all">👑 All Members</option>';
-        memberList.forEach(m => {
+        members.forEach(m => {
           const opt = document.createElement('option');
-          opt.value = m.discordId || m.id;
+          opt.value = m.id;
           opt.textContent = m.displayName;
           userSel.appendChild(opt);
         });
@@ -4019,17 +4016,17 @@ async function loadAnnounceMembers(guildId) {
   try {
     const res = await fetch(`/api/guilds/${guildId}/members`);
     const data = await res.json();
-    const memberList = data.members || (Array.isArray(data) ? data : []);
     targetSelect.innerHTML = '<option value="all">📢 All Members</option>';
-    if (res.ok && memberList.length > 0) {
-      memberList.forEach(m => {
+    if (res.ok && Array.isArray(data)) {
+      data.forEach(m => {
         const opt = document.createElement('option');
-        opt.value = m.discordId || m.id;
+        opt.value = m.id;
         opt.textContent = m.displayName;
         targetSelect.appendChild(opt);
       });
-    } else if (res.ok) {
-      targetSelect.innerHTML += '<option disabled>No members found</option>';
+      if (data.length === 0) {
+        targetSelect.innerHTML += '<option disabled>No members found</option>';
+      }
     } else {
       console.error('Members API error:', data);
       targetSelect.innerHTML += `<option disabled>Error: ${data.error || 'Failed to load'}</option>`;
