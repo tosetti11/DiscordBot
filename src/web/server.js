@@ -353,6 +353,16 @@ function createWebServer() {
         .map(c => ({ id: c.id, name: c.name, category: c.parent?.name || null }))
         .sort((a, b) => a.name.localeCompare(b.name));
 
+      // If ?sendable=1, only return channels where the bot can send messages
+      if (req.query.sendable === '1') {
+        const botMember = guild.members.me;
+        const sendable = channels.filter(ch => {
+          const dc = guild.channels.cache.get(ch.id);
+          return dc && botMember && dc.permissionsFor(botMember)?.has(['SendMessages', 'EmbedLinks']);
+        });
+        return res.json(sendable);
+      }
+
       res.json(channels);
     } catch (err) {
       console.error('[API] Channels error:', err);
@@ -1487,6 +1497,13 @@ function createWebServer() {
       res.json({ success: true });
     } catch (err) {
       console.error('[API] Share to Discord error:', err);
+      // Return helpful error messages for common Discord API errors
+      if (err.code === 50001) {
+        return res.status(403).json({ error: 'Bot doesn\'t have access to that channel. Check channel permissions.' });
+      }
+      if (err.code === 50013) {
+        return res.status(403).json({ error: 'Bot is missing "Send Messages" or "Embed Links" permission in that channel.' });
+      }
       res.status(500).json({ error: 'Failed to share to Discord' });
     }
   });

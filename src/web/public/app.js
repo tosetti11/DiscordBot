@@ -3418,7 +3418,7 @@ async function loadShareChannels(guildId, selectEl) {
   try {
     // Use cache to avoid redundant fetches
     if (!shareChannelsCache[guildId]) {
-      const res = await fetch(`/api/guilds/${guildId}/channels`);
+      const res = await fetch(`/api/guilds/${guildId}/channels?sendable=1`);
       shareChannelsCache[guildId] = await res.json();
     }
     const channels = shareChannelsCache[guildId];
