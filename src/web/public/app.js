@@ -869,6 +869,11 @@ function resetForm() {
 // ═══════════════════════════════════════════════
 
 function triggerSlipScan() {
+  if (!getUnitSize()) {
+    showToast('Set a unit size to ensure bets populate correctly.', 5000);
+    document.getElementById('unit-size-input').focus();
+    return;
+  }
   document.getElementById('slip-file-input').click();
 }
 
