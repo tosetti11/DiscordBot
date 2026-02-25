@@ -963,7 +963,13 @@ async function handleSlipFile(e) {
     }
 
     // Log raw scan data for troubleshooting
-    console.log('📸 OCR Scan Result:', JSON.stringify(result.data, null, 2));
+    const rawJson = JSON.stringify(result.data, null, 2);
+    console.log('📸 OCR Scan Result:', rawJson);
+
+    // Show debug panel with raw data
+    const debugPanel = document.getElementById('scan-debug');
+    document.getElementById('scan-debug-data').textContent = rawJson;
+    debugPanel.classList.remove('hidden');
 
     // Apply parsed data to form
     applyOcrData(result.data);

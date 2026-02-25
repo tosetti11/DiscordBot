@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=28">
+  <link rel="stylesheet" href="/style.css?v=29">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -129,6 +129,10 @@
             <div class="scan-spinner"></div>
             <span>Analyzing bet slip...</span>
           </div>
+          <details id="scan-debug" class="scan-debug hidden">
+            <summary>🔍 Scan Details <span class="scan-debug-hint">(tap to troubleshoot)</span></summary>
+            <pre id="scan-debug-data"></pre>
+          </details>
         </div>
 
         <form id="bet-form" autocomplete="off">
@@ -1449,6 +1453,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=33"></script>
+  <script src="/app.js?v=34"></script>
 </body>
 </html>

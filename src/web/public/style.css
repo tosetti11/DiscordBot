@@ -3793,6 +3793,41 @@ textarea {
   font-weight: 500;
 }
 
+.scan-debug {
+  margin-top: 10px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bg-hover);
+  overflow: hidden;
+}
+.scan-debug summary {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.scan-debug summary:hover { color: var(--text-primary); }
+.scan-debug-hint {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.scan-debug pre {
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--bg-primary);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+  border-top: 1px solid var(--bg-hover);
+}
+
 .scan-spinner {
   width: 16px;
   height: 16px;
