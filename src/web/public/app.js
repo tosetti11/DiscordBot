@@ -3383,11 +3383,16 @@ function buildShareBanner(pageType) {
   let line2 = '';
 
   if (pageType === 'stats') {
-    // User name
+    // User name — resolve actual name when "Me" is selected
     const userSel = document.getElementById('stats-user');
-    const userName = userSel.selectedIndex >= 0
-      ? userSel.options[userSel.selectedIndex].text
-      : 'Me';
+    let userName;
+    if (!userSel.value && currentUser && currentUser.displayName) {
+      userName = currentUser.displayName;
+    } else if (userSel.selectedIndex >= 0) {
+      userName = userSel.options[userSel.selectedIndex].text;
+    } else {
+      userName = 'Unknown';
+    }
     // Period
     const periodSel = document.getElementById('stats-period');
     const periodLabel = periodSel.selectedIndex >= 0
@@ -3455,23 +3460,44 @@ async function openShareModal(pageType) {
 
   // Build a temporary header banner for the screenshot
   const banner = buildShareBanner(pageType);
-  target.prepend(banner);
+
+  // Wrap content in a polished capture container so the screenshot
+  // fills the Discord message with clean borders and background
+  const wrapper = document.createElement('div');
+  wrapper.className = 'share-capture-wrapper';
+  wrapper.appendChild(banner);
+
+  // Clone the content into the wrapper so the original page stays untouched
+  const contentClone = target.cloneNode(true);
+  contentClone.classList.remove('hidden');
+  contentClone.style.display = 'block';
+  wrapper.appendChild(contentClone);
+
+  // Footer branding
+  const footer = document.createElement('div');
+  footer.className = 'share-capture-footer';
+  footer.textContent = 'thegamblingkingapp.com';
+  wrapper.appendChild(footer);
+
+  // Append offscreen so html2canvas can render it
+  document.body.appendChild(wrapper);
 
   // Capture screenshot
   try {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const canvas = await html2canvas(target, {
-      backgroundColor: '#121212',
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: '#0d0d0d',
       scale: isMobile ? 1 : 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
-      windowWidth: target.scrollWidth,
+      width: 520,
+      windowWidth: 520,
       imageTimeout: 5000,
       removeContainer: true,
     });
     // Use JPEG to keep size manageable (especially on mobile)
-    shareCapturedImage = canvas.toDataURL('image/jpeg', 0.9);
+    shareCapturedImage = canvas.toDataURL('image/jpeg', 0.92);
     // Fallback to PNG if JPEG returned empty
     if (!shareCapturedImage || shareCapturedImage.length < 100) {
       shareCapturedImage = canvas.toDataURL('image/png');
@@ -3485,8 +3511,8 @@ async function openShareModal(pageType) {
     previewLoading.innerHTML = '<p style="color:var(--text-danger)">Failed to capture screenshot. Try refreshing the page.</p>';
     showToast('Screenshot capture failed: ' + (e.message || 'Unknown error'));
   } finally {
-    // Always remove the temporary banner
-    banner.remove();
+    // Always remove the temporary wrapper
+    wrapper.remove();
   }
 }
 

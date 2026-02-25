@@ -3442,26 +3442,57 @@ textarea {
   object-fit: contain;
 }
 
-/* ── Share screenshot banner (injected temporarily during capture) ── */
+/* ── Share screenshot capture wrapper ── */
+.share-capture-wrapper {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 520px;
+  background: #0d0d0d;
+  border-left: 4px solid #f5c518;
+  border-right: 4px solid #f5c518;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+}
+
 .share-capture-banner {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-bottom: 2px solid var(--accent, #f5c518);
-  padding: 14px 18px;
-  margin-bottom: 10px;
-  border-radius: 8px 8px 0 0;
+  border-bottom: 2px solid #f5c518;
+  padding: 16px 20px;
   text-align: center;
 }
 .share-banner-title {
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #fff;
   letter-spacing: 0.3px;
 }
 .share-banner-sub {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--accent, #f5c518);
-  margin-top: 3px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f5c518;
+  margin-top: 4px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
+}
+
+.share-capture-wrapper > #stats-content,
+.share-capture-wrapper > #lb-content,
+.share-capture-wrapper > [id$="-content"] {
+  padding: 16px 16px 8px;
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+.share-capture-footer {
+  text-align: center;
+  padding: 10px 0 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #555;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border-top: 1px solid #222;
 }
