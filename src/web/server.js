@@ -1502,7 +1502,7 @@ For a SINGLE bet:
   "futuresMarket": "<market name or null>",
   "futuresSelection": "<selection or null>",
   "oddsAmerican": "<American odds like -110, +150>",
-  "units": "<wager amount as a number, or null if not visible>",
+  "wagerAmount": "<dollar wager/stake amount as a number, or null if not visible>",
   "eventStartTime": "<game time if visible, or null>"
 }
 
@@ -1510,7 +1510,7 @@ For a PARLAY (multiple legs):
 {
   "betType": "parlay",
   "oddsAmerican": "<total parlay odds in American format>",
-  "units": "<wager amount or null>",
+  "wagerAmount": "<dollar wager/stake amount as a number, or null if not visible>",
   "legs": [
     {
       "sport": "<sport value>",
@@ -1537,7 +1537,7 @@ Rules:
 - For player props, set betCategory to "player_prop", wagerType to "prop"
 - For futures, set betCategory to "futures", wagerType to "futures"
 - teamA should be the team/side being bet ON (the pick)
-- If you can detect the wager/stake amount, put it in units (just the number)
+- If you can detect the wager/stake amount in dollars, put it in wagerAmount (just the number, no $ sign)
 - If the slip has multiple bets/legs, return as parlay
 - Map the sport to the closest value from the valid sports list
 - Return ONLY valid JSON, no markdown or explanation`;

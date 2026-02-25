@@ -872,6 +872,37 @@ function triggerSlipScan() {
   document.getElementById('slip-file-input').click();
 }
 
+// Unit size persistence
+function saveUnitSize() {
+  const val = document.getElementById('unit-size-input').value;
+  if (val && parseFloat(val) > 0) {
+    localStorage.setItem('gk_unit_size', val);
+  } else {
+    localStorage.removeItem('gk_unit_size');
+  }
+}
+
+function getUnitSize() {
+  return parseFloat(localStorage.getItem('gk_unit_size')) || 0;
+}
+
+function convertWagerToUnits(wagerAmount) {
+  const unitSize = getUnitSize();
+  if (!unitSize || !wagerAmount) return wagerAmount || '';
+  const units = parseFloat(wagerAmount) / unitSize;
+  // Round to 1 decimal, remove trailing .0
+  return parseFloat(units.toFixed(1)).toString();
+}
+
+// Load saved unit size on page load
+(function loadUnitSize() {
+  const saved = localStorage.getItem('gk_unit_size');
+  if (saved) {
+    const el = document.getElementById('unit-size-input');
+    if (el) el.value = saved;
+  }
+})();
+
 // Compress image for OCR — resize to max 2048px and convert to JPEG
 function compressImageForOCR(file) {
   return new Promise((resolve, reject) => {
@@ -1007,7 +1038,11 @@ function applySingleData(data) {
 
   // Odds & Units
   if (data.oddsAmerican) document.getElementById('odds').value = data.oddsAmerican;
-  if (data.units) document.getElementById('units').value = data.units;
+  if (data.wagerAmount) {
+    document.getElementById('units').value = convertWagerToUnits(data.wagerAmount);
+  } else if (data.units) {
+    document.getElementById('units').value = data.units;
+  }
 
   // Event time
   if (data.eventStartTime) document.getElementById('event-time').value = data.eventStartTime;
@@ -1121,7 +1156,11 @@ function applyParlayData(data) {
 
   // Parlay totals
   if (data.oddsAmerican) document.getElementById('parlay-odds').value = data.oddsAmerican;
-  if (data.units) document.getElementById('parlay-units').value = data.units;
+  if (data.wagerAmount) {
+    document.getElementById('parlay-units').value = convertWagerToUnits(data.wagerAmount);
+  } else if (data.units) {
+    document.getElementById('parlay-units').value = data.units;
+  }
 }
 
 // ── Toast ──

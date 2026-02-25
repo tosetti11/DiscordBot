@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=27">
+  <link rel="stylesheet" href="/style.css?v=28">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -112,10 +112,17 @@
               <h2 id="slip-title">🎟️ New Bet Slip</h2>
               <p id="slip-subtitle" class="slip-subtitle">Fill out your bet details below</p>
             </div>
-            <button type="button" class="btn-scan-slip" id="scan-slip-btn" onclick="triggerSlipScan()" title="Upload a screenshot to auto-fill">
-              <span class="scan-icon">📸</span>
-              <span class="scan-text">Scan Slip</span>
-            </button>
+            <div class="scan-controls">
+              <div class="unit-size-wrap" title="Your unit size in dollars — used to convert scanned wager amounts to units">
+                <label for="unit-size-input">1u =</label>
+                <span class="unit-dollar">$</span>
+                <input type="number" id="unit-size-input" min="1" step="1" placeholder="25" onchange="saveUnitSize()">
+              </div>
+              <button type="button" class="btn-scan-slip" id="scan-slip-btn" onclick="triggerSlipScan()" title="Upload a screenshot to auto-fill">
+                <span class="scan-icon">📸</span>
+                <span class="scan-text">Scan Slip</span>
+              </button>
+            </div>
           </div>
           <input type="file" id="slip-file-input" accept="image/*" class="hidden" onchange="handleSlipFile(event)">
           <div id="scan-status" class="scan-status hidden">
@@ -1442,6 +1449,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=31"></script>
+  <script src="/app.js?v=32"></script>
 </body>
 </html>
