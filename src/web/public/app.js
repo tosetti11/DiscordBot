@@ -3374,6 +3374,51 @@ function getShareCaptureTarget(pageType) {
   return null;
 }
 
+/** Build a temporary banner injected into the capture target for the screenshot */
+function buildShareBanner(pageType) {
+  const banner = document.createElement('div');
+  banner.className = 'share-capture-banner';
+
+  let line1 = '';
+  let line2 = '';
+
+  if (pageType === 'stats') {
+    // User name
+    const userSel = document.getElementById('stats-user');
+    const userName = userSel.selectedIndex >= 0
+      ? userSel.options[userSel.selectedIndex].text
+      : 'Me';
+    // Period
+    const periodSel = document.getElementById('stats-period');
+    const periodLabel = periodSel.selectedIndex >= 0
+      ? periodSel.options[periodSel.selectedIndex].text
+      : 'All Time';
+
+    line1 = `📊 ${userName}'s Stats`;
+    line2 = periodLabel;
+  } else if (pageType === 'leaderboard') {
+    // Board type
+    const typeSel = document.getElementById('lb-type');
+    const typeLabel = typeSel.selectedIndex >= 0
+      ? typeSel.options[typeSel.selectedIndex].text
+      : 'Leaderboard';
+    // Category
+    const catSel = document.getElementById('lb-category');
+    const catLabel = catSel.selectedIndex >= 0
+      ? catSel.options[catSel.selectedIndex].text
+      : '';
+
+    line1 = `🏆 ${typeLabel}`;
+    line2 = catLabel;
+  }
+
+  banner.innerHTML =
+    `<div class="share-banner-title">${line1}</div>` +
+    (line2 ? `<div class="share-banner-sub">${line2}</div>` : '');
+
+  return banner;
+}
+
 async function openShareModal(pageType) {
   sharePageType = pageType;
   shareCapturedImage = null;
@@ -3408,6 +3453,10 @@ async function openShareModal(pageType) {
   const channelSelect = document.getElementById('share-channel');
   loadShareChannels(guildId, channelSelect);
 
+  // Build a temporary header banner for the screenshot
+  const banner = buildShareBanner(pageType);
+  target.prepend(banner);
+
   // Capture screenshot
   try {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -3435,6 +3484,9 @@ async function openShareModal(pageType) {
     console.error('Screenshot capture failed:', e);
     previewLoading.innerHTML = '<p style="color:var(--text-danger)">Failed to capture screenshot. Try refreshing the page.</p>';
     showToast('Screenshot capture failed: ' + (e.message || 'Unknown error'));
+  } finally {
+    // Always remove the temporary banner
+    banner.remove();
   }
 }
 

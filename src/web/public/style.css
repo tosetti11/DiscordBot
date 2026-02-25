@@ -3441,3 +3441,27 @@ textarea {
   max-height: 45vh;
   object-fit: contain;
 }
+
+/* ── Share screenshot banner (injected temporarily during capture) ── */
+.share-capture-banner {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-bottom: 2px solid var(--accent, #f5c518);
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  border-radius: 8px 8px 0 0;
+  text-align: center;
+}
+.share-banner-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+.share-banner-sub {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--accent, #f5c518);
+  margin-top: 3px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
