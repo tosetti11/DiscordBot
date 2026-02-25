@@ -2068,7 +2068,7 @@ function insertAtCursor(textarea, text) {
   textarea.focus();
 }
 
-function toggleEmojiPicker() {
+function toggleCloseBetEmojiPicker() {
   const el = document.getElementById('emoji-picker');
   const gifEl = document.getElementById('gif-picker');
   const btn = document.getElementById('emoji-picker-btn');
