@@ -3470,7 +3470,13 @@ async function openShareModal(pageType) {
   // Clone the content into the wrapper so the original page stays untouched
   const contentClone = target.cloneNode(true);
   contentClone.classList.remove('hidden');
-  contentClone.style.display = 'block';
+  contentClone.style.cssText = 'display:block; width:100%; max-width:100%; box-sizing:border-box; padding:16px;';
+  // Force all child panels/sections to fill the width
+  contentClone.querySelectorAll('.sp-hero, .sp-panel, .sp-metric-grid, .sp-bw-row, .breakdown-grid').forEach(el => {
+    el.style.maxWidth = '100%';
+    el.style.width = '100%';
+    el.style.boxSizing = 'border-box';
+  });
   wrapper.appendChild(contentClone);
 
   // Footer branding

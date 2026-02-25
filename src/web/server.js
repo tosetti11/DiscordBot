@@ -1406,22 +1406,18 @@ function createWebServer() {
   app.post('/api/share-to-discord', authMiddleware, imageJsonParser, postLimiter, async (req, res) => {
     try {
       const { guildId, channelId, pageType, imageData } = req.body;
-      const bodyKeys = Object.keys(req.body || {});
-      console.log(`[API] Share request: keys=[${bodyKeys}] guildId=${!!guildId} channelId=${!!channelId} pageType=${pageType || 'null'} imageData=${imageData ? imageData.substring(0, 40) + '...(len=' + imageData.length + ')' : 'null'}`);
       if (!guildId || !channelId || !pageType || !imageData) {
         const missing = [];
         if (!guildId) missing.push('guildId');
         if (!channelId) missing.push('channelId');
         if (!pageType) missing.push('pageType');
         if (!imageData) missing.push('imageData');
-        console.log(`[API] Share missing fields: ${missing.join(', ')}`);
         return res.status(400).json({ error: `Missing required fields: ${missing.join(', ')}` });
       }
 
       // Validate base64 image (PNG or JPEG)
       const match = imageData.match(/^data:image\/(png|jpeg);base64,(.+)$/);
       if (!match) {
-        console.log(`[API] Share invalid image format, starts with: ${imageData.substring(0, 50)}`);
         return res.status(400).json({ error: 'Invalid image data format' });
       }
 
@@ -1449,21 +1445,17 @@ function createWebServer() {
         displayName = member.displayName;
       } catch (e) {}
 
-      const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
+      const { AttachmentBuilder } = require('discord.js');
 
       const ext = imgFormat === 'jpeg' ? 'jpg' : 'png';
       const filename = pageType === 'stats' ? `stats.${ext}` : `leaderboard.${ext}`;
       const attachment = new AttachmentBuilder(imgBuffer, { name: filename });
 
-      const title = pageType === 'stats' ? '📊 Statistics' : '🏆 Rankings';
-      const embed = new EmbedBuilder()
-        .setColor(0xF5C518)
-        .setTitle(title)
-        .setImage(`attachment://${filename}`)
-        .setTimestamp()
-        .setFooter({ text: `Shared by ${displayName} • TheGamblingKing` });
-
-      await channel.send({ embeds: [embed], files: [attachment] });
+      // Send as direct file attachment (not embed) so Discord shows it full-width
+      await channel.send({
+        content: `*Shared by ${displayName} via TheGamblingKing*`,
+        files: [attachment],
+      });
 
       res.json({ success: true });
     } catch (err) {
