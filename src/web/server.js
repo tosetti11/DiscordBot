@@ -18,6 +18,7 @@ const { americanToDecimal, decimalToAmerican, formatOdds } = require('../utils/o
 const { SPORT_NAMES, WAGER_TYPES, STATUS_EMOJI } = require('../config/constants');
 const { buildBetEmbed, buildWhaleBetEmbed } = require('../utils/embeds');
 const remindersDb = require('../database/reminders');
+const { notifyFollowers } = require('../utils/notifications');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -2326,6 +2327,9 @@ Rules:
         });
         await db.updateBetMessageId(bet.id, message.id);
 
+        // Notify followers
+        notifyFollowers(discordClient, targetDiscordId, guildId, fullBet, displayName, false);
+
         return res.json({ success: true, slipNumber: bet.slip_number, betId: bet.id });
 
       } else {
@@ -2394,6 +2398,9 @@ Rules:
           content: isWhale ? whaleContent : 'Are You Tailing This Bet?',
         });
         await db.updateBetMessageId(bet.id, message.id);
+
+        // Notify followers
+        notifyFollowers(discordClient, targetDiscordId, guildId, bet, displayName, false);
 
         return res.json({ success: true, slipNumber: bet.slip_number, betId: bet.id });
       }

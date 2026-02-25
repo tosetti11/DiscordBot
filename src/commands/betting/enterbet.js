@@ -1,6 +1,7 @@
 // --- Tail poll interaction handler ---
 const tailedBetsDb = require('../../database/tailedBets');
 const { supabase } = require('../../config/supabase');
+const { notifyFollowers, notifyBetOwner } = require('../../utils/notifications');
 
 async function handleTailPoll(interaction) {
   const [prefix, answer, betId] = interaction.customId.split('_');
@@ -23,12 +24,27 @@ async function handleTailPoll(interaction) {
 
     // Check if user already has the same vote — toggle off if so
     const existing = await tailedBetsDb.getTailedBet(betId, userId);
+    let isNewAction = false;
     if (existing && existing.tailed === tailed) {
       // Same button clicked again — remove the vote
       await tailedBetsDb.removeTailedBet(betId, userId);
     } else {
       // New vote or switching vote
       await tailedBetsDb.addTailedBet(betId, userId, tailed);
+      isNewAction = true;
+    }
+
+    // DM the bet owner when someone tails/fades (only on new action, not toggle-off)
+    if (isNewAction && bet.discord_id !== userId) {
+      const tailerName = interaction.user.displayName || interaction.user.username;
+      const action = tailed ? 'tailed' : 'faded';
+      // Fetch bet details for the DM
+      const { data: betDetails } = await supabase
+        .from('bets')
+        .select('pick, odds_american')
+        .eq('id', betId)
+        .single();
+      notifyBetOwner(interaction.client, bet.discord_id, tailerName, action, betDetails || {});
     }
 
     // Fetch all tailers for this bet
@@ -1314,6 +1330,9 @@ async function saveParlayBet(interaction, session) {
       await db.updateBetMessageId(bet.id, message.id);
     }
 
+    // Notify followers
+    notifyFollowers(interaction.client, bettor.id, interaction.guildId, fullBet, displayName, session.isRetro);
+
     const forLabel = session.targetUser ? ` for **${displayName}**` : '';
     const retroSuffix = session.isRetro ? ` — ${session.retroResult.toUpperCase()} (RETRO)` : '';
     await interaction.update({
@@ -1402,6 +1421,9 @@ async function saveSingleBet(interaction, legData, units, betNote) {
       });
       await db.updateBetMessageId(bet.id, message.id);
     }
+
+    // Notify followers
+    notifyFollowers(interaction.client, bettor.id, interaction.guildId, bet, displayName, session?.isRetro);
 
     const forLabel = session?.targetUser ? ` for **${displayName}**` : '';
     const retroSuffix = session?.isRetro ? ` — ${session.retroResult.toUpperCase()} (RETRO)` : '';
