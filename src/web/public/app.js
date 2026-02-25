@@ -1361,6 +1361,7 @@ function switchPage(page) {
     bets: document.getElementById('bets-page'),
     closebets: document.getElementById('closebets-page'),
     leaderboard: document.getElementById('leaderboard-page'),
+    following: document.getElementById('following-page'),
     reminders: document.getElementById('reminders-page'),
     tools: document.getElementById('tools-page'),
     install: document.getElementById('install-page'),
@@ -1382,6 +1383,7 @@ function switchPage(page) {
   if (page === 'analytics') initAnalyticsPage();
   if (page === 'announce') initAnnouncePage();
   if (page === 'leaderboard') initLeaderboardPage();
+  if (page === 'following') initFollowingPage();
   if (page === 'closebets') initCloseBetsPage();
 }
 
@@ -2006,6 +2008,121 @@ function buildFollowBtn(discordId) {
   if (!discordId || discordId === currentUser?.discordId) return '';
   const isFollowing = followedBettors.has(discordId);
   return `<button class="follow-btn ${isFollowing ? 'following' : ''}" data-discord-id="${discordId}" onclick="event.stopPropagation();toggleFollow('${discordId}')" title="${isFollowing ? 'Following — click to unfollow' : 'Follow this bettor'}">${isFollowing ? '🔔' : '🔕'}</button>`;
+}
+
+// ═══════════════════════════════════════════════
+//  THE INNER CIRCLE (Following Page)
+// ═══════════════════════════════════════════════
+
+let followingInitialized = false;
+
+function initFollowingPage() {
+  if (followingInitialized) return;
+  followingInitialized = true;
+
+  const sel = document.getElementById('following-guild');
+  currentUser.guilds.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    sel.appendChild(opt);
+  });
+
+  sel.addEventListener('change', loadFollowingPage);
+
+  if (currentUser.guilds.length === 1) {
+    autoSelectGuild(sel);
+  } else if (currentUser.guilds.length > 1) {
+    sel.value = currentUser.guilds[0].id;
+    sel.dispatchEvent(new Event('change'));
+  }
+}
+
+async function loadFollowingPage() {
+  const guildId = document.getElementById('following-guild').value;
+  if (!guildId) return;
+
+  document.getElementById('following-loading').classList.remove('hidden');
+  document.getElementById('following-list').classList.add('hidden');
+  document.getElementById('following-empty').classList.add('hidden');
+
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/following`);
+    const data = await res.json();
+    const details = data.details || [];
+
+    // Update the global follow set
+    followGuildId = guildId;
+    followedBettors = new Set(data.following || []);
+
+    document.getElementById('following-loading').classList.add('hidden');
+
+    if (details.length === 0) {
+      document.getElementById('following-empty').classList.remove('hidden');
+      return;
+    }
+
+    const listEl = document.getElementById('following-list');
+    listEl.classList.remove('hidden');
+
+    let html = '';
+    details.forEach(user => {
+      const avatarUrl = user.avatar || '/TheGamblingKing.jpg';
+      html += `
+        <div class="following-card" data-discord-id="${user.discordId}">
+          <img src="${esc(avatarUrl)}" alt="" class="following-avatar">
+          <div class="following-info">
+            <div class="following-name">${esc(user.displayName)}</div>
+            <div class="following-sub">You'll get a DM when they post a bet</div>
+          </div>
+          <button class="btn-unfollow" onclick="unfollowFromPage('${user.discordId}', '${guildId}')">Unfollow</button>
+        </div>`;
+    });
+    listEl.innerHTML = html;
+  } catch (e) {
+    console.error('[Following] Load error:', e);
+    document.getElementById('following-loading').classList.add('hidden');
+    document.getElementById('following-empty').classList.remove('hidden');
+  }
+}
+
+async function unfollowFromPage(discordId, guildId) {
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/follow`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bettorDiscordId: discordId }),
+    });
+    const data = await res.json();
+    if (!data.followed) {
+      followedBettors.delete(discordId);
+      // Animate removal
+      const card = document.querySelector(`.following-card[data-discord-id="${discordId}"]`);
+      if (card) {
+        card.style.transition = 'opacity 0.3s, transform 0.3s';
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(30px)';
+        setTimeout(() => {
+          card.remove();
+          // Check if list empty
+          const listEl = document.getElementById('following-list');
+          if (!listEl.children.length) {
+            listEl.classList.add('hidden');
+            document.getElementById('following-empty').classList.remove('hidden');
+          }
+        }, 300);
+      }
+      showToast('🔕 Unfollowed');
+      // Update any visible follow buttons
+      document.querySelectorAll(`.follow-btn[data-discord-id="${discordId}"]`).forEach(btn => {
+        btn.textContent = '🔕';
+        btn.title = 'Follow this bettor';
+        btn.classList.remove('following');
+      });
+    }
+  } catch (e) {
+    showToast('Failed to unfollow');
+  }
 }
 
 let betsInitialized = false;

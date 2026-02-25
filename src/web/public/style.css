@@ -1511,6 +1511,83 @@ textarea {
   margin-left: 6px;
 }
 
+/* ─── Following Page (The Inner Circle) ─── */
+.following-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.following-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.following-header h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gold);
+}
+.following-controls {
+  margin-bottom: 20px;
+}
+.following-controls .form-select {
+  width: 100%;
+}
+.following-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.following-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.following-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.following-info {
+  flex: 1;
+  min-width: 0;
+}
+.following-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.following-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.btn-unfollow {
+  background: rgba(214, 35, 0, 0.12);
+  color: #D62300;
+  border: 1px solid rgba(214, 35, 0, 0.3);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn-unfollow:hover {
+  background: rgba(214, 35, 0, 0.25);
+  border-color: #D62300;
+}
+
 @media (max-width: 600px) {
   .lb-entry {
     padding: 12px 14px;

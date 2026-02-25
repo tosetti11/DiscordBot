@@ -910,7 +910,7 @@ function createWebServer() {
     }
   });
 
-  // Get who the current user follows in a guild
+  // Get who the current user follows in a guild (with display names)
   app.get('/api/guilds/:guildId/following', authMiddleware, async (req, res) => {
     try {
       const { guildId } = req.params;
@@ -918,7 +918,23 @@ function createWebServer() {
       if (!userGuild) return res.status(403).json({ error: 'Not in this guild' });
 
       const following = await followsDb.getFollowing(req.user.discordId, guildId);
-      res.json({ following: following.map(f => f.bettor_discord_id) });
+      const guild = discordClient?.guilds.cache.get(guildId);
+
+      // Resolve display names + avatars
+      const detailed = await Promise.all(following.map(async (f) => {
+        let displayName = f.bettor_discord_id;
+        let avatar = null;
+        try {
+          if (guild) {
+            const member = await fetchMember(guild, f.bettor_discord_id);
+            displayName = member.displayName || member.user.username;
+            avatar = member.user.displayAvatarURL({ size: 64 });
+          }
+        } catch (e) {}
+        return { discordId: f.bettor_discord_id, displayName, avatar };
+      }));
+
+      res.json({ following: detailed.map(d => d.discordId), details: detailed });
     } catch (err) {
       console.error('[API] Get following error:', err);
       res.status(500).json({ error: 'Failed to get following' });
