@@ -941,6 +941,8 @@ function createWebServer() {
     }
   });
 
+  const GAMBLING_KING_ID = '1246525685749649441';
+
   // Get all guild members with follow status (for The Inner Circle page)
   app.get('/api/guilds/:guildId/circle-members', authMiddleware, async (req, res) => {
     try {
@@ -962,7 +964,7 @@ function createWebServer() {
               displayName: m.displayName || m.user.username,
               username: m.user.username,
               avatar: m.user.displayAvatarURL({ size: 64 }),
-              isKing: m.id === SITE_OWNER_ID,
+              isKing: m.id === GAMBLING_KING_ID,
             }));
           const following = await followsDb.getFollowing(req.user.discordId, guildId);
           const followingIds = following.map(f => f.bettor_discord_id);
@@ -992,7 +994,7 @@ function createWebServer() {
           displayName: m.displayName || m.user.username,
           username: m.user.username,
           avatar: m.user.displayAvatarURL({ size: 64 }),
-          isKing: m.id === SITE_OWNER_ID,
+          isKing: m.id === GAMBLING_KING_ID,
         }));
 
       const following = await followsDb.getFollowing(req.user.discordId, guildId);
