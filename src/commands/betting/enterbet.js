@@ -94,10 +94,11 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
-const { PermissionFlagsBits } = require('discord.js');
+const { PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
 const { SPORTS } = require('../../config/constants');
 const { americanToDecimal, decimalToAmerican } = require('../../utils/odds');
 const { buildBetEmbed, buildWhaleBetEmbed } = require('../../utils/embeds');
+const { generateBetCardImage } = require('../../utils/betCardImage');
 const db = require('../../database/queries');
 
 // In-memory store for bet-building sessions (cleared on completion)
@@ -1294,18 +1295,24 @@ async function saveParlayBet(interaction, session) {
     const fullBet = await db.getBet(bet.id);
 
     const isWhale = session.isWhale || false;
-    const embed = isWhale
-      ? buildWhaleBetEmbed(fullBet, displayName, bettor.displayAvatarURL())
-      : buildBetEmbed(fullBet, displayName, bettor.displayAvatarURL());
+
+    // Build image attachment for non-whale bets, embed for whale bets
+    let sendPayload;
+    if (isWhale) {
+      const embed = buildWhaleBetEmbed(fullBet, displayName, bettor.displayAvatarURL());
+      sendPayload = { embeds: [embed] };
+    } else {
+      const imgBuffer = await generateBetCardImage(fullBet, displayName, bettor.displayAvatarURL());
+      const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+      sendPayload = { files: [attachment] };
+    }
 
     // Post to channel (channel already resolved above)
     if (session.isRetro) {
       // Retro — post without tail poll
       const retroLabel = `📋 **RETRO SLIP** — ${session.retroResult.toUpperCase()}`;
-      const message = await channel.send({
-        embeds: [embed],
-        content: isWhale ? `🚨🐋 **WHALE DICK RETRO** 🐋🚨\n${retroLabel}` : retroLabel,
-      });
+      sendPayload.content = isWhale ? `🚨🐋 **WHALE DICK RETRO** 🐋🚨\n${retroLabel}` : retroLabel;
+      const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     } else {
       // Normal — add poll buttons
@@ -1322,11 +1329,9 @@ async function saveParlayBet(interaction, session) {
       );
 
       const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
-      const message = await channel.send({
-        embeds: [embed],
-        components: [pollRow],
-        content: isWhale ? whaleContent : 'Are You Tailing This Bet?'
-      });
+      sendPayload.components = [pollRow];
+      sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
+      const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     }
 
@@ -1386,18 +1391,24 @@ async function saveSingleBet(interaction, legData, units, betNote) {
     const bet = await db.createBet(betData, displayName);
 
     const isWhale = session?.isWhale || false;
-    const embed = isWhale
-      ? buildWhaleBetEmbed(bet, displayName, bettor.displayAvatarURL())
-      : buildBetEmbed(bet, displayName, bettor.displayAvatarURL());
+
+    // Build image attachment for non-whale bets, embed for whale bets
+    let sendPayload;
+    if (isWhale) {
+      const embed = buildWhaleBetEmbed(bet, displayName, bettor.displayAvatarURL());
+      sendPayload = { embeds: [embed] };
+    } else {
+      const imgBuffer = await generateBetCardImage(bet, displayName, bettor.displayAvatarURL());
+      const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+      sendPayload = { files: [attachment] };
+    }
 
     // Post to channel
     if (session?.isRetro) {
       // Retro — post without tail poll
       const retroLabel = `📋 **RETRO SLIP** — ${session.retroResult.toUpperCase()}`;
-      const message = await channel.send({
-        embeds: [embed],
-        content: isWhale ? `🚨🐋 **WHALE DICK RETRO** 🐋🚨\n${retroLabel}` : retroLabel,
-      });
+      sendPayload.content = isWhale ? `🚨🐋 **WHALE DICK RETRO** 🐋🚨\n${retroLabel}` : retroLabel;
+      const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     } else {
       // Normal — add poll buttons
@@ -1414,11 +1425,9 @@ async function saveSingleBet(interaction, legData, units, betNote) {
       );
 
       const whaleContent = '🚨🐋 **WHALE DICK ALERT** 🐋🚨\nAre You Tailing This Bet?';
-      const message = await channel.send({
-        embeds: [embed],
-        components: [pollRow],
-        content: isWhale ? whaleContent : 'Are You Tailing This Bet?'
-      });
+      sendPayload.components = [pollRow];
+      sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
+      const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     }
 

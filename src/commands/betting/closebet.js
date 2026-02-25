@@ -7,7 +7,8 @@ const {
 } = require('discord.js');
 const db = require('../../database/queries');
 const { PermissionFlagsBits } = require('discord.js');
-const { buildBetEmbed } = require('../../utils/embeds');
+const { buildBetEmbed, buildWhaleBetEmbed } = require('../../utils/embeds');
+const { generateBetCardImage } = require('../../utils/betCardImage');
 const { SPORT_NAMES, STATUS_EMOJI } = require('../../config/constants');
 const { formatOdds } = require('../../utils/odds');
 
@@ -293,12 +294,16 @@ async function updateParlayEmbed(interaction, session) {
     if (fullBet.message_id && fullBet.channel_id) {
       const channel = await interaction.client.channels.fetch(fullBet.channel_id);
       const message = await channel.messages.fetch(fullBet.message_id);
-      const embed = buildBetEmbed(
-        fullBet,
-        interaction.member?.displayName || interaction.user.displayName,
-        interaction.user.displayAvatarURL()
-      );
-      await message.edit({ embeds: [embed] });
+      const displayName = interaction.member?.displayName || interaction.user.displayName;
+      if (fullBet.is_whale) {
+        const embed = buildWhaleBetEmbed(fullBet, displayName, interaction.user.displayAvatarURL());
+        await message.edit({ embeds: [embed] });
+      } else {
+        const { AttachmentBuilder } = require('discord.js');
+        const imgBuffer = await generateBetCardImage(fullBet, displayName, interaction.user.displayAvatarURL());
+        const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+        await message.edit({ files: [attachment], embeds: [], attachments: [] });
+      }
     }
   } catch (e) {
     console.warn('Could not update parlay embed:', e.message);
@@ -370,12 +375,16 @@ async function handleResultButton(interaction) {
       try {
         const channel = await interaction.client.channels.fetch(fullBet.channel_id);
         const message = await channel.messages.fetch(fullBet.message_id);
-        const embed = buildBetEmbed(
-          fullBet,
-          interaction.member?.displayName || interaction.user.displayName,
-          interaction.user.displayAvatarURL()
-        );
-        await message.edit({ embeds: [embed] });
+        const displayName = interaction.member?.displayName || interaction.user.displayName;
+        if (fullBet.is_whale) {
+          const embed = buildWhaleBetEmbed(fullBet, displayName, interaction.user.displayAvatarURL());
+          await message.edit({ embeds: [embed] });
+        } else {
+          const { AttachmentBuilder } = require('discord.js');
+          const imgBuffer = await generateBetCardImage(fullBet, displayName, interaction.user.displayAvatarURL());
+          const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+          await message.edit({ files: [attachment], embeds: [], attachments: [] });
+        }
       } catch (e) {
         console.warn('Could not update original bet message:', e.message);
       }
