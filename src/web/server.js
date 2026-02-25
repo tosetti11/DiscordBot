@@ -1404,11 +1404,12 @@ function createWebServer() {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      // Validate base64 image
-      const match = imageData.match(/^data:image\/png;base64,(.+)$/);
+      // Validate base64 image (PNG or JPEG)
+      const match = imageData.match(/^data:image\/(png|jpeg);base64,(.+)$/);
       if (!match) return res.status(400).json({ error: 'Invalid image data' });
 
-      const imgBuffer = Buffer.from(match[1], 'base64');
+      const imgFormat = match[1]; // 'png' or 'jpeg'
+      const imgBuffer = Buffer.from(match[2], 'base64');
       // Limit to 8MB (Discord file size limit)
       if (imgBuffer.length > 8 * 1024 * 1024) {
         return res.status(400).json({ error: 'Image too large (max 8MB)' });
@@ -1433,7 +1434,8 @@ function createWebServer() {
 
       const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
-      const filename = pageType === 'stats' ? 'stats.png' : 'leaderboard.png';
+      const ext = imgFormat === 'jpeg' ? 'jpg' : 'png';
+      const filename = pageType === 'stats' ? `stats.${ext}` : `leaderboard.${ext}`;
       const attachment = new AttachmentBuilder(imgBuffer, { name: filename });
 
       const title = pageType === 'stats' ? '📊 Statistics' : '🏆 Rankings';

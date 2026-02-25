@@ -3414,21 +3414,31 @@ async function openShareModal(pageType) {
 
   // Capture screenshot
   try {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     const canvas = await html2canvas(target, {
       backgroundColor: '#121212',
-      scale: 2,
+      scale: isMobile ? 1 : 2,
       useCORS: true,
+      allowTaint: true,
       logging: false,
       windowWidth: target.scrollWidth,
+      imageTimeout: 5000,
+      removeContainer: true,
     });
-    shareCapturedImage = canvas.toDataURL('image/png');
+    // Use JPEG to keep size manageable (especially on mobile)
+    shareCapturedImage = canvas.toDataURL('image/jpeg', 0.9);
+    // Fallback to PNG if JPEG returned empty
+    if (!shareCapturedImage || shareCapturedImage.length < 100) {
+      shareCapturedImage = canvas.toDataURL('image/png');
+    }
     previewImg.src = shareCapturedImage;
     previewImg.classList.remove('hidden');
     previewLoading.classList.add('hidden');
     document.getElementById('share-send-btn').disabled = false;
   } catch (e) {
     console.error('Screenshot capture failed:', e);
-    previewLoading.innerHTML = '<p style="color:var(--text-danger)">Failed to capture screenshot</p>';
+    previewLoading.innerHTML = '<p style="color:var(--text-danger)">Failed to capture screenshot. Try refreshing the page.</p>';
+    showToast('Screenshot capture failed: ' + (e.message || 'Unknown error'));
   }
 }
 
@@ -3512,7 +3522,8 @@ async function sendShareToDiscord() {
       showToast(data.error || 'Failed to share');
     }
   } catch (e) {
-    showToast('Failed to share');
+    console.error('Share failed:', e);
+    showToast('Failed to share: ' + (e.message || 'Network error'));
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="12" viewBox="0 0 71 55" fill="currentColor"><path d="M60.1 4.9A58.5 58.5 0 0045.4.2a.2.2 0 00-.2.1 40.8 40.8 0 00-1.8 3.7 54 54 0 00-16.2 0A37.4 37.4 0 0025.4.3a.2.2 0 00-.2-.1A58.4 58.4 0 0010.5 5 59.6 59.6 0 00.4 45.1a.3.3 0 00.1.2 58.7 58.7 0 0017.7 9 .2.2 0 00.3-.1 42 42 0 003.6-5.9.2.2 0 00-.1-.3 38.7 38.7 0 01-5.5-2.6.2.2 0 01 0-.4l1.1-.9a.2.2 0 01.2 0 41.8 41.8 0 0035.6 0 .2.2 0 01.2 0l1.1.9a.2.2 0 010 .4 36.4 36.4 0 01-5.5 2.6.2.2 0 00-.1.3 47.2 47.2 0 003.6 5.9.2.2 0 00.3.1 58.5 58.5 0 0017.7-9 .3.3 0 00.1-.2c1.5-15.5-2.5-29-10.5-40.2zM23.7 37c-3.5 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.2 6.3 7-2.8 7-6.3 7zm23.2 0c-3.5 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.2 6.3 7-2.8 7-6.3 7z"/></svg> Send`;
