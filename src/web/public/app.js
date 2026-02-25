@@ -962,9 +962,15 @@ async function handleSlipFile(e) {
       throw new Error(result.error || 'Failed to analyze bet slip');
     }
 
+    // Log raw scan data for troubleshooting
+    console.log('📸 OCR Scan Result:', JSON.stringify(result.data, null, 2));
+
     // Apply parsed data to form
     applyOcrData(result.data);
-    showToast('Bet slip scanned! Review and adjust the fields below.');
+
+    // Build summary of what was detected
+    const summary = buildScanSummary(result.data);
+    showToast(`Scan complete! ${summary}`, 7000);
     trackActivity('ocr_scan');
 
   } catch (err) {
@@ -992,6 +998,55 @@ function applyOcrData(data) {
   } else {
     applySingleData(data);
   }
+}
+
+function buildScanSummary(data) {
+  const found = [];
+  const missed = [];
+
+  if (data.betType === 'parlay') {
+    const legCount = data.legs?.length || 0;
+    found.push(`${legCount} legs`);
+    if (data.oddsAmerican) found.push('odds');
+    else missed.push('odds');
+    if (data.wagerAmount) found.push(`$${data.wagerAmount} wager`);
+    else missed.push('wager amount');
+
+    (data.legs || []).forEach((leg, i) => {
+      const n = i + 1;
+      if (!leg.sport) missed.push(`leg ${n} sport`);
+      if (!leg.betCategory) missed.push(`leg ${n} category`);
+      if (leg.betCategory === 'team_game' && (!leg.teamA || !leg.teamB)) missed.push(`leg ${n} teams`);
+      if (leg.betCategory === 'player_prop' && !leg.playerName) missed.push(`leg ${n} player`);
+      if (leg.betCategory === 'futures' && !leg.futuresSelection) missed.push(`leg ${n} selection`);
+    });
+  } else {
+    if (data.sport) found.push(data.sport.toUpperCase());
+    else missed.push('sport');
+    if (data.betCategory) found.push(data.betCategory.replace('_', ' '));
+    else missed.push('category');
+    if (data.oddsAmerican) found.push(data.oddsAmerican);
+    else missed.push('odds');
+    if (data.wagerAmount) found.push(`$${data.wagerAmount}`);
+    else missed.push('wager amount');
+
+    if (data.betCategory === 'team_game') {
+      if (data.teamA) found.push(data.teamA);
+      else missed.push('team A');
+      if (data.teamB) found.push(data.teamB);
+      else missed.push('team B');
+    } else if (data.betCategory === 'player_prop') {
+      if (data.playerName) found.push(data.playerName);
+      else missed.push('player');
+    } else if (data.betCategory === 'futures') {
+      if (data.futuresSelection) found.push(data.futuresSelection);
+      else missed.push('selection');
+    }
+  }
+
+  let msg = `Found: ${found.join(', ')}.`;
+  if (missed.length) msg += ` Missing: ${missed.join(', ')}.`;
+  return msg;
 }
 
 function applySingleData(data) {
@@ -1164,7 +1219,7 @@ function applyParlayData(data) {
 }
 
 // ── Toast ──
-function showToast(msg) {
+function showToast(msg, duration = 4000) {
   const existing = document.querySelector('.toast');
   if (existing) existing.remove();
 
@@ -1173,7 +1228,7 @@ function showToast(msg) {
   toast.textContent = msg;
   document.body.appendChild(toast);
 
-  setTimeout(() => toast.remove(), 4000);
+  setTimeout(() => toast.remove(), duration);
 }
 
 // ═══════════════════════════════════════════════
