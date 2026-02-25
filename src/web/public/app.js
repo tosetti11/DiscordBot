@@ -3510,7 +3510,13 @@ async function sendShareToDiscord() {
         imageData: shareCapturedImage,
       }),
     });
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch {
+      console.error('Non-JSON response:', res.status, text.slice(0, 200));
+      showToast(res.status === 413 ? 'Image too large – try a smaller screenshot' : 'Server error (' + res.status + ')');
+      return;
+    }
     if (data.success) {
       showToast('Shared to Discord!');
       closeShareModal();

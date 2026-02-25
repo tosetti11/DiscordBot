@@ -99,7 +99,12 @@ function createWebServer() {
   const activeUsers = new Map();
   const HEARTBEAT_TIMEOUT = 60000; // 60s — offline if no ping
 
-  app.use(express.json({ limit: '100kb' }));
+  // Global JSON parser – skip the share endpoint so its own larger parser handles it
+  const globalJsonParser = express.json({ limit: '100kb' });
+  app.use((req, res, next) => {
+    if (req.path === '/api/share-to-discord') return next();
+    globalJsonParser(req, res, next);
+  });
 
   // Larger limit specifically for image share endpoint
   const imageJsonParser = express.json({ limit: '10mb' });
