@@ -3496,3 +3496,36 @@ textarea {
   text-transform: uppercase;
   border-top: 1px solid #222;
 }
+
+/* ── Close Bet Modal ── */
+.close-bet-body { padding: 0 20px 10px; }
+.close-bet-desc { color: var(--text-secondary); margin-bottom: 10px; font-size: 0.9rem; }
+.close-bet-outcomes { display: flex; gap: 8px; }
+.close-outcome-btn {
+  flex: 1;
+  padding: 10px 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all .15s;
+  opacity: 0.6;
+}
+.close-outcome-btn.selected { opacity: 1; transform: scale(1.05); }
+.close-outcome-btn.win { background: rgba(67,181,129,0.15); color: #43b581; }
+.close-outcome-btn.win.selected { border-color: #43b581; background: rgba(67,181,129,0.3); }
+.close-outcome-btn.loss { background: rgba(214,35,0,0.15); color: #D62300; }
+.close-outcome-btn.loss.selected { border-color: #D62300; background: rgba(214,35,0,0.3); }
+.close-outcome-btn.push { background: rgba(250,166,26,0.15); color: #faa61a; }
+.close-outcome-btn.push.selected { border-color: #faa61a; background: rgba(250,166,26,0.3); }
+.close-bet-body textarea {
+  background: var(--bg-input, #1a1a1a);
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  color: var(--text-primary, #fff);
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.close-bet-body textarea::placeholder { color: var(--text-secondary, #888); }

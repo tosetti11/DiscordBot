@@ -1746,9 +1746,7 @@ function renderBetCard(bet, showOwner = false) {
   if (canManage && bet.status === 'open') {
     actionsHtml = `
       <div class="ticket-actions">
-        <button class="ticket-btn ticket-btn-win" onclick="event.stopPropagation();closeBet('${bet.id}','win')">✅ Win</button>
-        <button class="ticket-btn ticket-btn-loss" onclick="event.stopPropagation();closeBet('${bet.id}','loss')">❌ Loss</button>
-        <button class="ticket-btn ticket-btn-push" onclick="event.stopPropagation();closeBet('${bet.id}','push')">🔄 Push</button>
+        <button class="ticket-btn ticket-btn-win" onclick="event.stopPropagation();closeBet('${bet.id}')">💰 Close</button>
         <button class="ticket-btn ticket-btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')">✏️</button>
         <button class="ticket-btn ticket-btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')">🗑️</button>
       </div>`;
@@ -1939,23 +1937,60 @@ async function reopenBet(betId) {
   }
 }
 
-async function closeBet(betId, status) {
-  if (!confirm(`Mark this bet as ${status.toUpperCase()}?`)) return;
+// ── Close Bet Modal ──
+let closeBetPendingId = null;
+let closeBetPendingOutcome = null;
+
+function closeBet(betId) {
+  closeBetPendingId = betId;
+  closeBetPendingOutcome = null;
+  // Reset UI
+  document.querySelectorAll('.close-outcome-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('close-bet-message').value = '';
+  document.getElementById('close-bet-confirm-btn').disabled = true;
+  document.getElementById('close-bet-modal').classList.remove('hidden');
+}
+
+function selectCloseOutcome(outcome) {
+  closeBetPendingOutcome = outcome;
+  document.querySelectorAll('.close-outcome-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.outcome === outcome);
+  });
+  document.getElementById('close-bet-confirm-btn').disabled = false;
+}
+
+function closeCloseBetModal() {
+  document.getElementById('close-bet-modal').classList.add('hidden');
+  closeBetPendingId = null;
+  closeBetPendingOutcome = null;
+}
+
+async function confirmCloseBet() {
+  if (!closeBetPendingId || !closeBetPendingOutcome) return;
+  const message = document.getElementById('close-bet-message').value.trim();
+  const btn = document.getElementById('close-bet-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Closing...';
 
   try {
-    const res = await fetch(`/api/bets/${betId}/close`, {
+    const res = await fetch(`/api/bets/${closeBetPendingId}/close`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status: closeBetPendingOutcome, communityMessage: message || undefined })
     });
     const data = await res.json();
     if (data.error) {
-      alert('Error: ' + data.error);
+      showToast('Error: ' + data.error);
       return;
     }
+    showToast('Bet closed');
+    closeCloseBetModal();
     loadBets(); // Refresh
   } catch (e) {
-    alert('Failed to close bet');
+    showToast('Failed to close bet');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Close & Post';
   }
 }
 

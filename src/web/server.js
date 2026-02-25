@@ -1134,7 +1134,7 @@ function createWebServer() {
   app.post('/api/bets/:betId/close', authMiddleware, async (req, res) => {
     try {
       const { betId } = req.params;
-      const { status, resultNote } = req.body; // status: 'win', 'loss', 'push'
+      const { status, resultNote, communityMessage } = req.body;
 
       if (!['win', 'loss', 'push'].includes(status)) {
         return res.status(400).json({ error: 'Status must be win, loss, or push' });
@@ -1160,15 +1160,48 @@ function createWebServer() {
         }
       }
 
-      // Update Discord message
+      // Delete original Discord message and post a fresh one with the result
       if (bet.message_id && bet.channel_id) {
         try {
           const channel = await discordClient.channels.fetch(bet.channel_id);
-          const message = await channel.messages.fetch(bet.message_id);
+
+          // Delete the original message
+          try {
+            const oldMsg = await channel.messages.fetch(bet.message_id);
+            await oldMsg.delete();
+          } catch (e) {} // Original may already be deleted
+
+          // Build the updated embed
           const updatedBet = await db.getBet(betId);
-          const embed = buildBetEmbed(updatedBet, null, null);
-          await message.edit({ embeds: [embed], components: [] });
-        } catch (e) {}
+          const embedFn = updatedBet.is_whale ? buildWhaleBetEmbed : buildBetEmbed;
+          const embed = embedFn(updatedBet, null, null);
+
+          // Build the content message
+          let displayName = req.user.displayName || req.user.username || 'Unknown';
+          try {
+            const guild = discordClient.guilds.cache.get(bet.guild_id);
+            if (guild) {
+              const member = await fetchMember(guild, req.user.discordId);
+              displayName = member.displayName;
+            }
+          } catch (e) {}
+
+          const resultEmoji = status === 'win' ? '✅' : status === 'loss' ? '❌' : '🔄';
+          let content = `${resultEmoji} **${displayName}** closed a bet as **${status.toUpperCase()}**`;
+
+          // Append the user's community message (supports GIFs, emojis, etc.)
+          if (communityMessage && communityMessage.trim()) {
+            content += `\n\n${communityMessage.trim()}`;
+          }
+
+          // Post the new message
+          const newMsg = await channel.send({ content, embeds: [embed] });
+
+          // Update the stored message_id so future edits reference the new message
+          await db.updateBetMessageId(betId, newMsg.id);
+        } catch (e) {
+          console.error('[API] Close bet Discord update error:', e);
+        }
       }
 
       res.json({ success: true });

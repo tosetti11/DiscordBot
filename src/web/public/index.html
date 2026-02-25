@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=25">
+  <link rel="stylesheet" href="/style.css?v=26">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -1323,6 +1323,32 @@
     </div>
   </footer>
 
+  <!-- Close Bet Modal -->
+  <div id="close-bet-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeCloseBetModal()">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h3 id="close-bet-title">💰 Close Bet</h3>
+        <button class="modal-close" onclick="closeCloseBetModal()">&times;</button>
+      </div>
+      <div class="close-bet-body">
+        <p class="close-bet-desc">Pick the result:</p>
+        <div class="close-bet-outcomes">
+          <button class="btn close-outcome-btn win" onclick="selectCloseOutcome('win')" data-outcome="win">✅ Win</button>
+          <button class="btn close-outcome-btn loss" onclick="selectCloseOutcome('loss')" data-outcome="loss">❌ Loss</button>
+          <button class="btn close-outcome-btn push" onclick="selectCloseOutcome('push')" data-outcome="push">🔄 Push</button>
+        </div>
+        <div class="form-group" style="margin-top:14px;">
+          <label for="close-bet-message">Message to the community <span style="color:var(--text-secondary);font-weight:400;">(optional)</span></label>
+          <textarea id="close-bet-message" rows="3" placeholder="Add a message, GIF link, emojis... anything you want posted with the result!" style="width:100%;resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeCloseBetModal()">Cancel</button>
+        <button class="btn btn-primary" id="close-bet-confirm-btn" onclick="confirmCloseBet()" disabled>Close &amp; Post</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Share to Discord Modal -->
   <div id="share-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeShareModal()">
     <div class="modal-card modal-sm">
@@ -1356,6 +1382,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=25"></script>
+  <script src="/app.js?v=26"></script>
 </body>
 </html>
