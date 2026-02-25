@@ -3,6 +3,12 @@ const path = require('path');
 const { SPORT_NAMES, WAGER_TYPES } = require('../config/constants');
 const { formatOdds, calculatePayout } = require('./odds');
 
+// ── Register bundled Inter font ─────────────────────────────
+const FONT_PATH = path.join(__dirname, '..', 'fonts', 'Inter-Variable.ttf');
+GlobalFonts.registerFromPath(FONT_PATH, 'Inter');
+const FF = '"Inter", sans-serif';  // font-family used everywhere
+const FF_MONO = '"Courier New", "Inter", monospace';
+
 // ── Colors ──────────────────────────────────────────────────
 const C = {
   bgTop: '#1e1e1e',
@@ -72,7 +78,7 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 function drawPill(ctx, x, y, text, bgColor, textColor, fontSize = 11, fontWeight = '700', paddingX = 10, paddingY = 4) {
-  ctx.font = `${fontWeight} ${fontSize}px "Arial", "Segoe UI", sans-serif`;
+  ctx.font = `${fontWeight} ${fontSize}px ${FF}`;
   const m = ctx.measureText(text);
   const pw = paddingX * 2 + m.width;
   const ph = paddingY * 2 + fontSize;
@@ -153,7 +159,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   y += 10; // gap
 
   // Pick text
-  tempCtx.font = 'bold 20px "Arial", "Segoe UI", sans-serif';
+  tempCtx.font = 'bold 20px ' + FF;
   let pickText = bet.pick || (isParlay ? `${bet.parlay_legs.length}-Leg Parlay` : '—');
   if (bet.bet_category === 'futures' && !isParlay) {
     const parts = bet.pick ? bet.pick.split(': ') : [bet.pick];
@@ -176,7 +182,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     for (const leg of bet.parlay_legs) {
       y += 6; // gap between legs
       y += 16; // leg header (status + sport)
-      tempCtx.font = 'bold 13px "Arial", "Segoe UI", sans-serif';
+      tempCtx.font = 'bold 13px ' + FF;
       const legPickLines = wrapText(tempCtx, leg.pick || '—', INNER - 24);
       y += legPickLines.length * 17;
       if (leg.team_a && leg.team_b) y += 15;
@@ -197,7 +203,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
   // Note (if exists)
   if (bet.bet_note) {
-    tempCtx.font = '12px "Arial", "Segoe UI", sans-serif';
+    tempCtx.font = '12px ' + FF;
     const noteLines = wrapText(tempCtx, bet.bet_note, INNER - 20);
     y += 10 + noteLines.length * 16 + 10;
     y += 1; // divider
@@ -272,20 +278,20 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
   // Separator │
   const sepX = logoX + logoSize + 8;
-  ctx.font = '300 18px "Arial", sans-serif';
+  ctx.font = '300 18px ' + FF;
   ctx.fillStyle = 'rgba(255, 135, 50, 0.3)';
   ctx.fillText('│', sepX, HEADER_H / 2 + 6);
 
   // Username
   const nameX = sepX + 14;
-  ctx.font = 'bold 13px "Arial", "Segoe UI", sans-serif';
+  ctx.font = 'bold 13px ' + FF;
   ctx.fillStyle = C.textSecondary;
   const truncName = displayName.length > 20 ? displayName.slice(0, 18) + '…' : displayName;
   ctx.fillText(truncName, nameX, HEADER_H / 2 + 5);
 
   // Status badge (right side)
   const badgeText = statusLabel;
-  ctx.font = '800 11px "Arial", "Segoe UI", sans-serif';
+  ctx.font = '800 11px ' + FF;
   const badgeW = ctx.measureText(badgeText).width + 20;
   const badgeH = 22;
   const badgeX = W - PAD - badgeW;
@@ -294,7 +300,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   ctx.fillStyle = sc.bgBadge;
   ctx.fill();
   ctx.fillStyle = sc.text;
-  ctx.font = '800 11px "Arial", "Segoe UI", sans-serif';
+  ctx.font = '800 11px ' + FF;
   ctx.fillText(badgeText, badgeX + 10, badgeY + 15);
 
   curY = HEADER_H;
@@ -314,14 +320,14 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   }
 
   if (!isParlay && wagerLabel) {
-    ctx.font = '600 11px "Arial", "Segoe UI", sans-serif';
+    ctx.font = '600 11px ' + FF;
     ctx.fillStyle = C.textMuted;
     ctx.fillText(wagerLabel.toUpperCase(), tagX, curY + 14);
     tagX += ctx.measureText(wagerLabel.toUpperCase()).width + 10;
   }
 
   if (isParlay) {
-    ctx.font = '600 11px "Arial", "Segoe UI", sans-serif';
+    ctx.font = '600 11px ' + FF;
     ctx.fillStyle = C.textMuted;
     ctx.fillText('PARLAY', tagX, curY + 14);
     tagX += ctx.measureText('PARLAY').width + 10;
@@ -339,7 +345,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   curY += 10; // gap
 
   // ── Pick text (big bold) ──
-  ctx.font = 'bold 20px "Arial", "Segoe UI", sans-serif';
+  ctx.font = 'bold 20px ' + FF;
   ctx.fillStyle = C.textPrimary;
   for (const line of pickLines) {
     ctx.fillText(line, LEFT_BAR + PAD, curY + 18);
@@ -350,19 +356,19 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   // ── Single bet details ──
   if (!isParlay) {
     if (bet.team_a && bet.team_b) {
-      ctx.font = '13px "Arial", "Segoe UI", sans-serif';
+      ctx.font = '13px ' + FF;
       ctx.fillStyle = C.textMuted;
       ctx.fillText(`${bet.team_a} vs ${bet.team_b}`, LEFT_BAR + PAD, curY + 13);
       curY += 18;
     }
     if (bet.player_name) {
-      ctx.font = '13px "Arial", "Segoe UI", sans-serif';
+      ctx.font = '13px ' + FF;
       ctx.fillStyle = C.textSecondary;
       ctx.fillText(bet.player_name, LEFT_BAR + PAD, curY + 13);
       curY += 18;
     }
     if (bet.event_start_time) {
-      ctx.font = '12px "Arial", "Segoe UI", sans-serif';
+      ctx.font = '12px ' + FF;
       ctx.fillStyle = C.textMuted;
       ctx.fillText(`⏰ ${bet.event_start_time}`, LEFT_BAR + PAD, curY + 13);
       curY += 18;
@@ -389,16 +395,16 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       const legStatusMap = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void: '⛔' };
       const legEmoji = legStatusMap[leg.status] || '🟡';
 
-      ctx.font = '13px "Arial", "Segoe UI", sans-serif';
+      ctx.font = '13px ' + FF;
       ctx.fillStyle = C.textPrimary;
       ctx.fillText(legEmoji, legX, curY + 13);
-      ctx.font = '600 10px "Arial", "Segoe UI", sans-serif';
+      ctx.font = '600 10px ' + FF;
       ctx.fillStyle = C.textMuted;
       ctx.fillText(legSport, legX + 22, curY + 12);
       curY += 16;
 
       // Leg pick
-      ctx.font = 'bold 13px "Arial", "Segoe UI", sans-serif';
+      ctx.font = 'bold 13px ' + FF;
       ctx.fillStyle = C.textPrimary;
       const legPickLines = wrapText(ctx, leg.pick || '—', legInner);
       for (const lp of legPickLines) {
@@ -408,7 +414,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
       // Matchup
       if (leg.team_a && leg.team_b) {
-        ctx.font = '11px "Arial", "Segoe UI", sans-serif';
+        ctx.font = '11px ' + FF;
         ctx.fillStyle = C.textMuted;
         ctx.fillText(`${leg.team_a} vs ${leg.team_b}`, legX, curY + 12);
         curY += 15;
@@ -416,7 +422,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
       // Player
       if (leg.player_name) {
-        ctx.font = '11px "Arial", "Segoe UI", sans-serif';
+        ctx.font = '11px ' + FF;
         ctx.fillStyle = C.textSecondary;
         ctx.fillText(leg.player_name, legX, curY + 12);
         curY += 15;
@@ -424,7 +430,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
       // Event time
       if (leg.event_start_time) {
-        ctx.font = '11px "Arial", "Segoe UI", sans-serif';
+        ctx.font = '11px ' + FF;
         ctx.fillStyle = C.textMuted;
         ctx.fillText(`⏰ ${leg.event_start_time}`, legX, curY + 12);
         curY += 15;
@@ -432,7 +438,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
       // Leg odds
       if (leg.odds_american) {
-        ctx.font = '11px "Arial", "Segoe UI", sans-serif';
+        ctx.font = '11px ' + FF;
         ctx.fillStyle = C.textSecondary;
         ctx.fillText(`Odds: ${formatOdds(leg.odds_american)}`, legX, curY + 12);
         curY += 15;
@@ -461,7 +467,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   const colW = (W - LEFT_BAR - PAD * 2) / 3;
 
   // Labels
-  ctx.font = '700 10px "Arial", "Segoe UI", sans-serif';
+  ctx.font = '700 10px ' + FF;
   const labels = ['ODDS', 'WAGER', 'TO WIN'];
   const oddsStr = bet.odds_american ? `${formatOdds(bet.odds_american)} (${bet.odds_decimal})` : '—';
   const unitsStr = `${fmtU(bet.units)}u`;
@@ -477,13 +483,13 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
     // Label
     ctx.fillStyle = C.textMuted;
-    ctx.font = '700 10px "Arial", "Segoe UI", sans-serif';
+    ctx.font = '700 10px ' + FF;
     const lw = ctx.measureText(labels[i]).width;
     ctx.fillText(labels[i], cx - lw / 2, statsY + 18);
 
     // Value
     ctx.fillStyle = valueColors[i];
-    ctx.font = '800 16px "Arial", "Segoe UI", sans-serif';
+    ctx.font = '800 16px ' + FF;
     const vw = ctx.measureText(values[i]).width;
     ctx.fillText(values[i], cx - vw / 2, statsY + 38);
   }
@@ -495,7 +501,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     drawDashedLine(ctx, LEFT_BAR + 14, curY, W - 14);
     curY += 1;
     curY += 10;
-    ctx.font = 'italic 12px "Arial", "Segoe UI", sans-serif';
+    ctx.font = 'italic 12px ' + FF;
     ctx.fillStyle = C.textMuted;
     const noteLines = wrapText(ctx, `📝 ${bet.bet_note}`, INNER - 20);
     for (const nl of noteLines) {
@@ -516,11 +522,11 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       + ' ' + new Date(bet.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
     : '';
 
-  ctx.font = '11px "Courier New", monospace';
+  ctx.font = '11px ' + FF_MONO;
   ctx.fillStyle = C.textMuted;
   ctx.fillText(slipStr, LEFT_BAR + PAD, curY + 24);
 
-  ctx.font = '11px "Arial", "Segoe UI", sans-serif';
+  ctx.font = '11px ' + FF;
   ctx.fillStyle = C.textMuted;
   const dateW = ctx.measureText(dateStr).width;
   ctx.fillText(dateStr, W - PAD - dateW, curY + 24);
