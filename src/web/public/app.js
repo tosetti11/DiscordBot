@@ -1023,6 +1023,7 @@ function switchPage(page) {
 // ═══════════════════════════════════════════════
 
 let closeBetsInitialized = false;
+let closeBetsPerms = { isAdmin: false };
 
 function initCloseBetsPage() {
   if (closeBetsInitialized) return;
@@ -1037,12 +1038,29 @@ function initCloseBetsPage() {
     sel.appendChild(opt);
   });
 
-  sel.addEventListener('change', () => loadCloseBets());
+  sel.addEventListener('change', async () => {
+    const guildId = sel.value;
+    if (!guildId) return;
+
+    // Check admin perms
+    try {
+      const rolesRes = await fetch(`/api/guilds/${guildId}/roles`);
+      closeBetsPerms = await rolesRes.json();
+    } catch (e) {
+      closeBetsPerms = { isAdmin: false };
+    }
+
+    // Temporarily set betsGuildPerms so renderBetCard picks up admin
+    const savedPerms = betsGuildPerms;
+    betsGuildPerms = closeBetsPerms;
+    await loadCloseBets();
+    betsGuildPerms = savedPerms;
+  });
 
   // Auto-select if only one guild
   if (currentUser.guilds.length === 1) {
     sel.value = currentUser.guilds[0].id;
-    loadCloseBets();
+    sel.dispatchEvent(new Event('change'));
   }
 }
 
@@ -1053,8 +1071,12 @@ async function loadCloseBets() {
   const container = document.getElementById('closebets-list');
   container.innerHTML = '<p class="empty-state">Loading...</p>';
 
+  const isAdmin = closeBetsPerms.isAdmin;
+  const params = new URLSearchParams({ status: 'open' });
+  if (isAdmin) params.set('viewAll', 'true');
+
   try {
-    const res = await fetch(`/api/guilds/${guildId}/bets?status=open`);
+    const res = await fetch(`/api/guilds/${guildId}/bets?${params}`);
     const bets = await res.json();
 
     if (!bets || bets.length === 0) {
@@ -1064,7 +1086,7 @@ async function loadCloseBets() {
 
     container.innerHTML = '';
     bets.forEach(bet => {
-      container.appendChild(renderBetCard(bet, false));
+      container.appendChild(renderBetCard(bet, isAdmin));
     });
   } catch (e) {
     container.innerHTML = '<p class="empty-state" style="color:var(--text-danger)">Failed to load bets.</p>';
@@ -2065,7 +2087,13 @@ async function confirmCloseBet() {
     showToast('Bet closed');
     closeCloseBetModal();
     loadBets(); // Refresh bets page
-    if (closeBetsInitialized) loadCloseBets(); // Refresh close bets page too
+    if (closeBetsInitialized) {
+      // Temporarily swap perms for renderBetCard
+      const savedPerms = betsGuildPerms;
+      betsGuildPerms = closeBetsPerms;
+      loadCloseBets();
+      betsGuildPerms = savedPerms;
+    }
   } catch (e) {
     showToast('Failed to close bet');
   } finally {
