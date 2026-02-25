@@ -3467,17 +3467,36 @@ async function openShareModal(pageType) {
   wrapper.className = 'share-capture-wrapper';
   wrapper.appendChild(banner);
 
-  // Clone the content into the wrapper so the original page stays untouched
-  const contentClone = target.cloneNode(true);
-  contentClone.classList.remove('hidden');
-  contentClone.style.cssText = 'display:block; width:100%; max-width:100%; box-sizing:border-box; padding:16px;';
+  // Selectively clone only key sections for a compact aspect ratio.
+  // Discord constrains inline images to ~300px height, so a very tall
+  // image gets squished into a tiny narrow strip.
+  const contentBox = document.createElement('div');
+  contentBox.style.cssText = 'width:100%; padding:16px; box-sizing:border-box;';
+
+  if (pageType === 'stats') {
+    // Hero banner (record, win%, net, ROI, total, open)
+    const hero = target.querySelector('.sp-hero');
+    if (hero) contentBox.appendChild(hero.cloneNode(true));
+    // First panel = Betting Activity
+    const panels = target.querySelectorAll('.sp-panel');
+    if (panels[0]) contentBox.appendChild(panels[0].cloneNode(true));
+    // Second panel = Breakdowns
+    if (panels[1]) contentBox.appendChild(panels[1].cloneNode(true));
+  } else {
+    // Leaderboard — clone the whole table
+    const clone = target.cloneNode(true);
+    clone.classList.remove('hidden');
+    clone.style.display = 'block';
+    contentBox.appendChild(clone);
+  }
+
   // Force all child panels/sections to fill the width
-  contentClone.querySelectorAll('.sp-hero, .sp-panel, .sp-metric-grid, .sp-bw-row, .breakdown-grid').forEach(el => {
+  contentBox.querySelectorAll('.sp-hero, .sp-panel, .sp-metric-grid, .sp-bw-row, .breakdown-grid').forEach(el => {
     el.style.maxWidth = '100%';
     el.style.width = '100%';
     el.style.boxSizing = 'border-box';
   });
-  wrapper.appendChild(contentClone);
+  wrapper.appendChild(contentBox);
 
   // Footer branding
   const footer = document.createElement('div');
