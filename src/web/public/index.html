@@ -4,6 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TheGamblingKing | Bet Slip</title>
+  <script>
+    // Force service worker update for all users — runs before any cached JS
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(reg) { reg.update(); });
+      });
+      // If there's a new SW waiting, reload once to activate it
+      navigator.serviceWorker.ready.then(function(reg) {
+        if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
+        reg.addEventListener('updatefound', function() {
+          var newSW = reg.installing;
+          newSW.addEventListener('statechange', function() {
+            if (newSW.state === 'activated') { location.reload(); }
+          });
+        });
+      });
+    }
+  </script>
   <link rel="icon" type="image/jpeg" href="/TheGamblingKing.jpg">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#f5c518">
@@ -11,7 +29,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=15">
+  <link rel="stylesheet" href="/style.css?v=16">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
@@ -1355,6 +1373,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=15"></script>
+  <script src="/app.js?v=16"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gk-cache-v8';
+const CACHE_NAME = 'gk-cache-v9';
 const ASSETS_TO_CACHE = [
   '/',
   '/style.css',
@@ -23,6 +23,13 @@ self.addEventListener('activate', event => {
     )
   );
   self.clients.claim();
+});
+
+// Listen for skip-waiting message from page
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Fetch — network first (bypass HTTP cache), fallback to SW cache

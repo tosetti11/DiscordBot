@@ -18,10 +18,29 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
     .then(reg => {
       console.log('SW registered:', reg.scope);
-      // Check for updates immediately
       reg.update();
+      // If a new SW is waiting, tell it to activate now
+      if (reg.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            newSW.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
     })
     .catch(err => console.log('SW registration failed:', err));
+  // Reload when new SW takes over
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      location.reload();
+    }
+  });
 }
 
 // ── PWA: Capture install prompt ──
