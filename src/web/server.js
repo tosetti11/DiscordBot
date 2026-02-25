@@ -113,12 +113,12 @@ function createWebServer() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
         scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "https://cdn.discordapp.com", "data:"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
         frameSrc: ["'self'", "https://e.widgetbot.io", "https://widgetbot.io", "https://discord.com"],
       },
     },

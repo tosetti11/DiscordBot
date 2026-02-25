@@ -29,6 +29,11 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
+  // Only handle same-origin requests — skip external CDN/font URLs
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   // Don't cache API calls or auth routes
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
     return;
