@@ -148,7 +148,12 @@ async function execute(interaction) {
   );
 
   await interaction.reply({
-    content: `🎲 **New Bet**${targetLabel ? ` (for ${targetLabel})` : ''} — What type of bet?`,
+    content: `🏀 **New Bet**${targetLabel ? ` (for ${targetLabel})` : ''} — What type of bet?\n\n` +
+      `**Please select the appropriate channel for your bet:**\n` +
+      `- <#DAILY_ACTION_CHANNEL_ID> for Daily Action\n` +
+      `- <#PARLAY_MANIA_CHANNEL_ID> for Parlay Mania\n` +
+      `- <#PICK_OF_THE_DAY_CHANNEL_ID> for Pick of the Day\n` +
+      `- Whale channels are reserved for plays from the King and other whales.`,
     components: [row],
     ephemeral: true,
   });
