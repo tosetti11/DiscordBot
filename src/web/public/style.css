@@ -3925,7 +3925,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   width: 100%;
   background: linear-gradient(135deg, #FF8732, #FF6B1A, #e06b1e);
   background-size: 200% 200%;
@@ -3939,7 +3940,6 @@ textarea {
   letter-spacing: 0.5px;
   cursor: pointer;
   transition: all 0.25s ease;
-  white-space: nowrap;
   position: relative;
   overflow: hidden;
   box-shadow: 0 0 16px rgba(255, 135, 50, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -3973,6 +3973,21 @@ textarea {
   margin-left: 4px;
   border-left: 1px solid rgba(255,255,255,0.3);
   padding-left: 10px;
+}
+@media (max-width: 480px) {
+  .btn-scan-slip {
+    font-size: 15px;
+    padding: 12px 14px;
+    gap: 6px;
+  }
+  .btn-scan-slip .scan-sub {
+    width: 100%;
+    text-align: center;
+    border-left: none;
+    margin-left: 0;
+    padding-left: 0;
+    font-size: 12px;
+  }
 }
 @keyframes scanPulse {
   0%, 100% { box-shadow: 0 0 16px rgba(255, 135, 50, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3); }
