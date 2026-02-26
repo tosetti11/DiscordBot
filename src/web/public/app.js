@@ -173,6 +173,19 @@ function showApp() {
     }).catch(() => {});
   }
 
+  // Navigate to page from URL hash (e.g. #stats, #leaderboard) or default to slip
+  const validPages = ['slip', 'stats', 'bets', 'closebets', 'leaderboard', 'following', 'reminders', 'tools', 'install', 'analytics', 'announce'];
+  const hashPage = window.location.hash.replace('#', '');
+  if (hashPage && validPages.includes(hashPage)) {
+    switchPage(hashPage);
+  }
+
+  // Listen for hash changes (back/forward nav)
+  window.addEventListener('hashchange', () => {
+    const hp = window.location.hash.replace('#', '');
+    if (hp && validPages.includes(hp)) switchPage(hp);
+  });
+
   // Fetch online members count for chat dot
   setTimeout(() => fetchOnlineMembers(), 1000);
 
@@ -1340,6 +1353,11 @@ function toggleOnlineList() {
 }
 
 function switchPage(page) {
+  // Update URL hash so links and refresh work
+  if (window.location.hash !== '#' + page) {
+    history.replaceState(null, '', '#' + page);
+  }
+
   // Track page view
   const trackablePages = { stats: 'view_stats', bets: 'view_bets', closebets: 'view_closebets', tools: 'view_tools', reminders: 'view_reminders', slip: 'page_view', leaderboard: 'view_leaderboard' };
   if (trackablePages[page]) {
