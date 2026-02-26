@@ -3889,6 +3889,7 @@ textarea {
   flex-shrink: 0;
 }
 
+
 .unit-size-wrap {
   display: flex;
   align-items: center;
@@ -3923,25 +3924,64 @@ textarea {
 .btn-scan-slip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: linear-gradient(135deg, #FF8732, #e06b1e);
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  background: linear-gradient(135deg, #FF8732, #FF6B1A, #e06b1e);
+  background-size: 200% 200%;
   color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
+  border: 2px solid rgba(255, 135, 50, 0.5);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-top: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.25s ease;
   white-space: nowrap;
-  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 16px rgba(255, 135, 50, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: scanPulse 2.5s ease-in-out infinite;
+}
+.btn-scan-slip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: scanShimmer 3s ease-in-out infinite;
 }
 .btn-scan-slip:hover {
-  background: linear-gradient(135deg, #e06b1e, #c45a12);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #FF9944, #FF7722, #e06b1e);
+  transform: translateY(-2px);
+  box-shadow: 0 0 24px rgba(255, 135, 50, 0.5), 0 6px 20px rgba(0, 0, 0, 0.35);
 }
-.btn-scan-slip:active { transform: translateY(0); }
-.btn-scan-slip .scan-icon { font-size: 16px; }
+.btn-scan-slip:active {
+  transform: translateY(0);
+  box-shadow: 0 0 12px rgba(255, 135, 50, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.btn-scan-slip .scan-icon { font-size: 22px; }
+.btn-scan-slip .scan-sub {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.85;
+  letter-spacing: 0;
+  margin-left: 4px;
+  border-left: 1px solid rgba(255,255,255,0.3);
+  padding-left: 10px;
+}
+@keyframes scanPulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(255, 135, 50, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3); }
+  50% { box-shadow: 0 0 28px rgba(255, 135, 50, 0.55), 0 4px 16px rgba(0, 0, 0, 0.3); }
+}
+@keyframes scanShimmer {
+  0% { left: -100%; }
+  50%, 100% { left: 100%; }
+}
 
 .scan-status {
   display: flex;

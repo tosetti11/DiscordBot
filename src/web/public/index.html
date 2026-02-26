@@ -115,18 +115,17 @@
               <h2 id="slip-title">🎟️ New Bet Slip</h2>
               <p id="slip-subtitle" class="slip-subtitle">Fill out your bet details below</p>
             </div>
-            <div class="scan-controls">
-              <div class="unit-size-wrap" title="Your unit size in dollars — used to convert scanned wager amounts to units">
-                <label for="unit-size-input">1u =</label>
-                <span class="unit-dollar">$</span>
-                <input type="number" id="unit-size-input" min="1" step="1" placeholder="25" onchange="saveUnitSize()">
-              </div>
-              <button type="button" class="btn-scan-slip" id="scan-slip-btn" onclick="triggerSlipScan()" title="Upload a screenshot to auto-fill">
-                <span class="scan-icon">📸</span>
-                <span class="scan-text">Scan Slip</span>
-              </button>
+            <div class="unit-size-wrap" title="Your unit size in dollars — used to convert scanned wager amounts to units">
+              <label for="unit-size-input">1u =</label>
+              <span class="unit-dollar">$</span>
+              <input type="number" id="unit-size-input" min="1" step="1" placeholder="25" onchange="saveUnitSize()">
             </div>
           </div>
+          <button type="button" class="btn-scan-slip" id="scan-slip-btn" onclick="triggerSlipScan()" title="Upload a screenshot of your bet slip to auto-fill the form">
+            <span class="scan-icon">📸</span>
+            <span class="scan-text">SCAN YOUR BET SLIP</span>
+            <span class="scan-sub">Screenshot → Auto-fill</span>
+          </button>
           <input type="file" id="slip-file-input" accept="image/*" class="hidden" onchange="handleSlipFile(event)">
           <div id="scan-status" class="scan-status hidden">
             <div class="scan-spinner"></div>
