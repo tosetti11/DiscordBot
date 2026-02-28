@@ -2507,6 +2507,16 @@ function renderBetCard(bet, showOwner = false) {
   const time = bet.createdAt ? new Date(bet.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
   const isParlay = bet.betType === 'parlay';
 
+  // Track matchup keys shown in header to avoid repeating in legs
+  const headerMatchupKeys = new Set();
+  if (isParlay && bet.legs) {
+    bet.legs.forEach(leg => {
+      if (leg.teamA && leg.teamB) {
+        headerMatchupKeys.add([leg.teamA, leg.teamB].sort().join('|'));
+      }
+    });
+  }
+
   let pickText = esc(bet.pick) || (isParlay ? `${bet.legs?.length || 0}-Leg Parlay` : '—');
   const whaleTag = bet.isWhale ? '<span class="ticket-tag tag-whale">🐋 WHALE</span>' : '';
   const retroTag = bet.isRetro ? '<span class="ticket-tag tag-retro">RETRO</span>' : '';
@@ -2566,13 +2576,21 @@ function renderBetCard(bet, showOwner = false) {
              <button class="leg-btn leg-void" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','void')">⛔</button>
            </span>`
         : '';
+      // Only show per-leg matchup if NOT already in the header
+      let legMatchupHtml = '';
+      if (leg.teamA && leg.teamB) {
+        const legKey = [leg.teamA, leg.teamB].sort().join('|');
+        if (!headerMatchupKeys.has(legKey)) {
+          legMatchupHtml = `<div class="ticket-leg-matchup">${esc(leg.teamA)} vs ${esc(leg.teamB)}</div>`;
+        }
+      }
       return `<div class="ticket-leg">
         <div class="ticket-leg-header">
           <span class="ticket-leg-status">${legStatusEmoji}</span>
           <span class="ticket-leg-sport">${legSport}</span>
         </div>
         <div class="ticket-leg-pick">${esc(leg.pick) || '—'}</div>
-        ${leg.teamA && leg.teamB ? `<div class="ticket-leg-matchup">${esc(leg.teamA)} vs ${esc(leg.teamB)}</div>` : ''}
+        ${legMatchupHtml}
         ${leg.playerName ? `<div class="ticket-leg-player">${esc(leg.playerName)}${leg.propDescription ? ' — ' + esc(leg.propDescription) : ''}</div>` : ''}
         ${leg.eventStartTime ? `<div class="ticket-leg-time">⏰ ${esc(leg.eventStartTime)}</div>` : ''}
         ${legActions}
@@ -2605,12 +2623,11 @@ function renderBetCard(bet, showOwner = false) {
   } else if (isParlay && bet.legs && bet.legs.length > 0) {
     // DraftKings-style: show deduplicated matchups at the top of the parlay card
     const matchups = [];
-    const seen = new Set();
     bet.legs.forEach(leg => {
       if (leg.teamA && leg.teamB) {
         const key = [leg.teamA, leg.teamB].sort().join('|');
-        if (!seen.has(key)) {
-          seen.add(key);
+        if (!headerMatchupKeys.has(key)) {
+          headerMatchupKeys.add(key);
           matchups.push(`${esc(leg.teamA)} vs ${esc(leg.teamB)}`);
         }
       }

@@ -181,13 +181,13 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
   // DK-style deduplicated matchup header for parlays
   let parlayMatchups = [];
+  const parlayMatchupKeys = new Set();
   if (isParlay) {
-    const seen = new Set();
     for (const leg of bet.parlay_legs) {
       if (leg.team_a && leg.team_b) {
         const key = [leg.team_a, leg.team_b].sort().join('|');
-        if (!seen.has(key)) {
-          seen.add(key);
+        if (!parlayMatchupKeys.has(key)) {
+          parlayMatchupKeys.add(key);
           parlayMatchups.push(`${leg.team_a} vs ${leg.team_b}`);
         }
       }
@@ -209,7 +209,11 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       tempCtx.font = 'bold 13px ' + FF;
       const legPickLines = wrapText(tempCtx, leg.pick || '—', INNER - 24);
       y += legPickLines.length * 17;
-      if (leg.team_a && leg.team_b) y += 15;
+      // Only add matchup height if teams aren't already in header
+      if (leg.team_a && leg.team_b) {
+        const legKey = [leg.team_a, leg.team_b].sort().join('|');
+        if (!parlayMatchupKeys.has(legKey)) y += 15;
+      }
       if (leg.player_name) y += 15;
       if (leg.event_start_time) y += 15;
       if (leg.odds_american) y += 15; // odds line
@@ -463,12 +467,15 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         curY += 17;
       }
 
-      // Matchup
+      // Matchup (skip if already shown in header)
       if (leg.team_a && leg.team_b) {
-        ctx.font = '11px ' + FF;
-        ctx.fillStyle = C.textMuted;
-        ctx.fillText(`${leg.team_a} vs ${leg.team_b}`, legX, curY + 12);
-        curY += 15;
+        const legKey = [leg.team_a, leg.team_b].sort().join('|');
+        if (!parlayMatchupKeys.has(legKey)) {
+          ctx.font = '11px ' + FF;
+          ctx.fillStyle = C.textMuted;
+          ctx.fillText(`${leg.team_a} vs ${leg.team_b}`, legX, curY + 12);
+          curY += 15;
+        }
       }
 
       // Player
