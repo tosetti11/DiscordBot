@@ -1577,6 +1577,37 @@ function createWebServer() {
         }
       }
 
+      // Update mirror message in open bets channel
+      if (updatedBet.mirror_message_id && updatedBet.mirror_channel_id) {
+        try {
+          let mirrorName = req.user.displayName || req.user.username || 'Unknown';
+          let mirrorAvatar = req.user.avatar || null;
+          if (updatedBet.discord_id !== req.user.discordId && discordClient) {
+            const guild = discordClient.guilds.cache.get(updatedBet.guild_id);
+            if (guild) {
+              const member = await guild.members.fetch(updatedBet.discord_id).catch(() => null);
+              if (member) {
+                mirrorName = member.displayName || member.user.username;
+                mirrorAvatar = member.user.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+              }
+            }
+          } else if (discordClient) {
+            const dUser = await discordClient.users.fetch(req.user.discordId).catch(() => null);
+            if (dUser) {
+              mirrorAvatar = dUser.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+            }
+          }
+          const mirrorChannel = await discordClient.channels.fetch(updatedBet.mirror_channel_id);
+          const mirrorMsg = await mirrorChannel.messages.fetch(updatedBet.mirror_message_id);
+          const { AttachmentBuilder: ABMirrorEdit } = require('discord.js');
+          const mirrorImgBuffer = await generateBetCardImage(updatedBet, mirrorName, mirrorAvatar);
+          const mirrorAttachment = new ABMirrorEdit(mirrorImgBuffer, { name: 'bet-card.png' });
+          await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+        } catch (e) {
+          console.error('[API] Mirror message update failed:', e.message);
+        }
+      }
+
       res.json({ success: true, bet: formatBetForApi(updatedBet) });
     } catch (err) {
       console.error('[API] Edit bet error:', err);
