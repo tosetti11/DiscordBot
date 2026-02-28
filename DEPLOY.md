@@ -2,6 +2,10 @@
 
 Your bot runs 24/7 on an EC2 server. You edit code locally in VS Code, then push it live. Here's exactly how.
 
+> ⚠️ **CRITICAL: Deployment runs via SSH to EC2 — NEVER run `bash scripts/deploy.sh` locally.**
+> The deploy script is meant for the EC2 server. Running it locally will fail because pm2 and the project path don't exist on your Windows machine.
+> Always deploy using the SSH command below, or ask Copilot: **"deploy my changes to EC2"**.
+
 ---
 
 ## The Workflow (Every Time You Make Changes)
@@ -31,10 +35,12 @@ Or just ask Copilot: **"push my changes to GitHub"** and it will do it for you.
 Run this single command in the VS Code terminal:
 
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "cd DiscordBot && git pull && npm install && pm2 restart gk-bot"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"
 ```
 
 Or just ask Copilot: **"deploy my changes to EC2"** and it will run it for you.
+
+> ⚠️ **Do NOT run `bash scripts/deploy.sh` in your local terminal.** That script is only for running directly on the EC2 server. Always use the SSH command above from your local machine.
 
 That's it. Your bot is updated.
 
@@ -98,6 +104,8 @@ ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "pm2 start gk-bot"
 ## Important Notes
 
 - **Never run the bot locally** while it's on EC2 — two instances will conflict.
+- **Never run `bash scripts/deploy.sh` locally** — it only works on EC2. Always deploy via the SSH command.
 - The bot **auto-restarts** if it crashes or if the server reboots.
 - Your EC2 IP is **54.227.26.67** — if you stop/start the EC2 instance in AWS, this IP may change.
 - Your SSH key is at `C:\Users\toset\gk-bot-key.pem`.
+- The deploy SSH command is: `ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"`

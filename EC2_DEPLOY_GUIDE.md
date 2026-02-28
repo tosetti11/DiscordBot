@@ -187,19 +187,22 @@ git commit -m "describe what you changed"
 git push
 ```
 
-### On EC2 (SSH in first):
+### Deploy to EC2 (single command from your PC — no need to SSH in separately):
+```
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"
+```
+
+Or ask Copilot: **"deploy my changes to EC2"**
+
+> ⚠️ **NEVER run `bash scripts/deploy.sh` on your local Windows machine.** That script is designed to run ON the EC2 server itself. Running it locally will fail because pm2 doesn't exist on your PC.
+> Always use the SSH command above from your local terminal — it connects to EC2 and runs the deploy remotely.
+
+### Alternative: If you're already SSH'd into EC2:
 ```bash
 cd ~/DiscordBot
 git pull
 npm install --production
 pm2 restart gk-bot
-```
-
-Or just run the deploy script:
-```bash
-cd ~/DiscordBot
-chmod +x scripts/deploy.sh
-./scripts/deploy.sh
 ```
 
 ---
@@ -220,7 +223,10 @@ chmod +x scripts/deploy.sh
 ## ⚠️ Important Notes
 
 - **NEVER commit your .env file to GitHub** — it has your secrets. The .gitignore already prevents this.
+- **NEVER run `bash scripts/deploy.sh` on your local PC** — it only works on EC2. Always deploy via the SSH command above.
 - **Don't lose your .pem key file** — you can't download it again. If you lose it, you'll need to create a new key pair.
 - **Stop your local bot** before starting on EC2 — only one instance should run at a time or you'll get duplicate messages.
 - **EC2 costs**: `t2.micro` is free for 12 months with a new AWS account. After that it's ~$8-10/month. You could also use `t3.micro` or `t4g.micro` for similar pricing.
 - **Your Supabase database stays the same** — the EC2 bot connects to the same Supabase, so all existing bets and data carry over.
+- **SSH key location**: `C:\Users\toset\gk-bot-key.pem`
+- **EC2 IP**: `54.227.26.67` (may change if you stop/start the instance in AWS)

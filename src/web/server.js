@@ -1609,8 +1609,9 @@ function createWebServer() {
         return res.status(503).json({ error: 'OCR not configured. OPENAI_API_KEY missing.' });
       }
 
-      const { imageData } = req.body;
-      if (!imageData) return res.status(400).json({ error: 'No image data provided' });
+      const { imageData, imageDatas } = req.body;
+      const images = imageDatas || (imageData ? [imageData] : []);
+      if (!images.length) return res.status(400).json({ error: 'No image data provided' });
 
       const validSports = ['nfl','nba','mlb','nhl','ncaa_football','ncaa_mbb','ncaa_wbb','mls','epl','la_liga','ucl','ufc','boxing','tennis','golf','nascar','wnba','esports','other'];
 
@@ -1668,6 +1669,8 @@ Rules:
 - For over/under and total bets, ALWAYS include teamA and teamB from the game the total belongs to. Look at the matchup header above the bet (e.g. "OKC Thunder @ DET Pistons") and use those teams. Never leave teamA/teamB null for total bets.
 - In parlays, if a total/over-under leg appears under the same game header as a moneyline or spread leg, use that game's teams for the total leg too.
 - For player props, set betCategory to "player_prop", wagerType to "prop"
+- For player props, keep the EXACT prop description as shown on the slip. If the slip says "10+ Rebounds", use "10+ Rebounds" as propDescription (do NOT convert to "Over 10 Rebounds"). If it says "Over 25.5 Points", keep it as "Over 25.5 Points". Preserve the original format.
+- For over/under totals (team_game with wagerType "total"), the spreadValue should always end in .5 (e.g. 220.5, 45.5). If the line is a whole number, add .5.
 - For futures, set betCategory to "futures", wagerType to "futures"
 - teamA should be the team/side being bet ON (the pick). For totals, teamA is the first-listed team in the matchup.
 - If you can detect the wager/stake amount in dollars, put it in wagerAmount (just the number, no $ sign)
@@ -1675,51 +1678,58 @@ Rules:
 - Map the sport to the closest value from the valid sports list
 - Return ONLY valid JSON, no markdown or explanation`;
 
-      const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: imageData, detail: 'high' } },
-              ],
-            },
-          ],
-          max_tokens: 2000,
-          temperature: 0.1,
-        }),
-      });
+      // Process each image through OpenAI Vision
+      const results = [];
+      for (const imgData of images) {
+        const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: prompt },
+                  { type: 'image_url', image_url: { url: imgData, detail: 'high' } },
+                ],
+              },
+            ],
+            max_tokens: 2000,
+            temperature: 0.1,
+          }),
+        });
 
-      const oaiData = await oaiRes.json();
+        const oaiData = await oaiRes.json();
 
-      if (oaiData.error) {
-        console.error('[API] OpenAI error:', oaiData.error);
-        return res.status(500).json({ error: 'AI analysis failed: ' + (oaiData.error.message || 'Unknown error') });
+        if (oaiData.error) {
+          console.error('[API] OpenAI error:', oaiData.error);
+          return res.status(500).json({ error: 'AI analysis failed: ' + (oaiData.error.message || 'Unknown error') });
+        }
+
+        const content = oaiData.choices?.[0]?.message?.content;
+        if (!content) {
+          return res.status(500).json({ error: 'No response from AI' });
+        }
+
+        // Parse JSON from response (strip markdown code fences if present)
+        let parsed;
+        try {
+          const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          parsed = JSON.parse(jsonStr);
+        } catch (e) {
+          console.error('[API] Failed to parse OCR response:', content);
+          return res.status(500).json({ error: 'Could not parse bet details from image. Try a clearer screenshot.' });
+        }
+
+        results.push(parsed);
       }
 
-      const content = oaiData.choices?.[0]?.message?.content;
-      if (!content) {
-        return res.status(500).json({ error: 'No response from AI' });
-      }
-
-      // Parse JSON from response (strip markdown code fences if present)
-      let parsed;
-      try {
-        const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        parsed = JSON.parse(jsonStr);
-      } catch (e) {
-        console.error('[API] Failed to parse OCR response:', content);
-        return res.status(500).json({ error: 'Could not parse bet details from image. Try a clearer screenshot.' });
-      }
-
-      res.json({ success: true, data: parsed });
+      // Return single result or array for multi-image
+      res.json({ success: true, data: results.length === 1 ? results[0] : results });
     } catch (err) {
       console.error('[API] OCR slip error:', err);
       res.status(500).json({ error: 'Failed to analyze bet slip' });

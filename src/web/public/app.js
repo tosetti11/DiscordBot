@@ -630,6 +630,13 @@ async function handleSubmit(e) {
           if (wager === 'spread' || wager === 'total') {
             leg.spreadValue = document.querySelector(`.leg-spread-value[data-leg="${i}"]`)?.value;
             if (!leg.spreadValue) throw new Error(`Leg ${i}: Enter ${wager === 'spread' ? 'spread' : 'total line'}`);
+            // Enforce .5 intervals for total lines (over/under)
+            if (wager === 'total') {
+              const totalVal = parseFloat(leg.spreadValue);
+              if (!isNaN(totalVal) && totalVal % 1 === 0) {
+                leg.spreadValue = String(totalVal + 0.5);
+              }
+            }
           }
           if (wager === 'total') {
             const activeOU = document.querySelector(`.leg-ou-btn[data-leg="${i}"].active`);
@@ -692,6 +699,13 @@ async function handleSubmit(e) {
         if (wager === 'spread' || wager === 'total') {
           body.spreadValue = document.getElementById('spread-value').value;
           if (!body.spreadValue) throw new Error(`Enter ${wager === 'spread' ? 'spread' : 'total line'}`);
+          // Enforce .5 intervals for total lines (over/under)
+          if (wager === 'total') {
+            const totalVal = parseFloat(body.spreadValue);
+            if (!isNaN(totalVal) && totalVal % 1 === 0) {
+              body.spreadValue = String(totalVal + 0.5);
+            }
+          }
         }
         if (wager === 'total') {
           const activeOU = document.querySelector('#over-under-row .toggle-btn.active');
@@ -955,8 +969,8 @@ function compressImageForOCR(file) {
 }
 
 async function handleSlipFile(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
 
   // Show scanning status
   const scanStatus = document.getElementById('scan-status');
@@ -964,14 +978,14 @@ async function handleSlipFile(e) {
   document.getElementById('scan-slip-btn').disabled = true;
 
   try {
-    // Compress image before sending (resizes large phone screenshots)
-    const imageData = await compressImageForOCR(file);
+    // Compress all images before sending
+    const imageDatas = await Promise.all(files.map(f => compressImageForOCR(f)));
 
-    // Send to OCR endpoint
+    // Send to OCR endpoint (supports single or multiple images)
     const res = await fetch('/api/ocr-slip', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageData }),
+      body: JSON.stringify(imageDatas.length === 1 ? { imageData: imageDatas[0] } : { imageDatas }),
     });
 
     const result = await res.json();
@@ -980,8 +994,14 @@ async function handleSlipFile(e) {
       throw new Error(result.error || 'Failed to analyze bet slip');
     }
 
+    // If multiple results returned, merge them into one parlay
+    let finalData = result.data;
+    if (Array.isArray(result.data)) {
+      finalData = mergeOcrResults(result.data);
+    }
+
     // Log raw scan data for troubleshooting
-    const rawJson = JSON.stringify(result.data, null, 2);
+    const rawJson = JSON.stringify(finalData, null, 2);
     console.log('📸 OCR Scan Result:', rawJson);
 
     // Show debug panel with raw data (site owner only)
@@ -992,10 +1012,10 @@ async function handleSlipFile(e) {
     }
 
     // Apply parsed data to form
-    applyOcrData(result.data);
+    applyOcrData(finalData);
 
     // Build summary of what was detected
-    const summary = buildScanSummary(result.data);
+    const summary = buildScanSummary(finalData);
     showToast(`Scan complete! ${summary}`, 7000);
     trackActivity('ocr_scan');
 
@@ -1007,6 +1027,48 @@ async function handleSlipFile(e) {
     // Reset file input so same file can be re-selected
     e.target.value = '';
   }
+}
+
+// Merge multiple OCR results into a single parlay
+function mergeOcrResults(results) {
+  if (results.length === 1) return results[0];
+
+  // Collect all legs from all results
+  let allLegs = [];
+  let oddsAmerican = null;
+  let wagerAmount = null;
+
+  results.forEach(r => {
+    if (r.betType === 'parlay' && r.legs) {
+      allLegs = allLegs.concat(r.legs);
+    } else if (r.betType === 'single') {
+      // Convert single bet to a parlay leg
+      allLegs.push({
+        sport: r.sport,
+        betCategory: r.betCategory,
+        wagerType: r.wagerType,
+        teamA: r.teamA,
+        teamB: r.teamB,
+        spreadValue: r.spreadValue,
+        overUnder: r.overUnder,
+        playerName: r.playerName,
+        propDescription: r.propDescription,
+        futuresMarket: r.futuresMarket,
+        futuresSelection: r.futuresSelection,
+        eventStartTime: r.eventStartTime,
+      });
+    }
+    // Use odds/wager from the last result that has them
+    if (r.oddsAmerican) oddsAmerican = r.oddsAmerican;
+    if (r.wagerAmount) wagerAmount = r.wagerAmount;
+  });
+
+  return {
+    betType: 'parlay',
+    oddsAmerican,
+    wagerAmount,
+    legs: allLegs,
+  };
 }
 
 function applyOcrData(data) {
@@ -2529,6 +2591,22 @@ function renderBetCard(bet, showOwner = false) {
     }
     if (bet.eventStartTime) {
       matchupHtml += `<div class="ticket-game-time">⏰ ${esc(bet.eventStartTime)}</div>`;
+    }
+  } else if (isParlay && bet.legs && bet.legs.length > 0) {
+    // DraftKings-style: show deduplicated matchups at the top of the parlay card
+    const matchups = [];
+    const seen = new Set();
+    bet.legs.forEach(leg => {
+      if (leg.teamA && leg.teamB) {
+        const key = [leg.teamA, leg.teamB].sort().join('|');
+        if (!seen.has(key)) {
+          seen.add(key);
+          matchups.push(`${esc(leg.teamA)} vs ${esc(leg.teamB)}`);
+        }
+      }
+    });
+    if (matchups.length > 0) {
+      matchupHtml = `<div class="ticket-matchup">${matchups.join(' • ')}</div>`;
     }
   }
 
