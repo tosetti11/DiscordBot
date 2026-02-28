@@ -2526,7 +2526,7 @@ Rules:
           const mirrorImgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
           const { AttachmentBuilder: ABMirror } = require('discord.js');
           const mirrorAttachment = new ABMirror(mirrorImgBuffer, { name: 'bet-card.png' });
-          const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment] });
+          const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment], flags: [4096] });
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
         } catch (mirrorErr) {
           console.error('[API] Mirror post error (parlay):', mirrorErr);
@@ -2609,7 +2609,7 @@ Rules:
           const mirrorImgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
           const { AttachmentBuilder: ABMirror2 } = require('discord.js');
           const mirrorAttachment = new ABMirror2(mirrorImgBuffer, { name: 'bet-card.png' });
-          const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment] });
+          const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment], flags: [4096] });
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
         } catch (mirrorErr) {
           console.error('[API] Mirror post error (single):', mirrorErr);
