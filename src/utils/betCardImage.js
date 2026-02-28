@@ -179,6 +179,27 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (bet.event_start_time) y += 18;
   }
 
+  // DK-style deduplicated matchup header for parlays
+  let parlayMatchups = [];
+  if (isParlay) {
+    const seen = new Set();
+    for (const leg of bet.parlay_legs) {
+      if (leg.team_a && leg.team_b) {
+        const key = [leg.team_a, leg.team_b].sort().join('|');
+        if (!seen.has(key)) {
+          seen.add(key);
+          parlayMatchups.push(`${leg.team_a} vs ${leg.team_b}`);
+        }
+      }
+    }
+    if (parlayMatchups.length > 0) {
+      tempCtx.font = '13px ' + FF;
+      const matchupText = parlayMatchups.join(' • ');
+      const matchupLines = wrapText(tempCtx, matchupText, INNER);
+      y += matchupLines.length * 17 + 4;
+    }
+  }
+
   // Parlay legs (always expanded)
   if (isParlay) {
     y += 6;
@@ -390,6 +411,19 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       ctx.fillText(`⏰ ${bet.event_start_time}`, LEFT_BAR + PAD, curY + 13);
       curY += 18;
     }
+  }
+
+  // ── DK-style matchup header for parlays ──
+  if (isParlay && parlayMatchups.length > 0) {
+    ctx.font = '13px ' + FF;
+    ctx.fillStyle = C.textMuted;
+    const matchupText = parlayMatchups.join(' • ');
+    const matchupLines = wrapText(ctx, matchupText, INNER);
+    for (const ml of matchupLines) {
+      ctx.fillText(ml, LEFT_BAR + PAD, curY + 13);
+      curY += 17;
+    }
+    curY += 4;
   }
 
   // ── Parlay legs (all expanded) ──

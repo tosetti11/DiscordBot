@@ -647,6 +647,11 @@ async function handleSubmit(e) {
           leg.playerName = document.querySelector(`.leg-player-name[data-leg="${i}"]`)?.value;
           leg.propDescription = document.querySelector(`.leg-prop-desc[data-leg="${i}"]`)?.value;
           if (!leg.playerName || !leg.propDescription) throw new Error(`Leg ${i}: Enter player name and prop`);
+          // Include teams if available (populated by OCR scanner)
+          const propTeamA = document.querySelector(`.leg-team-a[data-leg="${i}"]`)?.value;
+          const propTeamB = document.querySelector(`.leg-team-b[data-leg="${i}"]`)?.value;
+          if (propTeamA) leg.teamA = propTeamA;
+          if (propTeamB) leg.teamB = propTeamB;
         } else if (category === 'futures') {
           leg.wagerType = 'futures';
           leg.futuresMarket = document.querySelector(`.leg-futures-market[data-leg="${i}"]`)?.value;
@@ -716,6 +721,11 @@ async function handleSubmit(e) {
         body.playerName = document.getElementById('player-name').value;
         body.propDescription = document.getElementById('prop-desc').value;
         if (!body.playerName || !body.propDescription) throw new Error('Enter player name and prop');
+        // Include teams if available (populated by OCR scanner)
+        const propTeamA = document.getElementById('team-a')?.value;
+        const propTeamB = document.getElementById('team-b')?.value;
+        if (propTeamA) body.teamA = propTeamA;
+        if (propTeamB) body.teamB = propTeamB;
       } else if (category === 'futures') {
         body.wagerType = 'futures';
         body.futuresMarket = document.getElementById('futures-market').value;

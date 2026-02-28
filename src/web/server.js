@@ -1670,6 +1670,7 @@ Rules:
 - In parlays, if a total/over-under leg appears under the same game header as a moneyline or spread leg, use that game's teams for the total leg too.
 - For player props, set betCategory to "player_prop", wagerType to "prop"
 - For player props, keep the EXACT prop description as shown on the slip. If the slip says "10+ Rebounds", use "10+ Rebounds" as propDescription (do NOT convert to "Over 10 Rebounds"). If it says "Over 25.5 Points", keep it as "Over 25.5 Points". Preserve the original format.
+- For player props, ALWAYS include teamA and teamB from the game the player is in. Look at the matchup header (e.g. "NYK Knicks @ MIL Bucks") and fill in both teams. Never leave teamA/teamB null for player props.
 - For over/under totals (team_game with wagerType "total"), the spreadValue should always end in .5 (e.g. 220.5, 45.5). If the line is a whole number, add .5.
 - For futures, set betCategory to "futures", wagerType to "futures"
 - teamA should be the team/side being bet ON (the pick). For totals, teamA is the first-listed team in the matchup.
