@@ -226,6 +226,18 @@ async function updateBetMessageId(betId, messageId) {
 }
 
 /**
+ * Update bet mirror_message_id (after posting to open bets channel)
+ */
+async function updateBetMirrorMessageId(betId, mirrorMessageId, mirrorChannelId) {
+  const { error } = await supabase
+    .from('bets')
+    .update({ mirror_message_id: mirrorMessageId, mirror_channel_id: mirrorChannelId })
+    .eq('id', betId);
+
+  if (error) throw error;
+}
+
+/**
  * Get user stats from the view
  */
 async function getUserStats(discordId) {
@@ -422,6 +434,7 @@ module.exports = {
   updateParlayLegStatus,
   updateParlayLegFields,
   updateBetMessageId,
+  updateBetMirrorMessageId,
   getUserStats,
   getWhaleStats,
   getLeaderboard,

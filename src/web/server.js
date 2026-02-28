@@ -37,6 +37,11 @@ const WHALE_ROLES = ['sharp', 'admin', 'the king'];
 const ADMIN_ROLES = ['admin', 'the king'];
 const SITE_OWNER_ID = '1338301556973633577'; // Only this Discord user can view analytics
 
+// Open bets mirror channels
+const KING_DISCORD_ID = '1246525685749649441';
+const KING_OPEN_CHANNEL = '1477318450618695692';
+const COMMUNITY_OPEN_CHANNEL = '1477318238273802480';
+
 function setDiscordClient(client) {
   discordClient = client;
 }
@@ -1285,6 +1290,17 @@ function createWebServer() {
         }
       }
 
+      // Delete mirror message from open bets channel
+      if (bet.mirror_message_id && bet.mirror_channel_id) {
+        try {
+          const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+          const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+          await mirrorMsg.delete();
+        } catch (e) {
+          console.error('[API] Mirror message delete error:', e.message);
+        }
+      }
+
       // Delete original Discord message and post a fresh one with the result (wins only)
       // For losses/push/void, just edit the existing message in place
       if (bet.message_id && bet.channel_id) {
@@ -1587,6 +1603,15 @@ function createWebServer() {
           const channel = await discordClient.channels.fetch(bet.channel_id);
           const message = await channel.messages.fetch(bet.message_id);
           await message.delete();
+        } catch (e) {}
+      }
+
+      // Delete mirror message from open bets channel
+      if (bet.mirror_message_id && bet.mirror_channel_id) {
+        try {
+          const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+          const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+          await mirrorMsg.delete();
         } catch (e) {}
       }
 
@@ -2494,6 +2519,19 @@ Rules:
         const message = await channel.send(sendPayload);
         await db.updateBetMessageId(bet.id, message.id);
 
+        // Mirror to open bets channel
+        try {
+          const mirrorChannelId = targetDiscordId === KING_DISCORD_ID ? KING_OPEN_CHANNEL : COMMUNITY_OPEN_CHANNEL;
+          const mirrorChannel = await discordClient.channels.fetch(mirrorChannelId);
+          const mirrorImgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
+          const { AttachmentBuilder: ABMirror } = require('discord.js');
+          const mirrorAttachment = new ABMirror(mirrorImgBuffer, { name: 'bet-card.png' });
+          const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment] });
+          await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
+        } catch (mirrorErr) {
+          console.error('[API] Mirror post error (parlay):', mirrorErr);
+        }
+
         // Notify followers
         notifyFollowers(discordClient, targetDiscordId, guildId, fullBet, displayName, false);
 
@@ -2563,6 +2601,19 @@ Rules:
         sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
         const message = await channel.send(sendPayload);
         await db.updateBetMessageId(bet.id, message.id);
+
+        // Mirror to open bets channel
+        try {
+          const mirrorChannelId = targetDiscordId === KING_DISCORD_ID ? KING_OPEN_CHANNEL : COMMUNITY_OPEN_CHANNEL;
+          const mirrorChannel = await discordClient.channels.fetch(mirrorChannelId);
+          const mirrorImgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
+          const { AttachmentBuilder: ABMirror2 } = require('discord.js');
+          const mirrorAttachment = new ABMirror2(mirrorImgBuffer, { name: 'bet-card.png' });
+          const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment] });
+          await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
+        } catch (mirrorErr) {
+          console.error('[API] Mirror post error (single):', mirrorErr);
+        }
 
         // Notify followers
         notifyFollowers(discordClient, targetDiscordId, guildId, bet, displayName, false);

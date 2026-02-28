@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS bets (
   guild_id TEXT NOT NULL,
   channel_id TEXT NOT NULL,
   message_id TEXT,
+  mirror_message_id TEXT,
+  mirror_channel_id TEXT,
 
   -- Slip number (e.g. RIC-001)
   slip_number TEXT UNIQUE,
