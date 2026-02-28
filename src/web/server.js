@@ -82,13 +82,14 @@ async function isAdminInGuild(guildId, discordId) {
  * Check if a member can place whale bets
  */
 async function canPlaceWhale(guildId, discordId) {
+  // Only admin or specific user ID can place whale bets
+  if (discordId === '1246525685749649441') return true;
   try {
     const guild = discordClient?.guilds.cache.get(guildId);
     if (!guild) return false;
     const member = await fetchMember(guild, discordId);
     if (member.permissions.has('Administrator')) return true;
-    const roleNames = member.roles.cache.map(r => r.name.toLowerCase());
-    return WHALE_ROLES.some(r => roleNames.includes(r));
+    return false;
   } catch (e) {
     return false;
   }
@@ -398,7 +399,7 @@ function createWebServer() {
           .map(r => r.name);
         const roleNamesLower = roleNames.map(r => r.toLowerCase());
         const hasAdmin = member.permissions.has('Administrator') || ADMIN_ROLES.some(r => roleNamesLower.includes(r));
-        const hasWhale = member.permissions.has('Administrator') || WHALE_ROLES.some(r => roleNamesLower.includes(r));
+        const hasWhale = member.permissions.has('Administrator') || req.user.discordId === '1246525685749649441';
 
         res.json({ roles: roleNames, isAdmin: hasAdmin, canWhale: hasWhale });
       } catch (e) {
@@ -1284,53 +1285,80 @@ function createWebServer() {
         }
       }
 
-      // Delete original Discord message and post a fresh one with the result
+      // Delete original Discord message and post a fresh one with the result (wins only)
+      // For losses/push/void, just edit the existing message in place
       if (bet.message_id && bet.channel_id) {
         try {
           const channel = await discordClient.channels.fetch(bet.channel_id);
 
-          // Delete the original message
-          try {
-            const oldMsg = await channel.messages.fetch(bet.message_id);
-            await oldMsg.delete();
-          } catch (e) {} // Original may already be deleted
-
           // Build the updated embed/image
           const updatedBet = await db.getBet(betId);
 
-          // Build the content message
-          let displayName = req.user.displayName || req.user.username || 'Unknown';
+          // Resolve the ORIGINAL bettor's display name (not the admin closing it)
+          let bettorDisplayName = 'Unknown';
+          try {
+            const guild = discordClient.guilds.cache.get(bet.guild_id);
+            if (guild) {
+              const member = await fetchMember(guild, bet.discord_id);
+              bettorDisplayName = member.displayName;
+            }
+          } catch (e) {}
+
+          // Resolve closing user's display name for the announcement text
+          let closerDisplayName = req.user.displayName || req.user.username || 'Unknown';
           try {
             const guild = discordClient.guilds.cache.get(bet.guild_id);
             if (guild) {
               const member = await fetchMember(guild, req.user.discordId);
-              displayName = member.displayName;
+              closerDisplayName = member.displayName;
             }
           } catch (e) {}
 
           const resultEmoji = status === 'win' ? '✅' : status === 'loss' ? '❌' : '🔄';
-          let content = `${resultEmoji} **${displayName}** closed a bet as **${status.toUpperCase()}**`;
+          let content = `${resultEmoji} **${closerDisplayName}** closed a bet as **${status.toUpperCase()}**`;
 
           // Append the user's community message
           if (communityMessage && communityMessage.trim()) {
             content += `\n\n${communityMessage.trim()}`;
           }
 
-          let sendPayload;
           const { AttachmentBuilder: ABClose } = require('discord.js');
-          const imgBuffer = await generateBetCardImage(updatedBet, displayName, null);
+          const imgBuffer = await generateBetCardImage(updatedBet, bettorDisplayName, null);
           const attachment = new ABClose(imgBuffer, { name: 'bet-card.png' });
-          sendPayload = { content, files: [attachment] };
-          // Append GIF URL to content so Discord auto-embeds it
-          if (gifUrl && gifUrl.trim()) {
-            sendPayload.content += `\n${gifUrl.trim()}`;
+
+          if (status === 'win') {
+            // WIN: Delete old message, post a fresh one
+            try {
+              const oldMsg = await channel.messages.fetch(bet.message_id);
+              await oldMsg.delete();
+            } catch (e) {} // Original may already be deleted
+
+            let sendPayload = { content, files: [attachment] };
+            if (gifUrl && gifUrl.trim()) {
+              sendPayload.content += `\n${gifUrl.trim()}`;
+            }
+
+            const newMsg = await channel.send(sendPayload);
+            await db.updateBetMessageId(betId, newMsg.id);
+          } else {
+            // LOSS/PUSH/VOID: Edit the existing message in place
+            try {
+              const oldMsg = await channel.messages.fetch(bet.message_id);
+              let editPayload = { content, files: [attachment], embeds: [], components: [] };
+              if (gifUrl && gifUrl.trim()) {
+                editPayload.content += `\n${gifUrl.trim()}`;
+              }
+              await oldMsg.edit(editPayload);
+            } catch (e) {
+              // If edit fails (message deleted), post a new one
+              let sendPayload = { content, files: [attachment] };
+              if (gifUrl && gifUrl.trim()) {
+                sendPayload.content += `\n${gifUrl.trim()}`;
+              }
+              const newMsg = await channel.send(sendPayload);
+              await db.updateBetMessageId(betId, newMsg.id);
+            }
           }
-
-          // Post the new message
-          const newMsg = await channel.send(sendPayload);
-
-          // Update the stored message_id so future edits reference the new message
-          await db.updateBetMessageId(betId, newMsg.id);
         } catch (e) {
           console.error('[API] Close bet Discord update error:', e);
         }

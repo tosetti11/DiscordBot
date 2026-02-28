@@ -2832,13 +2832,12 @@ async function confirmCloseBet() {
     }
     showToast('Bet closed');
     closeCloseBetModal();
-    loadBets(); // Refresh bets page
+    // Refresh bets page if on bets tab
+    loadBets();
     if (closeBetsInitialized) {
-      // Temporarily swap perms for renderBetCard
-      const savedPerms = betsGuildPerms;
+      // Use closeBetsPerms for rendering close bets page
       betsGuildPerms = closeBetsPerms;
-      loadCloseBets();
-      betsGuildPerms = savedPerms;
+      await loadCloseBets();
     }
   } catch (e) {
     showToast('Failed to close bet');
