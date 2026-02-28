@@ -179,7 +179,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (bet.event_start_time) y += 18;
   }
 
-  // DK-style deduplicated matchup header for parlays
+  // DK-style deduplicated matchup header for parlays (only for same-game parlays)
   let parlayMatchups = [];
   const parlayMatchupKeys = new Set();
   if (isParlay) {
@@ -191,6 +191,12 @@ async function generateBetCardImage(bet, username, avatarUrl) {
           parlayMatchups.push(`${leg.team_a} vs ${leg.team_b}`);
         }
       }
+    }
+    // Only show header if it's a same-game parlay (1 unique matchup)
+    // For multi-game parlays, show matchup per-leg instead
+    if (parlayMatchups.length > 1) {
+      parlayMatchups = [];
+      parlayMatchupKeys.clear();
     }
     if (parlayMatchups.length > 0) {
       tempCtx.font = '13px ' + FF;
@@ -209,7 +215,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       tempCtx.font = 'bold 13px ' + FF;
       const legPickLines = wrapText(tempCtx, leg.pick || '—', INNER - 24);
       y += legPickLines.length * 17;
-      // Only add matchup height if teams aren't already in header
+      // Add matchup height per leg (skipped only for same-game parlays where header shows it)
       if (leg.team_a && leg.team_b) {
         const legKey = [leg.team_a, leg.team_b].sort().join('|');
         if (!parlayMatchupKeys.has(legKey)) y += 15;
@@ -467,7 +473,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         curY += 17;
       }
 
-      // Matchup (skip if already shown in header)
+      // Matchup (skip only for same-game parlays where header already shows it)
       if (leg.team_a && leg.team_b) {
         const legKey = [leg.team_a, leg.team_b].sort().join('|');
         if (!parlayMatchupKeys.has(legKey)) {
