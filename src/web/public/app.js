@@ -2543,8 +2543,8 @@ function renderBetCard(bet, showOwner = false) {
   }
 
   // Actions
-  // Scoreboard button for open bets with a mirror placeholder
-  const scoreboardBtnHtml = (bet.status === 'open' && bet.mirrorScoreboardMsgId && canManage)
+  // Scoreboard button for open bets with a mirror channel
+  const scoreboardBtnHtml = (bet.status === 'open' && bet.mirrorChannelId && canManage)
     ? `<button class="ticket-btn ticket-btn-scoreboard" id="sb-btn-${bet.id}" onclick="event.stopPropagation();toggleScoreboard('${bet.id}')" title="Live Scoreboard">📡</button>`
     : '';
 

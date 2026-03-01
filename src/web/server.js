@@ -1198,6 +1198,7 @@ function createWebServer() {
       createdAt: bet.created_at,
       messageId: bet.message_id,
       channelId: bet.channel_id,
+      mirrorChannelId: bet.mirror_channel_id || null,
       mirrorScoreboardMsgId: bet.mirror_scoreboard_msg_id || null,
       legs: (bet.parlay_legs || []).map(l => ({
         id: l.id,
@@ -2746,8 +2747,21 @@ Rules:
       const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
       if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
 
-      if (!bet.mirror_channel_id || !bet.mirror_scoreboard_msg_id) {
-        return res.status(400).json({ error: 'No scoreboard placeholder found for this bet' });
+      if (!bet.mirror_channel_id) {
+        return res.status(400).json({ error: 'This bet has no mirror channel — it may have been created before mirroring was enabled.' });
+      }
+
+      // If no placeholder message exists yet (bet created before scoreboard feature), create one now
+      if (!bet.mirror_scoreboard_msg_id) {
+        try {
+          const placeholderChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+          const placeholderMsg = await placeholderChannel.send('📡 *Scoreboard will appear here when activated*');
+          await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
+          bet.mirror_scoreboard_msg_id = placeholderMsg.id;
+        } catch (phErr) {
+          console.error('[API] Failed to create scoreboard placeholder:', phErr);
+          return res.status(500).json({ error: 'Failed to create scoreboard placeholder in mirror channel' });
+        }
       }
 
       if (bet.status !== 'open') {
