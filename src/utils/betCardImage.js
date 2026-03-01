@@ -582,8 +582,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   // ── Footer: slip # | date ──
   const slipStr = bet.slip_number ? `#${bet.slip_number}` : `#${(bet.id || '').slice(0, 8)}`;
   const dateStr = bet.created_at
-    ? new Date(bet.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      + ' ' + new Date(bet.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    ? new Date(bet.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })
+      + ' ' + new Date(bet.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })
     : '';
 
   ctx.font = '11px ' + FF_MONO;
