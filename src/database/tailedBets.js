@@ -239,8 +239,9 @@ async function getTailStatsInGuild(discordId, guildId) {
       payout = -b.units;
     }
     payout = Math.round(payout * 100) / 100;
-    if (!bestBet || payout > bestBet.payout) bestBet = { pick: b.pick, payout, odds: b.odds_american, units: b.units, sport: b.sport };
-    if (!worstBet || payout < worstBet.payout) worstBet = { pick: b.pick, payout, odds: b.odds_american, units: b.units, sport: b.sport };
+    const pickLabel = b.pick || (b.bet_type === 'parlay' ? `${(b.parlay_legs || []).length}-Leg Parlay` : b.slip_number || 'Bet');
+    if (!bestBet || payout > bestBet.payout) bestBet = { pick: pickLabel, payout, odds: b.odds_american, units: b.units, sport: b.sport };
+    if (!worstBet || payout < worstBet.payout) worstBet = { pick: pickLabel, payout, odds: b.odds_american, units: b.units, sport: b.sport };
   }
 
   return {
