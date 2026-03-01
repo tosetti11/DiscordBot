@@ -97,8 +97,12 @@ client.once(Events.ClientReady, (c) => {
   }, 30_000);
   console.log('   ⏰ Reminder scheduler started (30s interval)');
 
-  // ─── Live Scoreboard Poller ───
-  setInterval(async () => {
+  // ─── Live Scoreboard Poller [DISABLED] ───
+  // Feature dormant. To re-enable: uncomment this setInterval block and the console.log below it.
+  // Also re-enable: placeholder posting in server.js (~lines 2596, 2687), 📡 button in app.js (~line 2547),
+  //   sidebar link in index.html (~line 84)
+  // Related files: src/services/espn.js, src/utils/scoreboardImage.js, src/database/scoreboards.js
+  /* setInterval(async () => {
     try {
       const active = await scoreboardDb.getActiveScoreboards();
       if (active.length === 0) return;
@@ -193,8 +197,8 @@ client.once(Events.ClientReady, (c) => {
     } catch (err) {
       console.error('[Scoreboard Poller] Error:', err.message);
     }
-  }, 60_000);
-  console.log('   📡 Scoreboard poller started (60s interval)');
+  }, 60_000); */
+  // console.log('   📡 Scoreboard poller started (60s interval)');
 
   // ─── Web Server ───
   setDiscordClient(client);

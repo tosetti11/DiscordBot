@@ -2543,10 +2543,11 @@ function renderBetCard(bet, showOwner = false) {
   }
 
   // Actions
-  // Scoreboard button for open bets with a mirror channel
-  const scoreboardBtnHtml = (bet.status === 'open' && bet.mirrorChannelId && canManage)
-    ? `<button class="ticket-btn ticket-btn-scoreboard" id="sb-btn-${bet.id}" onclick="event.stopPropagation();toggleScoreboard('${bet.id}')" title="Live Scoreboard">📡</button>`
-    : '';
+  // [SCOREBOARD DISABLED] Button hidden — feature dormant. To re-enable, restore the condition below.
+  const scoreboardBtnHtml = '';
+  // const scoreboardBtnHtml = (bet.status === 'open' && bet.mirrorChannelId && canManage)
+  //   ? `<button class="ticket-btn ticket-btn-scoreboard" id="sb-btn-${bet.id}" onclick="event.stopPropagation();toggleScoreboard('${bet.id}')" title="Live Scoreboard">📡</button>`
+  //   : '';
 
   let actionsHtml = '';
   if (canManage && bet.status === 'open') {

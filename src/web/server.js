@@ -2593,13 +2593,14 @@ Rules:
           const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment], flags: [4096] });
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
-          // Post scoreboard placeholder under the slip
-          try {
-            const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
-            await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
-          } catch (phErr) {
-            console.error('[API] Scoreboard placeholder error (parlay):', phErr.message);
-          }
+          // [SCOREBOARD DISABLED] Placeholder posting disabled — feature dormant
+          // To re-enable: uncomment below and the matching code in single bet section (~line 2687)
+          // try {
+          //   const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
+          //   await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
+          // } catch (phErr) {
+          //   console.error('[API] Scoreboard placeholder error (parlay):', phErr.message);
+          // }
         } catch (mirrorErr) {
           console.error('[API] Mirror post error (parlay):', mirrorErr);
         }
@@ -2684,13 +2685,14 @@ Rules:
           const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment], flags: [4096] });
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
-          // Post scoreboard placeholder under the slip
-          try {
-            const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
-            await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
-          } catch (phErr) {
-            console.error('[API] Scoreboard placeholder error (single):', phErr.message);
-          }
+          // [SCOREBOARD DISABLED] Placeholder posting disabled — feature dormant
+          // To re-enable: uncomment below and the matching code in parlay section (~line 2596)
+          // try {
+          //   const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
+          //   await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
+          // } catch (phErr) {
+          //   console.error('[API] Scoreboard placeholder error (single):', phErr.message);
+          // }
         } catch (mirrorErr) {
           console.error('[API] Mirror post error (single):', mirrorErr);
         }

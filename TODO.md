@@ -10,6 +10,7 @@
 | 2 | Public leaderboard page (shareable, read-only) | Not started |
 | 3 | Sharp/Capper tool (odds API integration) | Not started — options below |
 | 4 | Discord analytics / lurker detection | Not started — spec below |
+| 5 | Live scoreboard & player prop tracker | **BUILT but DISABLED** — see note below |
 
 ---
 
@@ -197,3 +198,261 @@ Deploy: git add -A && git commit -m "msg" && git push
         then SSH: cd DiscordBot && git pull && pm2 restart gk-bot
 Supabase SQL: https://supabase.com/dashboard/project/fjtqeazctzewzdfvfhxg/sql/new
 ```
+
+---
+
+## #5 — Live Scoreboard & Player Prop Tracker
+
+> **STATUS: BUILT but DISABLED**
+> Feature is fully coded but disabled pending further testing/refinement for parlays and player props.
+>
+> **Dormant code locations (search for `[SCOREBOARD DISABLED]`):**
+> - `src/index.js` — Background poller (lines ~100-197) commented out
+> - `src/web/server.js` — Placeholder posting on bet creation (~lines 2596, 2687) commented out
+> - `src/web/server.js` — Activate/deactivate/status endpoints (~lines 2739-2900) still exist but unused
+> - `src/web/public/app.js` — 📡 button on bet cards (~line 2547) disabled
+> - `src/web/public/index.html` — Sidebar link (~line 84) commented out
+>
+> **Files that exist but are dormant (fully intact, no changes needed to re-enable):**
+> - `src/services/espn.js` — ESPN API integration (scores, summaries, team matching)
+> - `src/utils/scoreboardImage.js` — Canvas image generator (score bug style)
+> - `src/database/scoreboards.js` — Supabase queries for live_scoreboards table
+>
+> **DB objects (exist but unused):**
+> - `live_scoreboards` table in Supabase
+> - `mirror_scoreboard_msg_id` column on `bets` table
+>
+> **To re-enable:** Search codebase for `[SCOREBOARD DISABLED]` — each comment has instructions.
+
+### Overview
+Post a live-updating Discord embed for any game. Automatically matches games from open bets. Shows live score, game clock, and real-time progress on player prop bets. Embed updates in-place every 60 seconds during games.
+
+---
+
+### Data Source — ESPN Unofficial API (Free)
+
+All sports use the same endpoint pattern:
+```
+https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard
+```
+
+**Sport-to-path mapping:**
+| Our Sport Value | ESPN Path | League |
+|----------------|-----------|--------|
+| `nba` | `basketball/nba` | NBA |
+| `nfl` | `football/nfl` | NFL |
+| `mlb` | `baseball/mlb` | MLB |
+| `nhl` | `hockey/nhl` | NHL |
+| `ncaa_football` | `football/college-football` | NCAAF |
+| `ncaa_mbb` | `basketball/mens-college-basketball` | NCAAM |
+| `ncaa_wbb` | `basketball/womens-college-basketball` | NCAAW |
+| `wnba` | `basketball/wnba` | WNBA |
+| `mls` | `soccer/usa.1` | MLS |
+| `epl` | `soccer/eng.1` | EPL |
+| `la_liga` | `soccer/esp.1` | La Liga |
+| `ucl` | `soccer/uefa.champions` | UCL |
+| `ufc` | `mma/ufc` | UFC |
+
+**Box score / player stats endpoint:**
+```
+https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/summary?event={gameId}
+```
+Returns full box score with individual player stats (points, rebounds, assists, etc.) for tracking player props.
+
+**Response structure (consistent across sports):**
+- `events[].id` — unique game ID
+- `events[].competitions[].competitors[]` — teams, scores
+- `events[].status` — game clock, period, state (pre/in/post)
+- Summary endpoint: `boxscore.players[].statistics[]` — per-player stats
+
+---
+
+### Game Selection — Two Modes
+
+#### Mode A: Auto-track from open bets (primary)
+1. When a user clicks **"Go Live 📡"** on a bet card (web app) or runs `/scoreboard` (Discord slash command)
+2. Server looks up open bets for that user → extracts team names + sport
+3. Calls ESPN scoreboard API for that sport → fuzzy-matches team names to find today's game
+4. Creates a scoreboard entry + posts embed to the selected channel
+5. No manual game selection needed — bets already contain everything
+
+#### Mode B: Manual game picker (fallback)
+1. New section on web app: "Today's Games" (accessible from bet page)
+2. Pulls today's schedule from ESPN scoreboard endpoint for all active sports
+3. Shows games grouped by sport with start times
+4. User clicks a game → selects channel → bot posts embed
+5. Useful when tracking a game you don't have a bet on
+
+---
+
+### Discord Embed Format
+
+```
+┌──────────────────────────────────────┐
+│ 🏀 NBA — LIVE Q3 4:32               │
+│━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+│                                      │
+│  🏠 NYK Knicks         87            │
+│  🏃 MIL Bucks          82            │
+│                                      │
+│━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+│ 📊 Your Props                        │
+│                                      │
+│ ✅ J. Brunson    22 pts  (O 20.5)    │
+│ 🔥 J. Randle     8 reb  (O 10.5)    │
+│ ⏳ D. Lillard   15 pts  (O 25.5)    │
+│                                      │
+│━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+│ 🔄 Updates every 60s │ !stop to end  │
+└──────────────────────────────────────┘
+```
+
+**Prop status icons:**
+- ✅ = already hit (stat >= line)
+- 🔥 = close / on pace (within 20% of line)
+- ⏳ = still tracking (under line, game in progress)
+- ❌ = missed (game over, didn't hit)
+
+**Embed color:**
+- 🟢 Green = all props hitting
+- 🟡 Yellow = mixed
+- 🔴 Red = most props behind
+- ⚪ Gray = pre-game
+
+---
+
+### Database Schema
+
+#### Table: `live_scoreboards`
+
+```sql
+CREATE TABLE IF NOT EXISTS live_scoreboards (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  guild_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  message_id TEXT,                    -- Discord message ID (for editing)
+  discord_id TEXT NOT NULL,            -- User who started it
+  sport TEXT NOT NULL,
+  espn_game_id TEXT NOT NULL,          -- ESPN event ID
+  home_team TEXT NOT NULL,
+  away_team TEXT NOT NULL,
+  bet_ids UUID[] DEFAULT '{}',         -- Linked bet IDs for prop tracking
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'ended', 'error')),
+  last_updated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  ended_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_live_scoreboards_active
+  ON live_scoreboards (status, guild_id);
+
+CREATE INDEX IF NOT EXISTS idx_live_scoreboards_espn
+  ON live_scoreboards (espn_game_id);
+```
+
+---
+
+### Architecture
+
+```
+Web App / Slash Cmd              Server                         Discord
+──────────────────              ──────                         ───────
+User clicks "Go Live"     →   1. Find ESPN game (fuzzy match)
+  or /scoreboard               2. Create live_scoreboards row
+                                3. Post initial embed      →   📊 Embed appears
+                                4. Store message_id             in channel
+                                                                    │
+                           ┌─── 5. Background poller (60s)  ◄──────┘
+                           │       - Fetch ESPN summary
+                           │       - Get player stats
+                           │       - Cross-ref with bet props
+                           │
+                           └──→ 6. Edit embed message      →   📊 Embed updates
+                                   with fresh data               in-place
+                                   
+                                7. Game ends → final update →  📊 FINAL score
+                                   Set status='ended'           Stop polling
+```
+
+**Background poller:**
+- `setInterval` every 60 seconds
+- Queries `live_scoreboards` WHERE `status = 'active'`
+- For each active scoreboard: fetch ESPN data → build embed → `message.edit()`
+- When ESPN reports game status as "Final": post final score, mark as ended
+- Auto-cleanup: end any scoreboard that's been active > 6 hours (safety net)
+
+---
+
+### Team Name Matching
+
+ESPN uses full names ("New York Knicks"), bets might have abbreviations ("NYK", "Knicks"). Need a fuzzy matcher:
+
+1. Build a mapping table: `{ "knicks": "New York Knicks", "nyk": "New York Knicks", ... }` for all teams
+2. Normalize: lowercase, strip "the", common abbreviations
+3. Fuzzy match: if exact match fails, use Levenshtein distance or substring matching
+4. Cache ESPN schedule per sport per day (avoid repeated API calls)
+
+---
+
+### Stat-to-Prop Matching
+
+Player props from bets have `prop_description` like "Over 25.5 Points". Need to parse:
+- Extract stat category: Points, Rebounds, Assists, 3-Pointers, Strikeouts, etc.
+- Extract line value: 25.5
+- Extract direction: Over/Under
+- Map stat category to ESPN box score field name
+- Compare live stat value to the line → determine status icon
+
+---
+
+### Web App UI
+
+**On bet cards (existing):**
+- New button: **"📡 Go Live"** (appears for open bets when game is today)
+- Opens a small modal: "Post live scoreboard to [channel dropdown]"
+- Confirm → API call → bot posts embed
+
+**New "Live Games" section (optional/later):**
+- Tab in the web app showing today's schedule
+- Grid of game cards with scores (auto-refreshing)
+- "Track" button on each card
+- Could show all active scoreboards across the server
+
+---
+
+### Implementation Steps
+
+| Step | What | Details |
+|------|------|---------|
+| 1 | **Create Supabase table** | Run `live_scoreboards` SQL above |
+| 2 | **Build ESPN service** | New file `src/services/espn.js` — functions: `getTodaysGames(sport)`, `getGameSummary(gameId)`, `matchTeamToGame(teamName, games)` |
+| 3 | **Build team name mapper** | New file `src/config/teamMappings.js` — abbreviation/alias → full name for all sports |
+| 4 | **Build scoreboard embed builder** | New file `src/utils/scoreboardEmbed.js` — takes game data + bet props → returns Discord embed |
+| 5 | **Add prop stat parser** | Parse `prop_description` → extract stat type + line + direction |
+| 6 | **Add API endpoints** | `POST /api/scoreboard/start` (start tracking a game), `DELETE /api/scoreboard/:id` (stop), `GET /api/scoreboard/games/:sport` (today's games from ESPN) |
+| 7 | **Add "Go Live" button** to web app bet cards | Only shows for open bets with today's event time |
+| 8 | **Build background poller** | In `index.js` — `setInterval` every 60s, fetch active scoreboards, update embeds |
+| 9 | **Add `/scoreboard` slash command** | Optional Discord slash command alternative to web button |
+| 10 | **Add auto-stop logic** | End scoreboard when game goes final, post final results |
+| 11 | **Test with live NBA game** | End-to-end test during an actual game |
+| 12 | **Deploy** | git push → SSH pull → pm2 restart |
+
+---
+
+### ESPN API Rate Limits & Caching
+
+- ESPN unofficial API has no published rate limit but be respectful
+- Cache scoreboard responses for 30 seconds (avoid hammering during multi-game nights)
+- Cache game summary responses for 60 seconds (matches our polling interval)
+- Pre-game: poll every 5 minutes (no need for 60s before tipoff)
+- In-game: poll every 60 seconds
+- Post-game: one final poll, then stop
+
+---
+
+### Cost
+
+- ESPN API: **Free** (unofficial, no API key needed)
+- Supabase: minimal rows, well within free tier
+- Discord API: editing messages has generous rate limits (5/5s per channel)
+- **Total cost: $0**
