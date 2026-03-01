@@ -50,7 +50,15 @@ async function getTodaysGames(sport, dateStr) {
   if (!espnPath) return [];
 
   const today = dateStr || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${today}`;
+  
+  // College sports need group + limit params to get all games (not just featured)
+  // Group 50 = NCAA D1 Basketball, Group 80 = NCAA D1 Football (FBS)
+  let extraParams = '';
+  if (sport === 'cbb' || sport === 'ncaa_mbb') extraParams = '&groups=50&limit=200';
+  else if (sport === 'cfb' || sport === 'ncaa_football') extraParams = '&groups=80&limit=200';
+  else if (sport === 'ncaa_wbb') extraParams = '&groups=50&limit=200';
+  
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${today}${extraParams}`;
 
   const cacheKey = `scoreboard:${sport}:${today}`;
   const cached = getCached(cacheKey, SCOREBOARD_TTL);
