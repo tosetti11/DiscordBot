@@ -19,7 +19,39 @@ const reminder = require('./commands/general/reminder');
 const announce = require('./commands/general/announce');
 const follow = require('./commands/general/follow');
 const remindersDb = require('./database/reminders');
+const scoreboardDb = require('./database/scoreboards');
+const espn = require('./services/espn');
+const { generateScoreboardImage } = require('./utils/scoreboardImage');
 const { createWebServer, setDiscordClient } = require('./web/server');
+
+// ── Scoreboard helpers ──
+function findPlayer(players, playerName) {
+  if (!players || !playerName) return null;
+  const norm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+  // Try exact normalized name match
+  if (players[norm]) return players[norm];
+  // Try partial match
+  for (const key of Object.keys(players)) {
+    if (typeof key === 'string' && key.includes(norm)) return players[key];
+    if (typeof key === 'string' && norm.includes(key)) return players[key];
+  }
+  return null;
+}
+
+function getStatStatus(direction, line, current, isGameOver) {
+  if (direction === 'over') {
+    if (current > line) return 'hit';
+    if (isGameOver) return 'missed';
+    if (current >= line * 0.8) return 'close';
+    return 'tracking';
+  } else {
+    if (isGameOver && current < line) return 'hit';
+    if (isGameOver) return 'missed';
+    if (current > line) return 'missed';
+    if (current >= line * 0.8) return 'close';
+    return 'tracking';
+  }
+}
 
 // Create Discord client
 const client = new Client({
@@ -64,6 +96,105 @@ client.once(Events.ClientReady, (c) => {
     }
   }, 30_000);
   console.log('   ⏰ Reminder scheduler started (30s interval)');
+
+  // ─── Live Scoreboard Poller ───
+  setInterval(async () => {
+    try {
+      const active = await scoreboardDb.getActiveScoreboards();
+      if (active.length === 0) return;
+
+      for (const sb of active) {
+        try {
+          // Fetch latest game data
+          const games = await espn.getTodaysGames(sb.sport);
+          const game = games.find(g => g.id === sb.espn_game_id);
+          if (!game) continue;
+
+          // Build prop tracking data if there are linked bets
+          let props = [];
+          if (sb.bet_ids && sb.bet_ids.length > 0 && game.state === 'in') {
+            const db = require('./database/queries');
+            const summary = await espn.getGameSummary(sb.sport, sb.espn_game_id);
+
+            for (const betId of sb.bet_ids) {
+              try {
+                const bet = await db.getBet(betId);
+                if (!bet) continue;
+
+                // Single bet props
+                if (bet.bet_category === 'player_prop' && bet.player_name && bet.prop_description) {
+                  const parsed = espn.parsePropDescription(bet.prop_description);
+                  if (parsed && summary) {
+                    const playerData = findPlayer(summary.players, bet.player_name);
+                    const currentStat = playerData?.stats?.[parsed.espnKey];
+                    const numStat = parseFloat(currentStat) || 0;
+                    props.push({
+                      playerName: bet.player_name,
+                      direction: parsed.direction,
+                      line: parsed.line,
+                      stat: parsed.stat,
+                      currentStat: numStat,
+                      status: getStatStatus(parsed.direction, parsed.line, numStat, game.state === 'post'),
+                    });
+                  }
+                }
+
+                // Parlay leg props
+                if (bet.parlay_legs) {
+                  for (const leg of bet.parlay_legs) {
+                    if (leg.bet_category === 'player_prop' && leg.player_name && leg.prop_description) {
+                      const parsed = espn.parsePropDescription(leg.prop_description);
+                      if (parsed && summary) {
+                        const playerData = findPlayer(summary.players, leg.player_name);
+                        const currentStat = playerData?.stats?.[parsed.espnKey];
+                        const numStat = parseFloat(currentStat) || 0;
+                        props.push({
+                          playerName: leg.player_name,
+                          direction: parsed.direction,
+                          line: parsed.line,
+                          stat: parsed.stat,
+                          currentStat: numStat,
+                          status: getStatStatus(parsed.direction, parsed.line, numStat, game.state === 'post'),
+                        });
+                      }
+                    }
+                  }
+                }
+              } catch (e) {}
+            }
+          }
+
+          // Generate updated image
+          const imgBuffer = await generateScoreboardImage(game, props);
+          const { AttachmentBuilder } = require('discord.js');
+          const attachment = new AttachmentBuilder(imgBuffer, { name: 'scoreboard.png' });
+
+          // Edit Discord message
+          const channel = await client.channels.fetch(sb.channel_id);
+          const msg = await channel.messages.fetch(sb.message_id);
+          await msg.edit({ files: [attachment] });
+          await scoreboardDb.touchScoreboard(sb.id);
+
+          // If game is final, end the scoreboard
+          if (game.completed || game.state === 'post') {
+            await scoreboardDb.endScoreboard(sb.id);
+            await msg.edit({
+              content: `📡 **Final Score** — ${game.away.abbreviation} ${game.away.score}, ${game.home.abbreviation} ${game.home.score}`,
+              files: [attachment],
+            });
+          }
+        } catch (e) {
+          console.error(`[Scoreboard Poller] Error updating ${sb.id}:`, e.message);
+        }
+      }
+
+      // Cleanup stale scoreboards
+      await scoreboardDb.cleanupStaleScoreboards();
+    } catch (err) {
+      console.error('[Scoreboard Poller] Error:', err.message);
+    }
+  }, 60_000);
+  console.log('   📡 Scoreboard poller started (60s interval)');
 
   // ─── Web Server ───
   setDiscordClient(client);

@@ -238,6 +238,18 @@ async function updateBetMirrorMessageId(betId, mirrorMessageId, mirrorChannelId)
 }
 
 /**
+ * Update bet scoreboard placeholder message ID
+ */
+async function updateBetScoreboardMsgId(betId, scoreboardMsgId) {
+  const { error } = await supabase
+    .from('bets')
+    .update({ mirror_scoreboard_msg_id: scoreboardMsgId })
+    .eq('id', betId);
+
+  if (error) throw error;
+}
+
+/**
  * Get user stats from the view
  */
 async function getUserStats(discordId) {
@@ -435,6 +447,7 @@ module.exports = {
   updateParlayLegFields,
   updateBetMessageId,
   updateBetMirrorMessageId,
+  updateBetScoreboardMsgId,
   getUserStats,
   getWhaleStats,
   getLeaderboard,

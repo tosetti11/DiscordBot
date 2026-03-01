@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS bets (
   message_id TEXT,
   mirror_message_id TEXT,
   mirror_channel_id TEXT,
+  mirror_scoreboard_msg_id TEXT,
 
   -- Slip number (e.g. RIC-001)
   slip_number TEXT UNIQUE,

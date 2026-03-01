@@ -174,7 +174,7 @@ function showApp() {
   }
 
   // Navigate to page from URL hash (e.g. #stats, #leaderboard) or default to slip
-  const validPages = ['slip', 'stats', 'bets', 'closebets', 'leaderboard', 'following', 'reminders', 'tools', 'install', 'analytics', 'announce'];
+  const validPages = ['slip', 'stats', 'bets', 'closebets', 'leaderboard', 'following', 'reminders', 'tools', 'install', 'analytics', 'announce', 'scoreboard'];
   const hashPage = window.location.hash.replace('#', '');
   if (hashPage && validPages.includes(hashPage)) {
     switchPage(hashPage);
@@ -1457,6 +1457,7 @@ function switchPage(page) {
     install: document.getElementById('install-page'),
     analytics: document.getElementById('analytics-page'),
     announce: document.getElementById('announce-page'),
+    scoreboard: document.getElementById('scoreboard-page'),
   };
 
   // Hide all, show selected
@@ -1475,6 +1476,7 @@ function switchPage(page) {
   if (page === 'leaderboard') initLeaderboardPage();
   if (page === 'following') initFollowingPage();
   if (page === 'closebets') initCloseBetsPage();
+  if (page === 'scoreboard') initScoreboardPage();
 }
 
 // ═══════════════════════════════════════════════
@@ -2541,11 +2543,17 @@ function renderBetCard(bet, showOwner = false) {
   }
 
   // Actions
+  // Scoreboard button for open bets with a mirror placeholder
+  const scoreboardBtnHtml = (bet.status === 'open' && bet.mirrorScoreboardMsgId && canManage)
+    ? `<button class="ticket-btn ticket-btn-scoreboard" id="sb-btn-${bet.id}" onclick="event.stopPropagation();toggleScoreboard('${bet.id}')" title="Live Scoreboard">📡</button>`
+    : '';
+
   let actionsHtml = '';
   if (canManage && bet.status === 'open') {
     actionsHtml = `
       <div class="ticket-actions">
         <button class="ticket-btn ticket-btn-win" onclick="event.stopPropagation();closeBet('${bet.id}')">💰 Close</button>
+        ${scoreboardBtnHtml}
         <button class="ticket-btn ticket-btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')">✏️</button>
         <button class="ticket-btn ticket-btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')">🗑️</button>
       </div>`;
@@ -2557,6 +2565,7 @@ function renderBetCard(bet, showOwner = false) {
   } else if (canManage && isParlay && bet.legs?.some(l => l.status === 'open')) {
     actionsHtml = `
       <div class="ticket-actions">
+        ${scoreboardBtnHtml}
         <button class="ticket-btn ticket-btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')">✏️</button>
         <button class="ticket-btn ticket-btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')">🗑️</button>
       </div>`;
@@ -4676,5 +4685,181 @@ async function sendShareToDiscord() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="12" viewBox="0 0 71 55" fill="currentColor"><path d="M60.1 4.9A58.5 58.5 0 0045.4.2a.2.2 0 00-.2.1 40.8 40.8 0 00-1.8 3.7 54 54 0 00-16.2 0A37.4 37.4 0 0025.4.3a.2.2 0 00-.2-.1A58.4 58.4 0 0010.5 5 59.6 59.6 0 00.4 45.1a.3.3 0 00.1.2 58.7 58.7 0 0017.7 9 .2.2 0 00.3-.1 42 42 0 003.6-5.9.2.2 0 00-.1-.3 38.7 38.7 0 01-5.5-2.6.2.2 0 01 0-.4l1.1-.9a.2.2 0 01.2 0 41.8 41.8 0 0035.6 0 .2.2 0 01.2 0l1.1.9a.2.2 0 010 .4 36.4 36.4 0 01-5.5 2.6.2.2 0 00-.1.3 47.2 47.2 0 003.6 5.9.2.2 0 00.3.1 58.5 58.5 0 0017.7-9 .3.3 0 00.1-.2c1.5-15.5-2.5-29-10.5-40.2zM23.7 37c-3.5 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.2 6.3 7-2.8 7-6.3 7zm23.2 0c-3.5 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.2 6.3 7-2.8 7-6.3 7z"/></svg> Send`;
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  LIVE SCOREBOARD PAGE
+// ═══════════════════════════════════════════════
+
+let scoreboardInitialized = false;
+let scoreboardAllGames = {};     // { nba: [games], nfl: [...], ... }
+let scoreboardActiveSport = 'all';
+let scoreboardRefreshTimer = null;
+
+function initScoreboardPage() {
+  if (scoreboardInitialized) return;
+  scoreboardInitialized = true;
+
+  // Load all games on init
+  loadScoreboardGames();
+
+  // Auto-refresh games every 30s
+  scoreboardRefreshTimer = setInterval(() => {
+    if (document.getElementById('scoreboard-page')?.classList.contains('hidden')) return;
+    loadScoreboardGames(true);
+  }, 30000);
+}
+
+async function loadScoreboardGames(silent = false) {
+  const container = document.getElementById('scoreboard-games');
+  if (!silent) container.innerHTML = '<p class="empty-state">Loading today\'s games...</p>';
+
+  try {
+    const res = await fetch('/api/scoreboard/games', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const data = await res.json();
+    scoreboardAllGames = data.sports || {};
+    renderScoreboardGames();
+  } catch (err) {
+    console.error('Failed to load scoreboard games:', err);
+    if (!silent) container.innerHTML = '<p class="empty-state">Failed to load games. Try refreshing.</p>';
+  }
+}
+
+function renderScoreboardGames() {
+  const container = document.getElementById('scoreboard-games');
+  const sport = scoreboardActiveSport;
+
+  // Collect all games, optionally filtered
+  let allGames = [];
+  for (const [s, games] of Object.entries(scoreboardAllGames)) {
+    if (sport !== 'all' && s !== sport) continue;
+    for (const g of games) {
+      allGames.push({ ...g, sport: s });
+    }
+  }
+
+  // Sort: live first, then scheduled, then final
+  const stateOrder = { in: 0, pre: 1, post: 2 };
+  allGames.sort((a, b) => (stateOrder[a.state] ?? 1) - (stateOrder[b.state] ?? 1) || new Date(a.startTime) - new Date(b.startTime));
+
+  if (allGames.length === 0) {
+    container.innerHTML = '<p class="no-games-msg">No games scheduled today for this filter.</p>';
+    return;
+  }
+
+  container.innerHTML = allGames.map(game => {
+    const sportEmoji = { nba: '🏀', nfl: '🏈', mlb: '⚾', nhl: '🏒', cfb: '🏈', cbb: '🏀', mma: '🥊', wnba: '🏀' }[game.sport] || '🏅';
+    const sportLabel = game.sport?.toUpperCase() || '';
+
+    let statusClass = 'game-status-scheduled';
+    let statusText = '';
+    if (game.state === 'in') {
+      statusClass = 'game-status-live';
+      statusText = game.detail || 'LIVE';
+    } else if (game.state === 'post') {
+      statusClass = 'game-status-final';
+      statusText = 'FINAL';
+    } else {
+      const d = new Date(game.startTime);
+      statusText = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
+    }
+
+    const homeWinClass = game.state === 'post' && game.home.score > game.away.score ? ' game-team-winner' : '';
+    const awayWinClass = game.state === 'post' && game.away.score > game.home.score ? ' game-team-winner' : '';
+
+    return `
+      <div class="game-card" data-sport="${game.sport}">
+        <div class="game-card-header">
+          <span>${sportEmoji} ${sportLabel}</span>
+          <span class="${statusClass}">${statusText}</span>
+        </div>
+        <div class="game-card-body">
+          <div class="game-team-row">
+            ${game.away.logo ? `<img class="game-team-logo" src="${game.away.logo}" alt="" onerror="this.style.display='none'">` : ''}
+            <span class="game-team-name">${game.away.shortName || game.away.abbreviation}</span>
+            <span class="game-team-record">${game.away.record || ''}</span>
+            <span class="game-team-score${awayWinClass}">${game.state === 'pre' ? '' : game.away.score}</span>
+          </div>
+          <div class="game-team-row">
+            ${game.home.logo ? `<img class="game-team-logo" src="${game.home.logo}" alt="" onerror="this.style.display='none'">` : ''}
+            <span class="game-team-name">${game.home.shortName || game.home.abbreviation}</span>
+            <span class="game-team-record">${game.home.record || ''}</span>
+            <span class="game-team-score${homeWinClass}">${game.state === 'pre' ? '' : game.home.score}</span>
+          </div>
+        </div>
+        ${game.odds ? `
+        <div class="game-card-footer">
+          <span style="font-size:11px;color:var(--text-secondary);flex:1">${game.odds.spread || ''} ${game.odds.overUnder ? 'O/U ' + game.odds.overUnder : ''}</span>
+        </div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function filterScoreboardSport(sport) {
+  scoreboardActiveSport = sport;
+  document.querySelectorAll('.score-tab').forEach(t => t.classList.toggle('active', t.dataset.sport === sport));
+  renderScoreboardGames();
+}
+
+// ── Toggle scoreboard on a bet (called from bet card 📡 button) ──
+async function toggleScoreboard(betId) {
+  const btn = document.getElementById(`sb-btn-${betId}`);
+  if (!btn) return;
+
+  // Check current state
+  btn.disabled = true;
+  btn.textContent = '⏳';
+
+  try {
+    const statusRes = await fetch(`/api/scoreboard/status/${betId}`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    const statusData = await statusRes.json();
+
+    if (statusData.active) {
+      // Deactivate
+      const res = await fetch(`/api/scoreboard/deactivate/${betId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Scoreboard stopped');
+        btn.textContent = '📡';
+        btn.classList.remove('sb-active');
+        btn.title = 'Activate Live Scoreboard';
+      } else {
+        showToast(data.error || 'Failed to stop scoreboard');
+        btn.textContent = '📡';
+      }
+    } else {
+      // Activate
+      const res = await fetch(`/api/scoreboard/activate/${betId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        let msg = `Scoreboard live! ${data.game}`;
+        if (data.props > 0) msg += ` — Tracking ${data.props} prop(s)`;
+        showToast(msg);
+        btn.textContent = '🔴';
+        btn.classList.add('sb-active');
+        btn.title = 'Stop Live Scoreboard';
+      } else {
+        showToast(data.error || 'Failed to activate scoreboard');
+        btn.textContent = '📡';
+      }
+    }
+  } catch (e) {
+    console.error('Toggle scoreboard error:', e);
+    showToast('Failed to toggle scoreboard');
+    btn.textContent = '📡';
+  } finally {
+    btn.disabled = false;
   }
 }

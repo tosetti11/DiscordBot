@@ -2042,6 +2042,8 @@ textarea {
 .ticket-btn-edit  { color: #5865F2; }
 .ticket-btn-del   { color: #D62300; }
 .ticket-btn-reopen { color: #43b581; }
+.ticket-btn-scoreboard { color: #FF8732; }
+.ticket-btn-scoreboard.sb-active { color: #ff4444; animation: pulse-live 1.5s infinite; }
 
 .ticket-btn-win:hover   { border-color: #43b581; background: rgba(67,181,129,0.12); }
 .ticket-btn-loss:hover  { border-color: #D62300; background: rgba(214,35,0,0.12); }
@@ -2049,6 +2051,7 @@ textarea {
 .ticket-btn-edit:hover  { border-color: #5865F2; background: rgba(88,101,242,0.12); }
 .ticket-btn-del:hover   { border-color: #D62300; background: rgba(214,35,0,0.12); }
 .ticket-btn-reopen:hover { border-color: #43b581; background: rgba(67,181,129,0.12); }
+.ticket-btn-scoreboard:hover { border-color: #FF8732; background: rgba(255,135,50,0.12); }
 
 /* ── Parlay Legs (collapsible DK-style) ── */
 .ticket-legs-section {
@@ -4077,4 +4080,266 @@ textarea {
 .closebets-controls select {
   min-width: 140px;
   flex: 1;
+}
+
+/* ===== Scoreboard Page ===== */
+.scoreboard-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+.scoreboard-header { margin-bottom: 20px; }
+.scoreboard-header h2 { font-size: 28px; font-weight: 800; }
+
+/* Sport Tabs */
+.scoreboard-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.score-tab {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.score-tab:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.score-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Controls */
+.scoreboard-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.scoreboard-controls select {
+  min-width: 140px;
+  flex: 1;
+}
+
+/* Active Scoreboards */
+.active-scoreboards-section {
+  margin-bottom: 24px;
+}
+.active-scoreboards-section .section-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #ff4444;
+}
+.active-scoreboards-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.active-sb-card {
+  background: var(--card);
+  border: 1px solid #ff444444;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.active-sb-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.active-sb-matchup {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+.active-sb-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.active-sb-channel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+.btn-stop-sb {
+  background: #ff4444;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.btn-stop-sb:hover {
+  background: #cc3333;
+}
+
+/* Games Grid */
+.scoreboard-games {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+.game-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.game-card:hover {
+  border-color: var(--accent);
+}
+.game-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.game-status-live {
+  color: #ff4444;
+  font-weight: 700;
+  animation: pulse-live 1.5s infinite;
+}
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.game-status-final { color: #22c55e; font-weight: 700; }
+.game-status-scheduled { color: var(--text-secondary); }
+
+.game-card-body {
+  padding: 12px 14px;
+}
+.game-team-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+.game-team-row + .game-team-row {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+.game-team-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: rgba(255,255,255,0.05);
+}
+.game-team-name {
+  font-weight: 700;
+  font-size: 14px;
+  flex: 1;
+  color: var(--text);
+}
+.game-team-record {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: -4px;
+}
+.game-team-score {
+  font-weight: 800;
+  font-size: 20px;
+  min-width: 36px;
+  text-align: right;
+  color: var(--text);
+}
+.game-team-winner {
+  color: var(--accent);
+}
+
+.game-card-footer {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.btn-go-live {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+.btn-go-live:hover {
+  opacity: 0.85;
+}
+.btn-go-live:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-go-live.is-live {
+  background: #ff4444;
+}
+
+/* Game sport badge */
+.game-sport-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+/* No games */
+.no-games-msg {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 600px) {
+  .scoreboard-games {
+    grid-template-columns: 1fr;
+  }
+  .active-scoreboards-list {
+    grid-template-columns: 1fr;
+  }
+  .scoreboard-tabs {
+    gap: 4px;
+  }
+  .score-tab {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
 }

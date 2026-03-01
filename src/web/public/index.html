@@ -81,6 +81,9 @@
         <a href="javascript:void(0)" class="sidebar-link" data-page="tools" onclick="switchPage('tools')">
           <span class="sidebar-icon">🔧</span> Tools
         </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="scoreboard" onclick="switchPage('scoreboard')">
+          <span class="sidebar-icon">📡</span> Live Scores
+        </a>
         <a href="javascript:void(0)" class="sidebar-link" data-page="install" onclick="switchPage('install')">
           <span class="sidebar-icon">📱</span> App
         </a>
@@ -1032,6 +1035,33 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Scoreboard Page -->
+    <main id="scoreboard-page" class="main-content hidden">
+      <div class="scoreboard-container">
+        <div class="scoreboard-header">
+          <h2>📡 Live Scores</h2>
+          <p class="slip-subtitle">Today's games across all sports — activate scoreboards on your open bets with the 📡 button</p>
+        </div>
+
+        <!-- Sport filter tabs -->
+        <div class="scoreboard-tabs">
+          <button class="score-tab active" data-sport="all" onclick="filterScoreboardSport('all')">All</button>
+          <button class="score-tab" data-sport="nba" onclick="filterScoreboardSport('nba')">🏀 NBA</button>
+          <button class="score-tab" data-sport="nfl" onclick="filterScoreboardSport('nfl')">🏈 NFL</button>
+          <button class="score-tab" data-sport="mlb" onclick="filterScoreboardSport('mlb')">⚾ MLB</button>
+          <button class="score-tab" data-sport="nhl" onclick="filterScoreboardSport('nhl')">🏒 NHL</button>
+          <button class="score-tab" data-sport="cfb" onclick="filterScoreboardSport('cfb')">🏈 CFB</button>
+          <button class="score-tab" data-sport="cbb" onclick="filterScoreboardSport('cbb')">🏀 CBB</button>
+          <button class="score-tab" data-sport="mma" onclick="filterScoreboardSport('mma')">🥊 MMA</button>
+        </div>
+
+        <!-- Games Grid -->
+        <div id="scoreboard-games" class="scoreboard-games">
+          <p class="empty-state">Loading today's games...</p>
         </div>
       </div>
     </main>

@@ -14,10 +14,13 @@ const rateLimit = require('express-rate-limit');
 const { supabase } = require('../config/supabase');
 const db = require('../database/queries');
 const tailedBetsDb = require('../database/tailedBets');
+const scoreboardDb = require('../database/scoreboards');
 const { americanToDecimal, decimalToAmerican, formatOdds } = require('../utils/odds');
 const { SPORT_NAMES, WAGER_TYPES, STATUS_EMOJI } = require('../config/constants');
 const { buildBetEmbed } = require('../utils/embeds');
 const { generateBetCardImage } = require('../utils/betCardImage');
+const { generateScoreboardImage } = require('../utils/scoreboardImage');
+const espn = require('../services/espn');
 const remindersDb = require('../database/reminders');
 const { notifyFollowers } = require('../utils/notifications');
 
@@ -1195,6 +1198,7 @@ function createWebServer() {
       createdAt: bet.created_at,
       messageId: bet.message_id,
       channelId: bet.channel_id,
+      mirrorScoreboardMsgId: bet.mirror_scoreboard_msg_id || null,
       legs: (bet.parlay_legs || []).map(l => ({
         id: l.id,
         legNumber: l.leg_number,
@@ -1296,9 +1300,24 @@ function createWebServer() {
           const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
           const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
           await mirrorMsg.delete();
+
+          // Also delete scoreboard placeholder
+          if (bet.mirror_scoreboard_msg_id) {
+            try {
+              const sbMsg = await mirrorChannel.messages.fetch(bet.mirror_scoreboard_msg_id);
+              await sbMsg.delete();
+            } catch (e2) {}
+          }
         } catch (e) {
           console.error('[API] Mirror message delete error:', e.message);
         }
+      }
+
+      // End any active scoreboard for this bet
+      if (bet.id) {
+        try {
+          await scoreboardDb.endScoreboardsByBet(bet.id);
+        } catch (e) {}
       }
 
       // Delete original Discord message and post a fresh one with the result (wins only)
@@ -1643,8 +1662,21 @@ function createWebServer() {
           const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
           const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
           await mirrorMsg.delete();
+
+          // Also delete scoreboard placeholder
+          if (bet.mirror_scoreboard_msg_id) {
+            try {
+              const sbMsg = await mirrorChannel.messages.fetch(bet.mirror_scoreboard_msg_id);
+              await sbMsg.delete();
+            } catch (e2) {}
+          }
         } catch (e) {}
       }
+
+      // End any active scoreboard for this bet
+      try {
+        await scoreboardDb.endScoreboardsByBet(betId);
+      } catch (e) {}
 
       await db.deleteBet(betId, req.user.discordId, admin);
       res.json({ success: true });
@@ -2559,6 +2591,14 @@ Rules:
           const mirrorAttachment = new ABMirror(mirrorImgBuffer, { name: 'bet-card.png' });
           const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment], flags: [4096] });
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
+
+          // Post scoreboard placeholder under the slip
+          try {
+            const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
+            await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
+          } catch (phErr) {
+            console.error('[API] Scoreboard placeholder error (parlay):', phErr.message);
+          }
         } catch (mirrorErr) {
           console.error('[API] Mirror post error (parlay):', mirrorErr);
         }
@@ -2642,6 +2682,14 @@ Rules:
           const mirrorAttachment = new ABMirror2(mirrorImgBuffer, { name: 'bet-card.png' });
           const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment], flags: [4096] });
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
+
+          // Post scoreboard placeholder under the slip
+          try {
+            const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
+            await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
+          } catch (phErr) {
+            console.error('[API] Scoreboard placeholder error (single):', phErr.message);
+          }
         } catch (mirrorErr) {
           console.error('[API] Mirror post error (single):', mirrorErr);
         }
@@ -2654,6 +2702,210 @@ Rules:
     } catch (err) {
       console.error('[API] Submit bet error:', err);
       res.status(500).json({ error: 'Failed to save bet' });
+    }
+  });
+
+  // ─── LIVE SCOREBOARD ENDPOINTS ───
+
+  // Get today's games for a sport
+  app.get('/api/scoreboard/games/:sport', authMiddleware, async (req, res) => {
+    try {
+      const { sport } = req.params;
+      const games = await espn.getTodaysGames(sport);
+      res.json({ games });
+    } catch (err) {
+      console.error('[API] Scoreboard games error:', err);
+      res.status(500).json({ error: 'Failed to fetch games' });
+    }
+  });
+
+  // Get today's games for ALL sports
+  app.get('/api/scoreboard/games', authMiddleware, async (req, res) => {
+    try {
+      const allGames = await espn.getAllTodaysGames();
+      // Convert array to object keyed by sport
+      const sportsObj = {};
+      for (const { sport, games } of allGames) {
+        sportsObj[sport] = games;
+      }
+      res.json({ sports: sportsObj });
+    } catch (err) {
+      console.error('[API] Scoreboard all games error:', err);
+      res.status(500).json({ error: 'Failed to fetch games' });
+    }
+  });
+
+  // Activate scoreboard for a specific bet (edits the placeholder under the mirror slip)
+  app.post('/api/scoreboard/activate/:betId', authMiddleware, async (req, res) => {
+    try {
+      const bet = await db.getBet(req.params.betId);
+      if (!bet) return res.status(404).json({ error: 'Bet not found' });
+
+      // Only bet owner or admin
+      const isOwner = bet.discord_id === req.user.discordId;
+      const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
+      if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
+
+      if (!bet.mirror_channel_id || !bet.mirror_scoreboard_msg_id) {
+        return res.status(400).json({ error: 'No scoreboard placeholder found for this bet' });
+      }
+
+      if (bet.status !== 'open') {
+        return res.status(400).json({ error: 'Bet is already closed' });
+      }
+
+      // Try to match this bet to an ESPN game
+      const sport = bet.sport;
+      if (!sport) return res.status(400).json({ error: 'No sport on this bet' });
+
+      const games = await espn.getTodaysGames(sport);
+      const game = espn.matchTeamToGame(bet.team_a, games) || espn.matchTeamToGame(bet.team_b, games);
+
+      if (!game) {
+        return res.status(404).json({ error: `No matching game found today for ${bet.team_a || bet.player_name || 'this bet'}. The game may not be scheduled today.` });
+      }
+
+      // Check if already tracking this bet
+      const existing = await scoreboardDb.getScoreboardByBet(bet.id);
+      if (existing) {
+        return res.status(400).json({ error: 'Scoreboard already active for this bet' });
+      }
+
+      // Build prop tracking data
+      const props = [];
+      if (bet.bet_category === 'player_prop' && bet.player_name && bet.prop_description) {
+        const parsed = espn.parsePropDescription(bet.prop_description);
+        if (parsed) {
+          props.push({
+            playerName: bet.player_name,
+            direction: parsed.direction,
+            line: parsed.line,
+            stat: parsed.stat,
+            espnKey: parsed.espnKey,
+            currentStat: null,
+            status: 'tracking',
+          });
+        }
+      }
+      // Parlay legs
+      if (bet.parlay_legs) {
+        for (const leg of bet.parlay_legs) {
+          if (leg.bet_category === 'player_prop' && leg.player_name && leg.prop_description) {
+            const parsed = espn.parsePropDescription(leg.prop_description);
+            if (parsed) {
+              props.push({
+                playerName: leg.player_name,
+                direction: parsed.direction,
+                line: parsed.line,
+                stat: parsed.stat,
+                espnKey: parsed.espnKey,
+                currentStat: null,
+                status: 'tracking',
+              });
+            }
+          }
+        }
+      }
+
+      // Generate scoreboard image
+      const imgBuffer = await generateScoreboardImage(game, props);
+      const { AttachmentBuilder: ABScore } = require('discord.js');
+      const attachment = new ABScore(imgBuffer, { name: 'scoreboard.png' });
+
+      // Edit the placeholder message in the mirror channel
+      const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+      const placeholderMsg = await mirrorChannel.messages.fetch(bet.mirror_scoreboard_msg_id);
+      await placeholderMsg.edit({
+        content: '',
+        files: [attachment],
+      });
+
+      // Save to scoreboard tracking table
+      const scoreboard = await scoreboardDb.createScoreboard({
+        guildId: bet.guild_id,
+        channelId: bet.mirror_channel_id,
+        messageId: bet.mirror_scoreboard_msg_id,
+        discordId: bet.discord_id,
+        sport,
+        espnGameId: game.id,
+        homeTeam: game.home.name,
+        awayTeam: game.away.name,
+        betIds: [bet.id],
+      });
+
+      res.json({ success: true, scoreboardId: scoreboard.id, game: `${game.away.abbreviation} @ ${game.home.abbreviation}`, props: props.length });
+    } catch (err) {
+      console.error('[API] Scoreboard activate error:', err);
+      res.status(500).json({ error: 'Failed to activate scoreboard' });
+    }
+  });
+
+  // Deactivate scoreboard for a bet (revert to placeholder)
+  app.post('/api/scoreboard/deactivate/:betId', authMiddleware, async (req, res) => {
+    try {
+      const bet = await db.getBet(req.params.betId);
+      if (!bet) return res.status(404).json({ error: 'Bet not found' });
+
+      const isOwner = bet.discord_id === req.user.discordId;
+      const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
+      if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
+
+      const scoreboard = await scoreboardDb.getScoreboardByBet(bet.id);
+      if (!scoreboard) return res.status(404).json({ error: 'No active scoreboard for this bet' });
+
+      await scoreboardDb.endScoreboard(scoreboard.id);
+
+      // Revert to placeholder text
+      if (bet.mirror_channel_id && bet.mirror_scoreboard_msg_id) {
+        try {
+          const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+          const msg = await mirrorChannel.messages.fetch(bet.mirror_scoreboard_msg_id);
+          await msg.edit({ content: '📡 *Scoreboard stopped*', files: [] });
+        } catch (e) {}
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[API] Scoreboard deactivate error:', err);
+      res.status(500).json({ error: 'Failed to deactivate scoreboard' });
+    }
+  });
+
+  // Check scoreboard status for a bet
+  app.get('/api/scoreboard/status/:betId', authMiddleware, async (req, res) => {
+    try {
+      const scoreboard = await scoreboardDb.getScoreboardByBet(req.params.betId);
+      res.json({ active: !!scoreboard, scoreboard: scoreboard || null });
+    } catch (err) {
+      res.json({ active: false, scoreboard: null });
+    }
+  });
+
+  // Get active scoreboards for a guild
+  app.get('/api/guilds/:guildId/scoreboards', authMiddleware, async (req, res) => {
+    try {
+      const scoreboards = await scoreboardDb.getActiveScoreboardsForGuild(req.params.guildId);
+      res.json({ scoreboards });
+    } catch (err) {
+      console.error('[API] Scoreboards list error:', err);
+      res.status(500).json({ error: 'Failed to fetch scoreboards' });
+    }
+  });
+
+  // Preview a scoreboard image (no Discord post)
+  app.get('/api/scoreboard/preview/:sport/:gameId', authMiddleware, async (req, res) => {
+    try {
+      const { sport, gameId } = req.params;
+      const games = await espn.getTodaysGames(sport);
+      const game = games.find(g => g.id === gameId);
+      if (!game) return res.status(404).json({ error: 'Game not found' });
+
+      const imgBuffer = await generateScoreboardImage(game);
+      res.set('Content-Type', 'image/png');
+      res.send(imgBuffer);
+    } catch (err) {
+      console.error('[API] Scoreboard preview error:', err);
+      res.status(500).json({ error: 'Failed to generate preview' });
     }
   });
 
