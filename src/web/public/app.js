@@ -1720,12 +1720,12 @@ function populateTailSection(t) {
   if (t.tail_best_bet) {
     document.getElementById('tail-hl-best').textContent = fmtNet(t.tail_best_bet.payout);
     document.getElementById('tail-hl-best').className = 'sp-bw-value positive';
-    document.getElementById('tail-hl-best-detail').textContent = `${t.tail_best_bet.pick} (${t.tail_best_bet.odds >= 0 ? '+' : ''}${t.tail_best_bet.odds})`;
+    document.getElementById('tail-hl-best-detail').textContent = t.tail_best_bet.odds != null ? `${t.tail_best_bet.pick} (${t.tail_best_bet.odds >= 0 ? '+' : ''}${t.tail_best_bet.odds})` : t.tail_best_bet.pick;
   }
   if (t.tail_worst_bet) {
     document.getElementById('tail-hl-worst').textContent = fmtNet(t.tail_worst_bet.payout);
     document.getElementById('tail-hl-worst').className = 'sp-bw-value negative';
-    document.getElementById('tail-hl-worst-detail').textContent = `${t.tail_worst_bet.pick} (${t.tail_worst_bet.odds >= 0 ? '+' : ''}${t.tail_worst_bet.odds})`;
+    document.getElementById('tail-hl-worst-detail').textContent = t.tail_worst_bet.odds != null ? `${t.tail_worst_bet.pick} (${t.tail_worst_bet.odds >= 0 ? '+' : ''}${t.tail_worst_bet.odds})` : t.tail_worst_bet.pick;
   }
 }
 
@@ -1799,12 +1799,12 @@ function renderStats(data) {
   if (data.bestBet) {
     document.getElementById('hl-best').textContent = `${fmtNet(data.bestBet.payout)}`;
     document.getElementById('hl-best').className = 'sp-bw-value positive';
-    document.getElementById('hl-best-detail').textContent = `${data.bestBet.pick} (${data.bestBet.odds >= 0 ? '+' : ''}${data.bestBet.odds})`;
+    document.getElementById('hl-best-detail').textContent = data.bestBet.odds != null ? `${data.bestBet.pick} (${data.bestBet.odds >= 0 ? '+' : ''}${data.bestBet.odds})` : data.bestBet.pick;
   }
   if (data.worstBet) {
     document.getElementById('hl-worst').textContent = `${fmtNet(data.worstBet.payout)}`;
     document.getElementById('hl-worst').className = 'sp-bw-value negative';
-    document.getElementById('hl-worst-detail').textContent = `${data.worstBet.pick} (${data.worstBet.odds >= 0 ? '+' : ''}${data.worstBet.odds})`;
+    document.getElementById('hl-worst-detail').textContent = data.worstBet.odds != null ? `${data.worstBet.pick} (${data.worstBet.odds >= 0 ? '+' : ''}${data.worstBet.odds})` : data.worstBet.pick;
   }
 
   // Bet type breakdown
