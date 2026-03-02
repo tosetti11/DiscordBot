@@ -399,7 +399,8 @@
       if (team) {
         const cd = document.createElement('div');
         cd.className = 'champion-display';
-        cd.innerHTML = `<h3>🏆 YOUR CHAMPION</h3><div class="champion-team">(${team.seed}) ${esc(team.team_name)}</div>`;
+        const champLogo = team.logo_url ? `<img class="champion-logo" src="${esc(team.logo_url)}" alt="">` : '';
+        cd.innerHTML = `<h3>🏆 YOUR CHAMPION</h3>${champLogo}<div class="champion-team">(${team.seed}) ${esc(team.team_name)}</div>`;
         ff.appendChild(cd);
       }
     }
@@ -471,7 +472,8 @@
       slot.classList.add('locked');
     }
 
-    slot.innerHTML = `<span class="seed">${team.seed}</span><span class="team-name">${esc(team.short_name || team.team_name)}</span>`;
+    const logoHtml = team.logo_url ? `<img class="team-logo" src="${esc(team.logo_url)}" alt="" onerror="this.style.display='none'">` : '';
+    slot.innerHTML = `<span class="seed">${team.seed}</span>${logoHtml}<span class="team-name">${esc(team.short_name || team.team_name)}</span>`;
     return slot;
   }
 
