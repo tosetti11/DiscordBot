@@ -207,6 +207,10 @@ function createWebServer() {
   app.get('/auth/login', (req, res) => {
     const state = crypto.randomBytes(16).toString('hex');
     res.cookie('oauth_state', state, { httpOnly: true, maxAge: 300000, sameSite: 'lax', secure: BASE_URL.startsWith('https') });
+    // Save redirect destination so callback can return user to the right page
+    if (req.query.redirect) {
+      res.cookie('oauth_redirect', req.query.redirect, { httpOnly: true, maxAge: 300000, sameSite: 'lax', secure: BASE_URL.startsWith('https') });
+    }
     const params = new URLSearchParams({
       client_id: DISCORD_CLIENT_ID,
       redirect_uri: DISCORD_REDIRECT_URI,
@@ -299,7 +303,10 @@ function createWebServer() {
         console.error('[Analytics] Failed to log login:', analyticsErr);
       }
 
-      res.redirect('/');
+      // Redirect to saved destination or default to /
+      const redirectTo = req.cookies.oauth_redirect || '/';
+      res.clearCookie('oauth_redirect');
+      res.redirect(redirectTo);
     } catch (err) {
       console.error('[OAuth2] Error:', err);
       res.redirect('/?error=auth_failed');
@@ -2924,6 +2931,9 @@ Rules:
       res.status(500).json({ error: 'Failed to generate preview' });
     }
   });
+
+  // ─── Bracket Challenge Routes ───
+  require('./bracketRoutes')(app, { jwt, JWT_SECRET, discordClient, path });
 
   // Fallback — serve index.html for SPA
   app.get('/{*splat}', (req, res) => {
