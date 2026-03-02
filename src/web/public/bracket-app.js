@@ -279,12 +279,18 @@
     }
     $('payment-bar').classList.remove('hidden');
     $('entry-fee-display').textContent = '$' + tournament.entry_fee;
-    $('venmo-display').innerHTML = tournament.venmo_username
-      ? `Pay via <a href="https://venmo.com/${esc(tournament.venmo_username)}" target="_blank">@${esc(tournament.venmo_username)}</a>`
-      : '';
+    const venmo = tournament.venmo_username || '';
+    if (venmo) {
+      const isUrl = venmo.startsWith('http');
+      const link = isUrl ? venmo : `https://venmo.com/${venmo}`;
+      $('venmo-display').innerHTML = `<a href="${esc(link)}" target="_blank" style="color:var(--accent)">💸 Pay via Venmo</a>`;
+    } else {
+      $('venmo-display').innerHTML = '';
+    }
+    const userName = currentUser?.displayName || currentUser?.email || '';
     $('payment-status-display').innerHTML = myEntry.paid
       ? '<span class="paid">✓ Paid</span>'
-      : '<span class="unpaid">✗ Not Paid</span>';
+      : `<span class="unpaid">✗ Not Paid</span><span style="font-size:12px;color:var(--text-secondary);margin-left:8px">⚠️ Put your <strong>Discord username</strong> or <strong>signup email</strong> in the Venmo message so we know who paid!${userName ? ' (e.g. "' + esc(userName) + '")' : ''}</span>`;
   }
 
   /* ═══════════ Region Tabs ═══════════ */
@@ -604,7 +610,7 @@
         <div class="admin-row"><label>Entry Fee ($)</label>
           <input id="t-fee" type="number" value="${t.entry_fee || 0}" min="0" /></div>
         <div class="admin-row"><label>Venmo Username</label>
-          <input id="t-venmo" value="${esc(t.venmo_username || '')}" placeholder="username (no @)" /></div>
+          <input id="t-venmo" value="${esc(t.venmo_username || '')}" placeholder="Full Venmo link or username" style="min-width:300px" /></div>
         <div class="admin-row"><label>Prize Description</label>
           <textarea id="t-prize">${esc(t.prize_description || '')}</textarea></div>
         <div class="admin-row"><label>Lock Date</label>
