@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS bets (
   -- Wager info
   units DECIMAL(5,2) NOT NULL DEFAULT 1,
   bet_note TEXT,
+  share_link TEXT,
 
   -- Status
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'win', 'loss', 'push', 'void')),

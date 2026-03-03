@@ -45,6 +45,12 @@ const KING_DISCORD_ID = '1246525685749649441';
 const KING_OPEN_CHANNEL = '1477318450618695692';
 const COMMUNITY_OPEN_CHANNEL = '1477318238273802480';
 
+// Helper: build message content with optional share link
+function buildContentWithLink(baseContent, shareLink) {
+  if (!shareLink) return baseContent;
+  return `${baseContent}\n\n🔗 **Copy this bet:** <${shareLink}>`;
+}
+
 function setDiscordClient(client) {
   discordClient = client;
 }
@@ -1199,6 +1205,7 @@ function createWebServer() {
       units: bet.units,
       status: bet.status,
       betNote: bet.bet_note,
+      shareLink: bet.share_link || null,
       eventStartTime: bet.event_start_time,
       isWhale: bet.is_whale,
       isRetro: bet.is_retro,
@@ -1268,7 +1275,9 @@ function createWebServer() {
           const channel = await discordClient.channels.fetch(bet.channel_id);
           const message = await channel.messages.fetch(bet.message_id);
           const attachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
-          await message.edit({ files: [attachment], embeds: [], attachments: [] });
+          const legEditPayload = { files: [attachment], embeds: [], attachments: [] };
+          if (updatedBet.share_link) legEditPayload.content = buildContentWithLink('', updatedBet.share_link);
+          await message.edit(legEditPayload);
         } catch (e) {
           console.warn('Could not update primary parlay message:', e.message);
         }
@@ -1280,7 +1289,9 @@ function createWebServer() {
           const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
           const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
           const mirrorAttachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
-          await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+          const mirrorLegPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+          if (updatedBet.share_link) mirrorLegPayload.content = buildContentWithLink('', updatedBet.share_link);
+          await mirrorMsg.edit(mirrorLegPayload);
         } catch (e) {
           console.warn('Could not update mirror parlay leg:', e.message);
         }
@@ -1495,7 +1506,7 @@ function createWebServer() {
       const { betId } = req.params;
       const { oddsAmerican, units, pick, betNote, sport, wagerType, teamA, teamB,
               eventStartTime, playerName, propDescription, betCategory, spreadValue,
-              legs } = req.body;
+              shareLink, legs } = req.body;
 
       const bet = await db.getBet(betId);
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
@@ -1519,6 +1530,7 @@ function createWebServer() {
       if (propDescription !== undefined) fields.prop_description = propDescription;
       if (betCategory !== undefined) fields.bet_category = betCategory;
       if (spreadValue !== undefined) fields.spread_value = spreadValue ? parseFloat(spreadValue) : null;
+      if (shareLink !== undefined) fields.share_link = (typeof shareLink === 'string' ? shareLink.slice(0, 500) : shareLink) || null;
 
       if (Object.keys(fields).length > 0) {
         // Reconstruct `pick` from edited field values + existing bet data
@@ -1619,7 +1631,10 @@ function createWebServer() {
           const { AttachmentBuilder: ABEdit } = require('discord.js');
           const imgBuffer = await generateBetCardImage(updatedBet, embedName, embedAvatar);
           const attachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
-          await message.edit({ files: [attachment], embeds: [], attachments: [] });
+          const editPayload = { files: [attachment], embeds: [], attachments: [] };
+          if (updatedBet.share_link) editPayload.content = buildContentWithLink('', updatedBet.share_link);
+          else editPayload.content = '';
+          await message.edit(editPayload);
         } catch (e) {
           console.error('[API] Discord message update failed:', e.message);
         }
@@ -1650,7 +1665,10 @@ function createWebServer() {
           const { AttachmentBuilder: ABMirrorEdit } = require('discord.js');
           const mirrorImgBuffer = await generateBetCardImage(updatedBet, mirrorName, mirrorAvatar);
           const mirrorAttachment = new ABMirrorEdit(mirrorImgBuffer, { name: 'bet-card.png' });
-          await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+          const mirrorEditPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+          if (updatedBet.share_link) mirrorEditPayload.content = buildContentWithLink('', updatedBet.share_link);
+          else mirrorEditPayload.content = '';
+          await mirrorMsg.edit(mirrorEditPayload);
         } catch (e) {
           console.error('[API] Mirror message update failed:', e.message);
         }
@@ -2446,7 +2464,7 @@ Rules:
         guildId, channelId, betType, sport, betCategory, wagerType,
         teamA, teamB, pick, playerName, propDescription,
         futuresMarket, futuresSelection,
-        spreadValue, oddsAmerican, units, betNote,
+        spreadValue, oddsAmerican, units, betNote, shareLink,
         eventStartTime, isWhale, overUnder,
         onBehalfOf, // admin placing bet for another user
         // Parlay fields
@@ -2462,6 +2480,7 @@ Rules:
       const truncate = (s, max = MAX_LEN) => (typeof s === 'string' ? s.slice(0, max) : s);
       const safePick = truncate(pick);
       const safeBetNote = truncate(betNote);
+      const safeShareLink = truncate(shareLink);
       const safeTeamA = truncate(teamA, 200);
       const safeTeamB = truncate(teamB, 200);
       const safePlayerName = truncate(playerName, 200);
@@ -2547,6 +2566,7 @@ Rules:
           odds_decimal: oddsDecimal,
           units: parsedUnits,
           bet_note: safeBetNote || null,
+          share_link: safeShareLink || null,
           is_whale: isWhale || false,
           is_retro: false,
           status: 'open',
@@ -2607,7 +2627,7 @@ Rules:
 
         const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${targetDiscordId}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
         sendPayload.components = [pollRow];
-        sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
+        sendPayload.content = buildContentWithLink(isWhale ? whaleContent : 'Are You Tailing This Bet?', fullBet.share_link);
         const message = await channel.send(sendPayload);
         await db.updateBetMessageId(bet.id, message.id);
 
@@ -2618,7 +2638,9 @@ Rules:
           const mirrorImgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
           const { AttachmentBuilder: ABMirror } = require('discord.js');
           const mirrorAttachment = new ABMirror(mirrorImgBuffer, { name: 'bet-card.png' });
-          const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment], flags: [4096] });
+          const mirrorPayload2 = { files: [mirrorAttachment], flags: [4096] };
+          if (bet.share_link) mirrorPayload2.content = buildContentWithLink('', bet.share_link);
+          const mirrorMsg = await mirrorChannel.send(mirrorPayload2);
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
           // [SCOREBOARD DISABLED] Placeholder posting disabled — feature dormant
@@ -2676,6 +2698,7 @@ Rules:
           odds_decimal: oddsDecimal,
           units: parsedUnits,
           bet_note: safeBetNote || null,
+          share_link: safeShareLink || null,
           event_start_time: eventStartTime || null,
           is_whale: isWhale || false,
           is_retro: false,
@@ -2699,7 +2722,7 @@ Rules:
 
         const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${targetDiscordId}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
         sendPayload.components = [pollRow];
-        sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
+        sendPayload.content = buildContentWithLink(isWhale ? whaleContent : 'Are You Tailing This Bet?', bet.share_link);
         const message = await channel.send(sendPayload);
         await db.updateBetMessageId(bet.id, message.id);
 
@@ -2710,7 +2733,9 @@ Rules:
           const mirrorImgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
           const { AttachmentBuilder: ABMirror2 } = require('discord.js');
           const mirrorAttachment = new ABMirror2(mirrorImgBuffer, { name: 'bet-card.png' });
-          const mirrorMsg = await mirrorChannel.send({ files: [mirrorAttachment], flags: [4096] });
+          const mirrorPayload = { files: [mirrorAttachment], flags: [4096] };
+          if (bet.share_link) mirrorPayload.content = buildContentWithLink('', bet.share_link);
+          const mirrorMsg = await mirrorChannel.send(mirrorPayload);
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
           // [SCOREBOARD DISABLED] Placeholder posting disabled — feature dormant

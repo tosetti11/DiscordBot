@@ -98,6 +98,12 @@ const { PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
 const { SPORTS } = require('../../config/constants');
 const { americanToDecimal, decimalToAmerican } = require('../../utils/odds');
 const { buildBetEmbed } = require('../../utils/embeds');
+
+// Helper: append share link to message content
+function appendShareLink(content, shareLink) {
+  if (!shareLink) return content;
+  return `${content}\n\n🔗 **Copy this bet:** <${shareLink}>`;
+}
 const { generateBetCardImage } = require('../../utils/betCardImage');
 const db = require('../../database/queries');
 
@@ -862,9 +868,18 @@ async function handleDetailsButton(interaction) {
     .setRequired(false)
     .setMaxLength(500);
 
+  const shareLinkInput = new TextInputBuilder()
+    .setCustomId('share_link')
+    .setLabel('DraftKings / Bet Share Link (optional)')
+    .setPlaceholder('e.g. https://sportsbook.draftkings.com/...')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setMaxLength(500);
+
   modal.addComponents(
     new ActionRowBuilder().addComponents(startTimeInput),
     new ActionRowBuilder().addComponents(noteInput),
+    new ActionRowBuilder().addComponents(shareLinkInput),
   );
 
   await interaction.showModal(modal);
@@ -878,10 +893,13 @@ async function handleDetailsModalSubmit(interaction) {
 
   const eventStartTime = interaction.fields.getTextInputValue('event_start_time')?.trim() || null;
   const betNote = interaction.fields.getTextInputValue('bet_note')?.trim() || null;
+  let shareLink = null;
+  try { shareLink = interaction.fields.getTextInputValue('share_link')?.trim() || null; } catch (e) { /* no field */ }
 
   // Store on session
   session.pendingEventStartTime = eventStartTime;
   session.pendingBetNote = betNote;
+  session.pendingShareLink = shareLink;
 
   // Also update the pending leg data
   if (session.pendingLegData) {
@@ -1104,10 +1122,19 @@ async function handleParlayFinalButton(interaction) {
     .setRequired(false)
     .setMaxLength(200);
 
+  const shareLinkInput = new TextInputBuilder()
+    .setCustomId('share_link')
+    .setLabel('DraftKings / Bet Share Link (optional)')
+    .setPlaceholder('e.g. https://sportsbook.draftkings.com/...')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setMaxLength(500);
+
   modal.addComponents(
     new ActionRowBuilder().addComponents(oddsInput),
     new ActionRowBuilder().addComponents(unitsInput),
     new ActionRowBuilder().addComponents(noteInput),
+    new ActionRowBuilder().addComponents(shareLinkInput),
   );
 
   await interaction.showModal(modal);
@@ -1133,6 +1160,8 @@ async function handleParlayFinalSubmit(interaction) {
 
   let betNote = null;
   try { betNote = interaction.fields.getTextInputValue('bet_note')?.trim() || null; } catch (e) { /* no note field */ }
+  let shareLink = null;
+  try { shareLink = interaction.fields.getTextInputValue('share_link')?.trim() || null; } catch (e) { /* no field */ }
 
   const oddsDecimal = americanToDecimal(oddsAmerican);
 
@@ -1143,6 +1172,7 @@ async function handleParlayFinalSubmit(interaction) {
       oddsDecimal,
       units,
       betNote,
+      shareLink,
     };
     betSessions.set(userId, session);
 
@@ -1215,7 +1245,7 @@ async function handleBetConfirm(interaction) {
   if (session.betType === 'parlay') {
     await saveParlayBet(interaction, session);
   } else {
-    await saveSingleBet(interaction, session.pendingLegData, session.pendingUnits, session.pendingBetNote);
+    await saveSingleBet(interaction, session.pendingLegData, session.pendingUnits, session.pendingBetNote, session.pendingShareLink);
   }
 }
 
@@ -1247,14 +1277,14 @@ async function handleRetroResult(interaction) {
   if (session.betType === 'parlay') {
     await saveParlayBet(interaction, session);
   } else {
-    await saveSingleBet(interaction, session.pendingLegData, session.pendingUnits, session.pendingBetNote);
+    await saveSingleBet(interaction, session.pendingLegData, session.pendingUnits, session.pendingBetNote, session.pendingShareLink);
   }
 }
 
 // Save a parlay bet to DB and post embed
 async function saveParlayBet(interaction, session) {
   const userId = interaction.user.id;
-  const { oddsAmerican, oddsDecimal, units, betNote } = session.pendingParlayData;
+  const { oddsAmerican, oddsDecimal, units, betNote, shareLink } = session.pendingParlayData;
 
   // Determine the actual bettor (target user or the interaction user)
   const bettor = session.targetUser || interaction.user;
@@ -1279,6 +1309,7 @@ async function saveParlayBet(interaction, session) {
       odds_decimal: oddsDecimal,
       units,
       bet_note: betNote,
+      share_link: shareLink || null,
       is_whale: session.isWhale || false,
       is_retro: session.isRetro || false,
       status: session.isRetro ? (session.retroResult || 'win') : 'open',
@@ -1307,12 +1338,14 @@ async function saveParlayBet(interaction, session) {
     const sendPayload = { files: [attachment] };
 
     // Post to channel (channel already resolved above)
+    const betShareLink = fullBet.share_link || shareLink;
     if (session.isRetro) {
       // Retro — post without tail poll
       const retroLabel = `📋 **RETRO SLIP** — ${session.retroResult.toUpperCase()}`;
       sendPayload.content = isWhale
         ? `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\n${retroLabel}\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`
         : retroLabel;
+      sendPayload.content = appendShareLink(sendPayload.content, betShareLink);
       const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     } else {
@@ -1329,9 +1362,10 @@ async function saveParlayBet(interaction, session) {
           .setStyle(ButtonStyle.Danger)
       );
 
-      const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
+      let whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
       sendPayload.components = [pollRow];
       sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
+      sendPayload.content = appendShareLink(sendPayload.content, betShareLink);
       const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     }
@@ -1357,7 +1391,7 @@ async function saveParlayBet(interaction, session) {
 }
 
 // Save a single bet to DB and post embed
-async function saveSingleBet(interaction, legData, units, betNote) {
+async function saveSingleBet(interaction, legData, units, betNote, shareLink) {
   const session = betSessions.get(interaction.user.id);
   // Determine the actual bettor (target user or the interaction user)
   const bettor = session?.targetUser || interaction.user;
@@ -1381,6 +1415,7 @@ async function saveSingleBet(interaction, legData, units, betNote) {
       ...legData,
       units,
       bet_note: betNote,
+      share_link: shareLink || null,
       is_whale: session?.isWhale || false,
       is_retro: session?.isRetro || false,
       event_start_time: legData.event_start_time || session?.pendingEventStartTime || null,
@@ -1392,6 +1427,7 @@ async function saveSingleBet(interaction, legData, units, betNote) {
     const bet = await db.createBet(betData, displayName);
 
     const isWhale = session?.isWhale || false;
+    const betShareLink = bet.share_link || shareLink;
 
     // Build image attachment
     const imgBuffer = await generateBetCardImage(bet, displayName, bettor.displayAvatarURL());
@@ -1405,6 +1441,7 @@ async function saveSingleBet(interaction, legData, units, betNote) {
       sendPayload.content = isWhale
         ? `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\n${retroLabel}\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`
         : retroLabel;
+      sendPayload.content = appendShareLink(sendPayload.content, betShareLink);
       const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     } else {
@@ -1421,9 +1458,10 @@ async function saveSingleBet(interaction, legData, units, betNote) {
           .setStyle(ButtonStyle.Danger)
       );
 
-      const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
+      let whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${bettor.id}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
       sendPayload.components = [pollRow];
       sendPayload.content = isWhale ? whaleContent : 'Are You Tailing This Bet?';
+      sendPayload.content = appendShareLink(sendPayload.content, betShareLink);
       const message = await channel.send(sendPayload);
       await db.updateBetMessageId(bet.id, message.id);
     }

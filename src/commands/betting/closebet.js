@@ -301,7 +301,9 @@ async function updateParlayEmbed(interaction, session) {
         const channel = await interaction.client.channels.fetch(fullBet.channel_id);
         const message = await channel.messages.fetch(fullBet.message_id);
         const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
-        await message.edit({ files: [attachment], embeds: [], attachments: [] });
+        const editPayload = { files: [attachment], embeds: [], attachments: [] };
+        if (fullBet.share_link) editPayload.content = `🔗 **Copy this bet:** <${fullBet.share_link}>`;
+        await message.edit(editPayload);
       } catch (e) {
         console.warn('Could not update parlay embed:', e.message);
       }
@@ -313,7 +315,9 @@ async function updateParlayEmbed(interaction, session) {
         const mirrorChannel = await interaction.client.channels.fetch(fullBet.mirror_channel_id);
         const mirrorMsg = await mirrorChannel.messages.fetch(fullBet.mirror_message_id);
         const mirrorAttachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
-        await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+        const mirrorPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+        if (fullBet.share_link) mirrorPayload.content = `🔗 **Copy this bet:** <${fullBet.share_link}>`;
+        await mirrorMsg.edit(mirrorPayload);
       } catch (e) {
         console.warn('Could not update mirror parlay embed:', e.message);
       }

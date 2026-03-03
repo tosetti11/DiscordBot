@@ -674,6 +674,7 @@ async function handleSubmit(e) {
         oddsAmerican: parlayOdds,
         units: parlayUnits,
         betNote: document.getElementById('parlay-note').value || null,
+        shareLink: document.getElementById('parlay-share-link').value || null,
         isWhale,
         legs,
       };
@@ -692,6 +693,7 @@ async function handleSubmit(e) {
         isWhale,
         eventStartTime: document.getElementById('event-time').value || null,
         betNote: document.getElementById('bet-note').value || null,
+        shareLink: document.getElementById('share-link').value || null,
       };
 
       if (category === 'team_game') {
@@ -3145,6 +3147,7 @@ async function fetchBetForEdit(betId) {
       document.getElementById('parlay-odds').value = bet.oddsAmerican || '';
       document.getElementById('parlay-units').value = bet.units || '';
       document.getElementById('parlay-note').value = bet.betNote || '';
+      document.getElementById('parlay-share-link').value = bet.shareLink || '';
 
     } else {
       // Single bet
@@ -3200,6 +3203,7 @@ async function fetchBetForEdit(betId) {
       document.getElementById('units').value = bet.units || '';
       document.getElementById('event-time').value = bet.eventStartTime || '';
       document.getElementById('bet-note').value = bet.betNote || '';
+      document.getElementById('share-link').value = bet.shareLink || '';
     }
 
     // Whale toggle

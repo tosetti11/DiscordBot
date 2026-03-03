@@ -98,7 +98,9 @@ async function handleEditBetModal(interaction) {
         const channel = await interaction.client.channels.fetch(bet.channel_id);
         const message = await channel.messages.fetch(bet.message_id);
         const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
-        await message.edit({ files: [attachment], embeds: [], attachments: [] });
+        const editPayload = { files: [attachment], embeds: [], attachments: [] };
+        if (bet.share_link) editPayload.content = `\ud83d\udd17 **Copy this bet:** <${bet.share_link}>`;
+        await message.edit(editPayload);
       } catch (e) {
         // ignore
       }
@@ -110,7 +112,9 @@ async function handleEditBetModal(interaction) {
         const mirrorChannel = await interaction.client.channels.fetch(bet.mirror_channel_id);
         const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
         const mirrorAttachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
-        await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+        const mirrorPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+        if (bet.share_link) mirrorPayload.content = `\ud83d\udd17 **Copy this bet:** <${bet.share_link}>`;
+        await mirrorMsg.edit(mirrorPayload);
       } catch (e) {
         console.warn('Could not update mirror message:', e.message);
       }
