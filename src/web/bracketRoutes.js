@@ -9,7 +9,7 @@ const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/e
 const { BRACKET, ROUND_NAMES, REGIONS, STANDARD_SCORING, MAX_SCORE,
   R1_SEED_MATCHUPS, calculateScore, calculateMaxPossible } = require('../services/bracketStructure');
 
-const KING_DISCORD_ID = '1246525685749649441';
+const KING_DISCORD_ID = '1338301556973633577';
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 module.exports = function mountBracketRoutes(app, { jwt, JWT_SECRET, discordClient, path }) {
