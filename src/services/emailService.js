@@ -8,7 +8,7 @@
  */
 const nodemailer = require('nodemailer');
 
-const GMAIL_USER = process.env.GMAIL_USER || 'thegamblingkingapp@gmail.com';
+const GMAIL_USER = process.env.GMAIL_USER || 'rttoast1122@gmail.com';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 
 let transporter = null;
