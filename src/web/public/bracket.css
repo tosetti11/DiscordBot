@@ -300,6 +300,48 @@ body {
   font-weight: 700;
 }
 
+/* ─── Inline Tiebreaker (Final Four tab) ─── */
+.tiebreaker-inline {
+  text-align: center;
+  margin-top: 20px;
+  padding: 18px 24px;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  background: rgba(99,102,241,0.08);
+}
+.tiebreaker-heading {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+.tiebreaker-required {
+  color: var(--red, #ef4444);
+  font-weight: 700;
+}
+.tiebreaker-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.tiebreaker-inline input {
+  width: 120px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 2px solid var(--accent);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+.tiebreaker-inline input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(255,215,0,0.2);
+}
+
 /* ─── Submit Section ─── */
 .submit-section {
   position: sticky;
@@ -315,13 +357,6 @@ body {
   gap: 20px;
   max-width: 900px;
   margin: 0 auto;
-}
-.tiebreaker-group { display: flex; align-items: center; gap: 10px; }
-.tiebreaker-group label { font-size: 13px; color: var(--text-secondary); }
-.tiebreaker-group input {
-  width: 80px; padding: 6px 10px; border-radius: var(--radius);
-  border: 1px solid var(--border); background: var(--bg-card);
-  color: var(--text-primary); font-size: 14px; text-align: center;
 }
 .submit-actions { display: flex; align-items: center; gap: 16px; }
 .picks-count { font-size: 13px; color: var(--text-secondary); font-weight: 600; }

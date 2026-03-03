@@ -269,7 +269,7 @@
     renderCurrentRegion();
     updatePickCount();
 
-    if (myEntry && myEntry.tiebreaker) $('tiebreaker-input').value = myEntry.tiebreaker;
+    if (myEntry && myEntry.tiebreaker && $('tiebreaker-input')) $('tiebreaker-input').value = myEntry.tiebreaker;
   }
 
   function renderPaymentBar() {
@@ -404,6 +404,20 @@
         ff.appendChild(cd);
       }
     }
+
+    // Tiebreaker — directly under championship
+    if (canEdit && myEntry) {
+      const existingVal = myEntry?.tiebreaker || '';
+      const tbDiv = document.createElement('div');
+      tbDiv.className = 'tiebreaker-inline';
+      tbDiv.innerHTML = `
+        <div class="tiebreaker-heading">⚠️ TIEBREAKER <span class="tiebreaker-required">(REQUIRED)</span></div>
+        <div class="tiebreaker-desc">Predict the <strong>total combined score</strong> of the Championship game</div>
+        <input type="number" id="tiebreaker-input" min="0" max="500" placeholder="e.g. 145" value="${existingVal}">
+      `;
+      ff.appendChild(tbDiv);
+    }
+
     container.appendChild(ff);
   }
 
@@ -520,7 +534,13 @@
     const count = Object.keys(myPicks).length;
     if (count < 63) { toast(`Need all 63 picks — you have ${count}`); return; }
 
-    const tiebreaker = parseInt($('tiebreaker-input').value) || 0;
+    const tbInput = $('tiebreaker-input');
+    const tiebreaker = tbInput ? parseInt(tbInput.value) : 0;
+    if (!tiebreaker || tiebreaker <= 0) {
+      toast('\u26A0\uFE0F Tiebreaker is required! Go to Final Four tab and enter a total score prediction.');
+      switchRegion('finalfour');
+      return;
+    }
     try {
       await api('/api/bracket/picks', {
         method: 'POST',
