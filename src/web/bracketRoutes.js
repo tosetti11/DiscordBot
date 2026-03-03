@@ -3,11 +3,14 @@
  * Mounted on the Express app from server.js
  */
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const bracketDb = require('../database/bracket');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/emailService');
 const { BRACKET, ROUND_NAMES, REGIONS, STANDARD_SCORING, MAX_SCORE,
   R1_SEED_MATCHUPS, calculateScore, calculateMaxPossible } = require('../services/bracketStructure');
 
 const KING_DISCORD_ID = '1246525685749649441';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 module.exports = function mountBracketRoutes(app, { jwt, JWT_SECRET, discordClient, path }) {
 
@@ -81,9 +84,16 @@ module.exports = function mountBracketRoutes(app, { jwt, JWT_SECRET, discordClie
       const hash = await bcrypt.hash(password, 10);
       const user = await bracketDb.createEmailUser(email, hash, displayName.trim());
 
+      // Generate verification token and send email
+      const verifyToken = crypto.randomBytes(32).toString('hex');
+      await bracketDb.updateEmailUser(user.id, { verification_token: verifyToken, email_verified: false });
+      const verifyUrl = `${BASE_URL}/bracket?verify=${verifyToken}`;
+      sendVerificationEmail(email, displayName.trim(), verifyUrl).catch(() => {});
+
+      // Log them in immediately (but they'll see unverified notice)
       const token = jwt.sign({ emailUserId: user.id, email: user.email, displayName: user.display_name, authType: 'email' }, JWT_SECRET, { expiresIn: '30d' });
       res.cookie('bracket_token', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
-      res.json({ success: true, user: { id: user.id, email: user.email, displayName: user.display_name, authType: 'email' } });
+      res.json({ success: true, needsVerification: true, user: { id: user.id, email: user.email, displayName: user.display_name, authType: 'email', emailVerified: false } });
     } catch (err) {
       console.error('[Bracket] Register error:', err);
       res.status(500).json({ error: 'Registration failed' });
@@ -101,17 +111,119 @@ module.exports = function mountBracketRoutes(app, { jwt, JWT_SECRET, discordClie
       const valid = await bcrypt.compare(password, user.password_hash);
       if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
 
+      if (!user.email_verified) {
+        return res.status(403).json({ error: 'Please verify your email before logging in. Check your inbox for the verification link.', needsVerification: true, email: user.email });
+      }
+
       const token = jwt.sign({ emailUserId: user.id, email: user.email, displayName: user.display_name, authType: 'email' }, JWT_SECRET, { expiresIn: '30d' });
       res.cookie('bracket_token', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
-      res.json({ success: true, user: { id: user.id, email: user.email, displayName: user.display_name, authType: 'email' } });
+      res.json({ success: true, user: { id: user.id, email: user.email, displayName: user.display_name, authType: 'email', emailVerified: true } });
     } catch (err) {
       console.error('[Bracket] Login error:', err);
       res.status(500).json({ error: 'Login failed' });
     }
   });
 
+  // Verify email via token
+  app.get('/api/bracket/auth/verify', async (req, res) => {
+    try {
+      const { token } = req.query;
+      if (!token) return res.status(400).json({ error: 'Missing verification token' });
+
+      const user = await bracketDb.getEmailUserByVerificationToken(token);
+      if (!user) return res.status(400).json({ error: 'Invalid or expired verification link' });
+
+      await bracketDb.updateEmailUser(user.id, { email_verified: true, verification_token: null });
+
+      // Auto-login after verification
+      const jwtToken = jwt.sign({ emailUserId: user.id, email: user.email, displayName: user.display_name, authType: 'email' }, JWT_SECRET, { expiresIn: '30d' });
+      res.cookie('bracket_token', jwtToken, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
+      res.json({ success: true, message: 'Email verified successfully!' });
+    } catch (err) {
+      console.error('[Bracket] Verify error:', err);
+      res.status(500).json({ error: 'Verification failed' });
+    }
+  });
+
+  // Resend verification email
+  app.post('/api/bracket/auth/resend-verification', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'Email required' });
+
+      const user = await bracketDb.getEmailUserByEmail(email);
+      if (!user) return res.json({ success: true }); // Don't reveal if email exists
+      if (user.email_verified) return res.json({ success: true, message: 'Already verified' });
+
+      const verifyToken = crypto.randomBytes(32).toString('hex');
+      await bracketDb.updateEmailUser(user.id, { verification_token: verifyToken });
+      const verifyUrl = `${BASE_URL}/bracket?verify=${verifyToken}`;
+      await sendVerificationEmail(user.email, user.display_name, verifyUrl);
+
+      res.json({ success: true, message: 'Verification email sent' });
+    } catch (err) {
+      console.error('[Bracket] Resend verify error:', err);
+      res.status(500).json({ error: 'Failed to resend' });
+    }
+  });
+
+  // Request password reset
+  app.post('/api/bracket/auth/forgot-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'Email required' });
+
+      const user = await bracketDb.getEmailUserByEmail(email);
+      // Always return success to not reveal if email exists
+      if (!user) return res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
+
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await bracketDb.updateEmailUser(user.id, { reset_token: resetToken, reset_token_expires: expires.toISOString() });
+
+      const resetUrl = `${BASE_URL}/bracket?reset=${resetToken}`;
+      await sendPasswordResetEmail(user.email, user.display_name, resetUrl);
+
+      res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
+    } catch (err) {
+      console.error('[Bracket] Forgot password error:', err);
+      res.status(500).json({ error: 'Failed to process request' });
+    }
+  });
+
+  // Reset password with token
+  app.post('/api/bracket/auth/reset-password', async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) return res.status(400).json({ error: 'Token and new password required' });
+      if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+      const user = await bracketDb.getEmailUserByResetToken(token);
+      if (!user) return res.status(400).json({ error: 'Invalid or expired reset link' });
+
+      // Check expiration
+      if (user.reset_token_expires && new Date(user.reset_token_expires) < new Date()) {
+        return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' });
+      }
+
+      const hash = await bcrypt.hash(password, 10);
+      await bracketDb.updateEmailUser(user.id, {
+        password_hash: hash,
+        reset_token: null,
+        reset_token_expires: null,
+        email_verified: true, // Reset also verifies email
+      });
+
+      res.json({ success: true, message: 'Password reset successfully! You can now log in.' });
+    } catch (err) {
+      console.error('[Bracket] Reset password error:', err);
+      res.status(500).json({ error: 'Failed to reset password' });
+    }
+  });
+
   app.post('/api/bracket/auth/logout', (req, res) => {
-    res.clearCookie('bracket_token');
+    res.clearCookie('bracket_token', { path: '/', sameSite: 'lax' });
+    res.clearCookie('fk_token', { path: '/', sameSite: 'lax' });
     res.json({ success: true });
   });
 

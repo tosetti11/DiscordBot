@@ -365,7 +365,8 @@ function createWebServer() {
 
   // Logout
   app.get('/auth/logout', (req, res) => {
-    res.clearCookie('fk_token');
+    res.clearCookie('fk_token', { path: '/', sameSite: 'lax' });
+    res.clearCookie('bracket_token', { path: '/', sameSite: 'lax' });
     res.redirect('/');
   });
 

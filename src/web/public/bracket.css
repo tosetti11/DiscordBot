@@ -82,6 +82,9 @@ body {
 .auth-toggle { font-size: 13px; color: var(--text-secondary); }
 .auth-toggle a { color: var(--accent); text-decoration: none; }
 .auth-toggle a:hover { text-decoration: underline; }
+.forgot-link { font-size: 13px; color: var(--text-secondary); margin-top: 8px; text-align: right; }
+.forgot-link a { color: var(--accent); text-decoration: none; }
+.forgot-link a:hover { text-decoration: underline; }
 
 .auth-error {
   margin-top: 12px; padding: 10px; border-radius: var(--radius);

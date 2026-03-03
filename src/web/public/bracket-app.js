@@ -25,7 +25,21 @@
   document.addEventListener('DOMContentLoaded', () => {
     $('email-login-form').addEventListener('submit', handleEmailLogin);
     $('email-register-form').addEventListener('submit', handleEmailRegister);
-    checkAuth();
+    $('forgot-password-form').addEventListener('submit', handleForgotPassword);
+    $('reset-password-form').addEventListener('submit', handleResetPassword);
+
+    // Check for verification or reset tokens in URL
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get('verify');
+    const resetToken = params.get('reset');
+
+    if (verifyToken) {
+      handleVerifyToken(verifyToken);
+    } else if (resetToken) {
+      showResetPasswordForm(resetToken);
+    } else {
+      checkAuth();
+    }
   });
 
   /* ═══════════ API helper ═══════════ */
@@ -73,13 +87,20 @@
       });
       $('auth-error').classList.add('hidden');
       await checkAuth();
-    } catch (err) { showAuthError(err.message); }
+    } catch (err) {
+      // Check if needs verification
+      if (err.message.includes('verify your email')) {
+        showVerifyNotice($('login-email').value);
+      } else {
+        showAuthError(err.message);
+      }
+    }
   }
 
   async function handleEmailRegister(e) {
     e.preventDefault();
     try {
-      await api('/api/bracket/auth/register', {
+      const result = await api('/api/bracket/auth/register', {
         method: 'POST',
         body: {
           displayName: $('reg-name').value,
@@ -88,35 +109,131 @@
         },
       });
       $('auth-error').classList.add('hidden');
-      await checkAuth();
+      if (result.needsVerification) {
+        showVerifyNotice($('reg-email').value);
+      } else {
+        await checkAuth();
+      }
     } catch (err) { showAuthError(err.message); }
+  }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    try {
+      const result = await api('/api/bracket/auth/forgot-password', {
+        method: 'POST',
+        body: { email: $('forgot-email').value },
+      });
+      $('auth-error').classList.add('hidden');
+      showAuthSuccess(result.message || 'If that email is registered, a reset link has been sent.');
+    } catch (err) { showAuthError(err.message); }
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    const pw = $('reset-password').value;
+    const confirm = $('reset-password-confirm').value;
+    if (pw !== confirm) return showAuthError('Passwords do not match');
+    try {
+      const resetToken = $('reset-password-form').dataset.token;
+      const result = await api('/api/bracket/auth/reset-password', {
+        method: 'POST',
+        body: { token: resetToken, password: pw },
+      });
+      $('auth-error').classList.add('hidden');
+      showAuthSuccess(result.message || 'Password reset! You can now log in.');
+      // Clean URL and show login after a delay
+      window.history.replaceState({}, '', '/bracket');
+      setTimeout(() => showLogin(), 2000);
+    } catch (err) { showAuthError(err.message); }
+  }
+
+  async function handleVerifyToken(token) {
+    try {
+      const result = await api(`/api/bracket/auth/verify?token=${encodeURIComponent(token)}`);
+      // Clean URL
+      window.history.replaceState({}, '', '/bracket');
+      toast(result.message || 'Email verified!');
+      await checkAuth();
+    } catch (err) {
+      window.history.replaceState({}, '', '/bracket');
+      $('auth-screen').classList.remove('hidden');
+      showAuthError(err.message || 'Verification failed');
+    }
+  }
+
+  function showResetPasswordForm(token) {
+    hideAllAuthForms();
+    $('reset-password-form').classList.remove('hidden');
+    $('reset-password-form').dataset.token = token;
+    $('auth-screen').classList.remove('hidden');
+    $('bracket-screen').classList.add('hidden');
+  }
+
+  let pendingVerifyEmail = '';
+  function showVerifyNotice(email) {
+    hideAllAuthForms();
+    pendingVerifyEmail = email;
+    $('verify-notice').classList.remove('hidden');
+    $('verify-email-display').textContent = email;
+  }
+
+  window.resendVerification = async function () {
+    if (!pendingVerifyEmail) return;
+    try {
+      await api('/api/bracket/auth/resend-verification', {
+        method: 'POST',
+        body: { email: pendingVerifyEmail },
+      });
+      toast('Verification email sent! Check your inbox.');
+    } catch (err) {
+      showAuthError(err.message);
+    }
+  };
+
+  function hideAllAuthForms() {
+    $('email-login-form').classList.add('hidden');
+    $('email-register-form').classList.add('hidden');
+    $('forgot-password-form').classList.add('hidden');
+    $('reset-password-form').classList.add('hidden');
+    $('verify-notice').classList.add('hidden');
+    $('show-register').classList.add('hidden');
+    $('show-login').classList.add('hidden');
+    $('auth-error').classList.add('hidden');
   }
 
   function showAuthError(msg) {
     const el = $('auth-error');
     el.textContent = msg;
+    el.style.color = '';
+    el.classList.remove('hidden');
+  }
+
+  function showAuthSuccess(msg) {
+    const el = $('auth-error');
+    el.textContent = msg;
+    el.style.color = '#4caf50';
     el.classList.remove('hidden');
   }
 
   /* Exposed via HTML onclick */
   window.showRegister = function () {
-    $('email-login-form').classList.add('hidden');
-    $('show-register').classList.add('hidden');
+    hideAllAuthForms();
     $('email-register-form').classList.remove('hidden');
     $('show-login').classList.remove('hidden');
-    $('auth-error').classList.add('hidden');
   };
   window.showLogin = function () {
-    $('email-register-form').classList.add('hidden');
-    $('show-login').classList.add('hidden');
+    hideAllAuthForms();
     $('email-login-form').classList.remove('hidden');
     $('show-register').classList.remove('hidden');
-    $('auth-error').classList.add('hidden');
+  };
+  window.showForgotPassword = function () {
+    hideAllAuthForms();
+    $('forgot-password-form').classList.remove('hidden');
   };
   window.logout = async function () {
     try { await api('/api/bracket/auth/logout', { method: 'POST' }); } catch {}
-    // also clear Discord cookie so the user truly logs out of the bracket page
-    document.cookie = 'fk_token=; Max-Age=0; path=/';
+    // Server clears both httpOnly cookies (fk_token + bracket_token)
     currentUser = null; tournament = null; myEntry = null; myPicks = {};
     $('auth-screen').classList.remove('hidden');
     $('bracket-screen').classList.add('hidden');

@@ -29,6 +29,7 @@
             <input type="email" id="login-email" placeholder="Email" required>
             <input type="password" id="login-password" placeholder="Password" required>
             <button type="submit" class="btn btn-primary">Login</button>
+            <p class="forgot-link"><a href="#" onclick="event.preventDefault();showForgotPassword()">Forgot password?</a></p>
           </form>
           <p class="auth-toggle" id="show-register">Don't have an account? <a href="#" onclick="event.preventDefault();showRegister()">Sign up</a></p>
 
@@ -39,6 +40,30 @@
             <button type="submit" class="btn btn-primary">Create Account</button>
           </form>
           <p class="auth-toggle hidden" id="show-login">Already have an account? <a href="#" onclick="event.preventDefault();showLogin()">Login</a></p>
+
+          <!-- Forgot Password Form -->
+          <form id="forgot-password-form" class="auth-form hidden">
+            <p style="color:#ccc;font-size:14px;margin-bottom:12px;">Enter your email and we'll send you a reset link.</p>
+            <input type="email" id="forgot-email" placeholder="Email" required>
+            <button type="submit" class="btn btn-primary">Send Reset Link</button>
+            <p class="forgot-link"><a href="#" onclick="event.preventDefault();showLogin()">Back to login</a></p>
+          </form>
+
+          <!-- Reset Password Form -->
+          <form id="reset-password-form" class="auth-form hidden">
+            <p style="color:#ccc;font-size:14px;margin-bottom:12px;">Choose a new password.</p>
+            <input type="password" id="reset-password" placeholder="New password (min 6 chars)" required minlength="6">
+            <input type="password" id="reset-password-confirm" placeholder="Confirm new password" required minlength="6">
+            <button type="submit" class="btn btn-primary">Reset Password</button>
+          </form>
+
+          <!-- Verification Notice -->
+          <div id="verify-notice" class="auth-form hidden" style="text-align:center;">
+            <p style="color:#f9a825;font-size:16px;margin-bottom:8px;">📧 Check your email!</p>
+            <p style="color:#ccc;font-size:14px;">We sent a verification link to <strong id="verify-email-display"></strong>. Click it to activate your account.</p>
+            <button class="btn btn-primary" style="margin-top:12px;" onclick="resendVerification()">Resend Verification Email</button>
+            <p class="forgot-link" style="margin-top:12px;"><a href="#" onclick="event.preventDefault();showLogin()">Back to login</a></p>
+          </div>
         </div>
         <div id="auth-error" class="auth-error hidden"></div>
       </div>

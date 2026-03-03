@@ -28,6 +28,27 @@ async function getEmailUser(id) {
   return data;
 }
 
+async function updateEmailUser(id, fields) {
+  const { data, error } = await supabase.from('bracket_email_users')
+    .update(fields).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function getEmailUserByVerificationToken(token) {
+  const { data, error } = await supabase.from('bracket_email_users')
+    .select('*').eq('verification_token', token).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function getEmailUserByResetToken(token) {
+  const { data, error } = await supabase.from('bracket_email_users')
+    .select('*').eq('reset_token', token).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 // ─── Tournaments ───
 
 async function createTournament(data) {
@@ -196,7 +217,8 @@ async function getLeaderboard(tournamentId) {
 
 module.exports = {
   // Email users
-  createEmailUser, getEmailUserByEmail, getEmailUser,
+  createEmailUser, getEmailUserByEmail, getEmailUser, updateEmailUser,
+  getEmailUserByVerificationToken, getEmailUserByResetToken,
   // Tournaments
   createTournament, getTournament, getActiveTournament, updateTournament,
   // Teams
