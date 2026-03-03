@@ -23,6 +23,7 @@ const scoreboardDb = require('./database/scoreboards');
 const espn = require('./services/espn');
 const { generateScoreboardImage } = require('./utils/scoreboardImage');
 const { createWebServer, setDiscordClient } = require('./web/server');
+const { startBracketUpdater } = require('./services/bracketUpdater');
 
 // ── Scoreboard helpers ──
 function findPlayer(players, playerName) {
@@ -96,6 +97,10 @@ client.once(Events.ClientReady, (c) => {
     }
   }, 30_000);
   console.log('   ⏰ Reminder scheduler started (30s interval)');
+
+  // ─── Bracket Auto-Updater ───
+  // Polls ESPN every 2 minutes for NCAA tournament results
+  startBracketUpdater();
 
   // ─── Live Scoreboard Poller [DISABLED] ───
   // Feature dormant. To re-enable: uncomment this setInterval block and the console.log below it.
