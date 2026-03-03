@@ -418,7 +418,7 @@ async function deleteBet(betId, discordId, isAdmin = false) {
   // Verify ownership unless admin
   const { data: bet, error: fetchErr } = await supabase
     .from('bets')
-    .select('id, discord_id, message_id, channel_id')
+    .select('id, discord_id, message_id, channel_id, mirror_message_id, mirror_channel_id')
     .eq('id', betId)
     .single();
 

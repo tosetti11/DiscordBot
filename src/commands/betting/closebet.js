@@ -287,18 +287,36 @@ async function handleLegResultButton(interaction) {
   }
 }
 
-// Update the parlay embed in the channel
+// Update the parlay embed in the channel + mirror in open slips
 async function updateParlayEmbed(interaction, session) {
   try {
     const fullBet = await db.getBet(session.betId);
+    const displayName = interaction.member?.displayName || interaction.user.displayName;
+    const { AttachmentBuilder } = require('discord.js');
+    const imgBuffer = await generateBetCardImage(fullBet, displayName, interaction.user.displayAvatarURL());
+
+    // Update primary message
     if (fullBet.message_id && fullBet.channel_id) {
-      const channel = await interaction.client.channels.fetch(fullBet.channel_id);
-      const message = await channel.messages.fetch(fullBet.message_id);
-      const displayName = interaction.member?.displayName || interaction.user.displayName;
-      const { AttachmentBuilder } = require('discord.js');
-      const imgBuffer = await generateBetCardImage(fullBet, displayName, interaction.user.displayAvatarURL());
-      const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
-      await message.edit({ files: [attachment], embeds: [], attachments: [] });
+      try {
+        const channel = await interaction.client.channels.fetch(fullBet.channel_id);
+        const message = await channel.messages.fetch(fullBet.message_id);
+        const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+        await message.edit({ files: [attachment], embeds: [], attachments: [] });
+      } catch (e) {
+        console.warn('Could not update parlay embed:', e.message);
+      }
+    }
+
+    // Update mirror message in open slips channel
+    if (fullBet.mirror_message_id && fullBet.mirror_channel_id) {
+      try {
+        const mirrorChannel = await interaction.client.channels.fetch(fullBet.mirror_channel_id);
+        const mirrorMsg = await mirrorChannel.messages.fetch(fullBet.mirror_message_id);
+        const mirrorAttachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+        await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+      } catch (e) {
+        console.warn('Could not update mirror parlay embed:', e.message);
+      }
     }
   } catch (e) {
     console.warn('Could not update parlay embed:', e.message);
@@ -377,6 +395,17 @@ async function handleResultButton(interaction) {
         await message.edit({ files: [attachment], embeds: [], attachments: [] });
       } catch (e) {
         console.warn('Could not update original bet message:', e.message);
+      }
+    }
+
+    // Delete mirror message from open slips channel (bet is now closed)
+    if (fullBet.mirror_message_id && fullBet.mirror_channel_id) {
+      try {
+        const mirrorChannel = await interaction.client.channels.fetch(fullBet.mirror_channel_id);
+        const mirrorMsg = await mirrorChannel.messages.fetch(fullBet.mirror_message_id);
+        await mirrorMsg.delete();
+      } catch (e) {
+        console.warn('Could not delete mirror message from open slips:', e.message);
       }
     }
 

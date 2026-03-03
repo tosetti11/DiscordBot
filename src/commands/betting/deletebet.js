@@ -233,6 +233,17 @@ async function handleDeleteConfirmModal(interaction) {
       }
     }
 
+    // Delete mirror message from open slips channel
+    if (result.mirror_message_id && result.mirror_channel_id) {
+      try {
+        const mirrorChannel = await interaction.client.channels.fetch(result.mirror_channel_id);
+        const mirrorMsg = await mirrorChannel.messages.fetch(result.mirror_message_id);
+        await mirrorMsg.delete();
+      } catch (e) {
+        console.warn('Could not delete mirror bet message:', e.message);
+      }
+    }
+
     pendingDeletes.delete(userId);
     await interaction.reply({
       content: `🗑️ Bet **${bet?.slip_number || betId.slice(0, 8)}** has been permanently deleted.`,

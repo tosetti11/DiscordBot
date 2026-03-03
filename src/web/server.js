@@ -1262,6 +1262,18 @@ function createWebServer() {
           const imgBuffer = await generateBetCardImage(updatedBet, null, null);
           const attachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
           await message.edit({ files: [attachment], embeds: [], attachments: [] });
+
+          // Also update mirror message in open slips channel
+          if (bet.mirror_message_id && bet.mirror_channel_id) {
+            try {
+              const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+              const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+              const mirrorAttachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
+              await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+            } catch (e) {
+              console.warn('Could not update mirror parlay leg:', e.message);
+            }
+          }
         } catch (e) {}
       }
 

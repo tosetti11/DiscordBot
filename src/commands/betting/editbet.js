@@ -91,16 +91,28 @@ async function handleEditBetModal(interaction) {
     const bet = await db.getBet(betId);
 
     // Update original message if possible
+    const { AttachmentBuilder } = require('discord.js');
+    const imgBuffer = await generateBetCardImage(bet, null, null);
     if (bet.message_id && bet.channel_id) {
       try {
         const channel = await interaction.client.channels.fetch(bet.channel_id);
         const message = await channel.messages.fetch(bet.message_id);
-        const { AttachmentBuilder } = require('discord.js');
-        const imgBuffer = await generateBetCardImage(bet, null, null);
         const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
         await message.edit({ files: [attachment], embeds: [], attachments: [] });
       } catch (e) {
         // ignore
+      }
+    }
+
+    // Update mirror message in open slips channel
+    if (bet.mirror_message_id && bet.mirror_channel_id) {
+      try {
+        const mirrorChannel = await interaction.client.channels.fetch(bet.mirror_channel_id);
+        const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+        const mirrorAttachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+        await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+      } catch (e) {
+        console.warn('Could not update mirror message:', e.message);
       }
     }
 
