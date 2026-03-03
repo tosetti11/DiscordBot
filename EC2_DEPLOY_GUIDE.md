@@ -189,7 +189,7 @@ git push
 
 ### Deploy to EC2 (single command from your PC — no need to SSH in separately):
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"
 ```
 
 Or ask Copilot: **"deploy my changes to EC2"**
@@ -229,4 +229,4 @@ pm2 restart gk-bot
 - **EC2 costs**: `t2.micro` is free for 12 months with a new AWS account. After that it's ~$8-10/month. You could also use `t3.micro` or `t4g.micro` for similar pricing.
 - **Your Supabase database stays the same** — the EC2 bot connects to the same Supabase, so all existing bets and data carry over.
 - **SSH key location**: `C:\Users\toset\gk-bot-key.pem`
-- **EC2 IP**: `54.227.26.67` (may change if you stop/start the instance in AWS)
+- **EC2 Elastic IP**: `100.48.25.36` (static — will not change even if you stop/start the instance)

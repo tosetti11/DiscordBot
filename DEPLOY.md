@@ -35,7 +35,7 @@ Or just ask Copilot: **"push my changes to GitHub"** and it will do it for you.
 Run this single command in the VS Code terminal:
 
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"
 ```
 
 Or just ask Copilot: **"deploy my changes to EC2"** and it will run it for you.
@@ -51,7 +51,7 @@ That's it. Your bot is updated.
 If you added a new command, renamed one, or changed command options, you also need to re-register them. Run this after deploying:
 
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "cd DiscordBot && node src/deploy-commands.js && pm2 restart gk-bot"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "cd DiscordBot && node src/deploy-commands.js && pm2 restart gk-bot"
 ```
 
 Or ask Copilot: **"deploy my changes and re-register commands"**
@@ -62,27 +62,27 @@ Or ask Copilot: **"deploy my changes and re-register commands"**
 
 ### Check if the bot is running:
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "pm2 status"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "pm2 status"
 ```
 
 ### View recent logs (to debug issues):
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "pm2 logs gk-bot --lines 30 --nostream"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "pm2 logs gk-bot --lines 30 --nostream"
 ```
 
 ### Restart the bot manually:
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "pm2 restart gk-bot"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "pm2 restart gk-bot"
 ```
 
 ### Stop the bot:
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "pm2 stop gk-bot"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "pm2 stop gk-bot"
 ```
 
 ### Start the bot again:
 ```
-ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "pm2 start gk-bot"
+ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "pm2 start gk-bot"
 ```
 
 ---
@@ -106,6 +106,6 @@ ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "pm2 start gk-bot"
 - **Never run the bot locally** while it's on EC2 — two instances will conflict.
 - **Never run `bash scripts/deploy.sh` locally** — it only works on EC2. Always deploy via the SSH command.
 - The bot **auto-restarts** if it crashes or if the server reboots.
-- Your EC2 IP is **54.227.26.67** — if you stop/start the EC2 instance in AWS, this IP may change.
+- Your EC2 Elastic IP is **100.48.25.36** — this is a static IP and will not change.
 - Your SSH key is at `C:\Users\toset\gk-bot-key.pem`.
-- The deploy SSH command is: `ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"`
+- The deploy SSH command is: `ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36 "cd ~/DiscordBot && git pull origin main && npm install && pm2 restart all"`

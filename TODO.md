@@ -193,7 +193,7 @@ CREATE INDEX IF NOT EXISTS idx_daily_stats_lookup
 ## SSH / Deploy Info
 
 ```
-SSH: ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@54.227.26.67
+SSH: ssh -i "C:\Users\toset\gk-bot-key.pem" ec2-user@100.48.25.36
 Deploy: git add -A && git commit -m "msg" && git push
         then SSH: cd DiscordBot && git pull && pm2 restart gk-bot
 Supabase SQL: https://supabase.com/dashboard/project/fjtqeazctzewzdfvfhxg/sql/new
