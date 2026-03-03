@@ -1252,29 +1252,38 @@ function createWebServer() {
 
       await db.updateParlayLegStatus(legId, status);
 
+      // Generate updated bet card image
+      const updatedBet = await db.getBet(betId);
+      const { AttachmentBuilder: ABLeg } = require('discord.js');
+      let imgBuffer;
+      try {
+        imgBuffer = await generateBetCardImage(updatedBet, null, null);
+      } catch (e) {
+        console.warn('Could not generate bet card image for leg close:', e.message);
+      }
+
       // Update Discord message with new leg statuses
-      if (bet.message_id && bet.channel_id) {
+      if (imgBuffer && bet.message_id && bet.channel_id) {
         try {
           const channel = await discordClient.channels.fetch(bet.channel_id);
           const message = await channel.messages.fetch(bet.message_id);
-          const updatedBet = await db.getBet(betId);
-          const { AttachmentBuilder: ABLeg } = require('discord.js');
-          const imgBuffer = await generateBetCardImage(updatedBet, null, null);
           const attachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
           await message.edit({ files: [attachment], embeds: [], attachments: [] });
+        } catch (e) {
+          console.warn('Could not update primary parlay message:', e.message);
+        }
+      }
 
-          // Also update mirror message in open slips channel
-          if (bet.mirror_message_id && bet.mirror_channel_id) {
-            try {
-              const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
-              const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
-              const mirrorAttachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
-              await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
-            } catch (e) {
-              console.warn('Could not update mirror parlay leg:', e.message);
-            }
-          }
-        } catch (e) {}
+      // Update mirror message in open slips channel (independent of primary)
+      if (imgBuffer && bet.mirror_message_id && bet.mirror_channel_id) {
+        try {
+          const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+          const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+          const mirrorAttachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
+          await mirrorMsg.edit({ files: [mirrorAttachment], embeds: [], attachments: [] });
+        } catch (e) {
+          console.warn('Could not update mirror parlay leg:', e.message);
+        }
       }
 
       res.json({ success: true });
