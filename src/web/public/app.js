@@ -1479,6 +1479,7 @@ function switchPage(page) {
   if (page === 'following') initFollowingPage();
   if (page === 'closebets') initCloseBetsPage();
   if (page === 'scoreboard') initScoreboardPage();
+  if (page === 'tools') initPropsIfNeeded();
 }
 
 // ═══════════════════════════════════════════════
@@ -3806,6 +3807,258 @@ async function convertOdds(e) {
   } catch (e) {
     alert('Failed to convert odds');
   }
+}
+
+// ═══════════════════════════════════════════════
+//  NBA PLAYER PROPS ANALYZER (Tools Page)
+// ═══════════════════════════════════════════════
+
+let propsGames = [];
+let propsSelectedGame = null;
+let propsSelectedPlayer = null;
+let propsInitialized = false;
+
+// Called when Tools page becomes visible
+function initPropsIfNeeded() {
+  if (propsInitialized) return;
+  propsInitialized = true;
+  propsLoadGames();
+}
+
+async function propsLoadGames() {
+  const list = document.getElementById('props-games-list');
+  const noGames = document.getElementById('props-no-games');
+  if (!list) return;
+
+  list.innerHTML = '<div class="props-loading">Loading today\'s games...</div>';
+  noGames.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/props/games', {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const games = await res.json();
+    propsGames = games;
+
+    if (!games.length) {
+      list.innerHTML = '';
+      noGames.classList.remove('hidden');
+      return;
+    }
+
+    list.innerHTML = games.map((g, i) => {
+      const time = new Date(g.startTime);
+      const isLive = g.state === 'in';
+      const isPre = g.state === 'pre';
+      const timeStr = isLive ? '🔴 LIVE' : isPre
+        ? time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        : 'Final';
+      const oddsStr = g.odds ? `O/U ${g.odds.overUnder || '—'} | ${g.odds.spread || ''}` : '';
+      return `
+        <div class="props-game-card" onclick="propsSelectGame(${i})" data-idx="${i}">
+          <div class="matchup">${g.away.abbreviation} @ ${g.home.abbreviation}</div>
+          <div class="game-time ${isLive ? 'live' : ''}">${timeStr}</div>
+          ${oddsStr ? `<div class="game-odds">${oddsStr}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    list.innerHTML = '<div class="props-empty">Failed to load games. Try again.</div>';
+  }
+}
+
+async function propsSelectGame(idx) {
+  const game = propsGames[idx];
+  if (!game) return;
+  propsSelectedGame = game;
+
+  // Highlight selected
+  document.querySelectorAll('.props-game-card').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.props-game-card[data-idx="${idx}"]`)?.classList.add('active');
+
+  // Show step 2
+  document.getElementById('props-step-player').classList.remove('hidden');
+  document.getElementById('props-step-results').classList.add('hidden');
+
+  // Game banner
+  document.getElementById('props-game-banner').textContent = `${game.away.name} @ ${game.home.name}`;
+
+  // Load rosters
+  document.getElementById('props-away-team-name').textContent = game.away.name;
+  document.getElementById('props-home-team-name').textContent = game.home.name;
+  document.getElementById('props-away-roster').innerHTML = '<div class="props-loading">Loading...</div>';
+  document.getElementById('props-home-roster').innerHTML = '<div class="props-loading">Loading...</div>';
+
+  const [awayRoster, homeRoster] = await Promise.all([
+    fetch(`/api/props/roster/${game.away.id}`).then(r => r.json()).catch(() => []),
+    fetch(`/api/props/roster/${game.home.id}`).then(r => r.json()).catch(() => []),
+  ]);
+
+  document.getElementById('props-away-roster').innerHTML = propsRenderRoster(awayRoster, game.home.id);
+  document.getElementById('props-home-roster').innerHTML = propsRenderRoster(homeRoster, game.away.id);
+
+  // Scroll to step 2
+  document.getElementById('props-step-player').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function propsRenderRoster(players, opponentId) {
+  if (!players.length) return '<div class="props-empty">No roster data</div>';
+  return players.map(p => {
+    const img = p.headshot || '';
+    return `
+      <button class="props-player-btn" onclick="propsSelectPlayer('${p.id}', '${opponentId}', '${p.name.replace(/'/g, "\\'")}', '${img}', '${p.position}')">
+        ${img ? `<img src="${img}" alt="" loading="lazy">` : '<span style="width:28px;height:28px;border-radius:50%;background:var(--bg-card);display:inline-block"></span>'}
+        <span>${p.name}</span>
+        <span class="props-player-pos">${p.position}</span>
+      </button>
+    `;
+  }).join('');
+}
+
+async function propsSelectPlayer(playerId, opponentId, name, headshot, position) {
+  propsSelectedPlayer = { id: playerId, opponentId, name, headshot, position };
+
+  // Show step 3
+  document.getElementById('props-step-results').classList.remove('hidden');
+
+  // Player banner
+  document.getElementById('props-player-banner').innerHTML = `
+    ${headshot ? `<img src="${headshot}" alt="">` : ''}
+    <div class="player-info">
+      <div class="player-name">${name}</div>
+      <div class="player-meta">${position} · vs ${propsSelectedGame.away.id === opponentId ? propsSelectedGame.away.name : propsSelectedGame.home.name}</div>
+    </div>
+  `;
+
+  // Analyze
+  const grid = document.getElementById('props-analysis-cards');
+  grid.innerHTML = '<div class="props-loading">Analyzing player stats...</div>';
+  document.getElementById('props-game-log').classList.add('hidden');
+
+  try {
+    const res = await fetch(`/api/props/analyze/${playerId}?opponentId=${opponentId}`);
+    const data = await res.json();
+
+    if (data.error) {
+      grid.innerHTML = `<div class="props-empty">${data.error}</div>`;
+      return;
+    }
+
+    // Render analysis cards
+    const analyses = data.analyses || {};
+    const keys = Object.keys(analyses);
+    if (!keys.length) {
+      grid.innerHTML = '<div class="props-empty">Not enough data to analyze this player.</div>';
+      return;
+    }
+
+    grid.innerHTML = keys.map(key => propsRenderAnalysisCard(analyses[key])).join('');
+
+    // Render game log
+    propsRenderGameLog(data.gameLog || []);
+
+    // Scroll to results
+    document.getElementById('props-step-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    grid.innerHTML = '<div class="props-empty">Failed to analyze player. Try again.</div>';
+  }
+}
+
+function propsRenderAnalysisCard(a) {
+  const recClass = a.recommendation.toLowerCase().replace(' ', '-');
+  const hitColor = a.hitRateSeason >= 60 ? '#22c55e' : a.hitRateSeason >= 45 ? '#f59e0b' : '#ef4444';
+  const trendIcon = a.trending === 'up' ? '📈' : a.trending === 'down' ? '📉' : '➡️';
+  const vsOppRow = a.vsOpponent
+    ? `<div class="props-stat-row"><span class="label">vs Opponent (${a.vsOpponent.games}g)</span><span class="value">${a.vsOpponent.avg} avg · ${a.vsOpponent.hitRate}% over</span></div>`
+    : '';
+
+  return `
+    <div class="props-result-card ${a.confidence}">
+      <div class="props-stat-header">
+        <span class="props-stat-label">${a.shortLabel} — ${a.label}</span>
+        <span class="props-recommendation ${recClass}">${a.recommendation}</span>
+      </div>
+      <div class="props-line-display">
+        <div class="props-line-number">${a.propLine}</div>
+        <div class="props-line-caption">Prop Line</div>
+      </div>
+      <div class="props-stats-rows">
+        <div class="props-stat-row"><span class="label">Season Avg</span><span class="value">${a.seasonAvg}</span></div>
+        <div class="props-stat-row"><span class="label">Last 5 Avg</span><span class="value ${a.avg5 > a.propLine ? 'green' : a.avg5 < a.propLine ? 'red' : ''}">${a.avg5} ${trendIcon}</span></div>
+        <div class="props-stat-row"><span class="label">Last 10 Avg</span><span class="value">${a.avg10}</span></div>
+        <div class="props-stat-row"><span class="label">Home / Away Avg</span><span class="value">${a.homeAvg} / ${a.awayAvg}</span></div>
+        ${vsOppRow}
+        <div class="props-stat-row"><span class="label">Hit Rate (Season)</span><span class="value ${a.hitRateSeason >= 55 ? 'green' : a.hitRateSeason <= 40 ? 'red' : 'yellow'}">${a.hitRateSeason}% over (${a.gamesPlayed}g)</span></div>
+        <div class="props-stat-row"><span class="label">Hit Rate (L10)</span><span class="value">${a.hitRate10}%</span></div>
+        <div class="props-stat-row"><span class="label">Consistency (StdDev)</span><span class="value">${a.stdDev}</span></div>
+      </div>
+      <div class="props-hit-bar">
+        <div class="props-hit-bar-fill" style="width: ${a.overProbability}%; background: ${hitColor};"></div>
+      </div>
+      <div class="props-confidence-bar">
+        <span class="props-confidence-label">Over ${a.overProbability}%</span>
+        <span class="props-confidence-label" style="margin-left:auto">Under ${a.underProbability}%</span>
+      </div>
+    </div>
+  `;
+}
+
+function propsRenderGameLog(games) {
+  if (!games.length) return;
+
+  const section = document.getElementById('props-game-log');
+  section.classList.remove('hidden');
+
+  // Determine which stat columns to show
+  const statKeys = ['pts', 'reb', 'ast', 'stl', 'blk', 'to', 'min', 'fg3'];
+  const statLabels = { pts: 'PTS', reb: 'REB', ast: 'AST', stl: 'STL', blk: 'BLK', to: 'TO', min: 'MIN', fg3: '3PM' };
+
+  // Filter to stat keys that have data
+  const availableKeys = statKeys.filter(k => games.some(g => {
+    const keys = Object.keys(g.stats || {});
+    return keys.some(sk => sk.toLowerCase() === k || (k === 'fg3' && (sk === '3pm' || sk === 'fg3')));
+  }));
+
+  const head = document.getElementById('props-gamelog-head');
+  head.innerHTML = `<th>Date</th><th>Opp</th><th>Result</th>${availableKeys.map(k => `<th>${statLabels[k] || k.toUpperCase()}</th>`).join('')}`;
+
+  const body = document.getElementById('props-gamelog-body');
+  body.innerHTML = games.map(g => {
+    const date = g.date ? new Date(g.date).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '—';
+    const result = g.result || '—';
+    const resultClass = result.startsWith('W') ? 'green' : result.startsWith('L') ? 'red' : '';
+    const stats = g.stats || {};
+
+    const getVal = (key) => {
+      const aliases = { fg3: ['3pm', 'fg3'], pts: ['pts'], reb: ['reb'], ast: ['ast'], stl: ['stl'], blk: ['blk'], to: ['to'], min: ['min'] };
+      for (const alias of (aliases[key] || [key])) {
+        if (stats[alias] !== undefined) return stats[alias];
+        if (stats[alias.toLowerCase()] !== undefined) return stats[alias.toLowerCase()];
+      }
+      return '—';
+    };
+
+    return `
+      <tr>
+        <td>${date}</td>
+        <td>${g.opponent || '—'}</td>
+        <td class="${resultClass}">${result}</td>
+        ${availableKeys.map(k => `<td>${getVal(k)}</td>`).join('')}
+      </tr>
+    `;
+  }).join('');
+}
+
+function propsBackToGames() {
+  document.getElementById('props-step-player').classList.add('hidden');
+  document.getElementById('props-step-results').classList.add('hidden');
+  propsSelectedGame = null;
+  document.querySelectorAll('.props-game-card').forEach(c => c.classList.remove('active'));
+}
+
+function propsBackToPlayer() {
+  document.getElementById('props-step-results').classList.add('hidden');
+  propsSelectedPlayer = null;
 }
 
 // ═══════════════════════════════════════════════

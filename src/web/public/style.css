@@ -2632,6 +2632,381 @@ textarea {
   color: var(--text-secondary);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   NBA Player Props Analyzer
+   ══════════════════════════════════════════════════════════════ */
+
+.props-analyzer-card {
+  margin-bottom: 20px;
+}
+
+.props-subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* Steps */
+.props-step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.props-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Games grid */
+.props-games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.props-game-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all .2s;
+  text-align: center;
+}
+.props-game-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.props-game-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 99,102,241), .25);
+}
+.props-game-card .matchup {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.props-game-card .game-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.props-game-card .game-time.live {
+  color: #ef4444;
+  font-weight: 600;
+}
+.props-game-card .game-odds {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.props-empty, .props-loading {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+  font-size: 14px;
+}
+.props-loading::after {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Game banner */
+.props-game-banner {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+/* Team columns */
+.props-team-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.props-team-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.props-roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.props-player-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .15s;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  width: 100%;
+}
+.props-player-btn:hover {
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+.props-player-btn img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-secondary);
+}
+.props-player-pos {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Player banner */
+.props-player-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.props-player-banner img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.props-player-banner .player-info {
+  flex: 1;
+}
+.props-player-banner .player-name {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.props-player-banner .player-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Analysis cards */
+.props-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.props-result-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.props-result-card.high { border-left: 3px solid #22c55e; }
+.props-result-card.medium { border-left: 3px solid #f59e0b; }
+.props-result-card.low { border-left: 3px solid var(--border); }
+
+.props-stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.props-stat-label {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+.props-recommendation {
+  font-weight: 700;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+.props-recommendation.over { background: rgba(34,197,94,.15); color: #22c55e; }
+.props-recommendation.under { background: rgba(239,68,68,.15); color: #ef4444; }
+.props-recommendation.lean-over { background: rgba(34,197,94,.08); color: #86efac; }
+.props-recommendation.lean-under { background: rgba(239,68,68,.08); color: #fca5a5; }
+.props-recommendation.skip { background: rgba(156,163,175,.1); color: var(--text-muted); }
+
+.props-line-display {
+  text-align: center;
+  margin-bottom: 10px;
+}
+.props-line-number {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.props-line-caption {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.props-stats-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.props-stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.props-stat-row .label {
+  color: var(--text-muted);
+}
+.props-stat-row .value {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.props-stat-row .value.green { color: #22c55e; }
+.props-stat-row .value.red { color: #ef4444; }
+.props-stat-row .value.yellow { color: #f59e0b; }
+
+.props-hit-bar {
+  height: 6px;
+  background: var(--bg-card);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.props-hit-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .4s ease;
+}
+
+/* Game log table */
+.props-gamelog-section h4 {
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+}
+.props-gamelog-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.props-gamelog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.props-gamelog-table th {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  padding: 8px 10px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.props-gamelog-table td {
+  padding: 6px 10px;
+  text-align: center;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.props-gamelog-table tr:hover td {
+  background: var(--bg-secondary);
+}
+
+.props-confidence-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.props-confidence-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .props-games-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .props-team-columns {
+    grid-template-columns: 1fr;
+  }
+  .props-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .props-games-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Responsive additions ── */
 @media (max-width: 768px) {
   .reminder-compose-layout {

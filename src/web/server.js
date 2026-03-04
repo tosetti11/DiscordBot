@@ -21,6 +21,7 @@ const { buildBetEmbed } = require('../utils/embeds');
 const { generateBetCardImage } = require('../utils/betCardImage');
 const { generateScoreboardImage } = require('../utils/scoreboardImage');
 const espn = require('../services/espn');
+const nbaProps = require('../services/nbaProps');
 const remindersDb = require('../database/reminders');
 const { notifyFollowers } = require('../utils/notifications');
 
@@ -2455,6 +2456,61 @@ Rules:
       const american = decimalToAmerican(val);
       const impliedProb = Math.round((1 / val) * 1000) / 10;
       res.json({ american: formatOdds(american), decimal: val, impliedProbability: impliedProb });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // NBA Player Props Analysis Routes
+  // ══════════════════════════════════════════════════════════════
+
+  // Get today's NBA games
+  app.get('/api/props/games', authMiddleware, async (req, res) => {
+    try {
+      const games = await nbaProps.getTodaysNBAGames();
+      res.json(games);
+    } catch (err) {
+      console.error('[Props API] games error:', err);
+      res.status(500).json({ error: 'Failed to fetch games' });
+    }
+  });
+
+  // Get roster for a team
+  app.get('/api/props/roster/:teamId', authMiddleware, async (req, res) => {
+    try {
+      const roster = await nbaProps.getTeamRoster(req.params.teamId);
+      res.json(roster);
+    } catch (err) {
+      console.error('[Props API] roster error:', err);
+      res.status(500).json({ error: 'Failed to fetch roster' });
+    }
+  });
+
+  // Analyze a player: auto-generate lines based on season averages
+  app.get('/api/props/analyze/:playerId', authMiddleware, async (req, res) => {
+    try {
+      const { playerId } = req.params;
+      const { opponentId } = req.query;
+      if (!opponentId) return res.status(400).json({ error: 'opponentId query param required' });
+      const result = await nbaProps.autoAnalyzePlayer(playerId, opponentId);
+      if (result.error) return res.status(404).json(result);
+      res.json(result);
+    } catch (err) {
+      console.error('[Props API] analyze error:', err);
+      res.status(500).json({ error: 'Failed to analyze player' });
+    }
+  });
+
+  // Analyze a player with custom prop lines
+  app.post('/api/props/analyze', authMiddleware, async (req, res) => {
+    try {
+      const { playerId, opponentId, propLines } = req.body;
+      if (!playerId || !opponentId) return res.status(400).json({ error: 'playerId and opponentId required' });
+      const result = await nbaProps.analyzePlayerForGame(playerId, opponentId, propLines || {});
+      if (result.error) return res.status(404).json(result);
+      res.json(result);
+    } catch (err) {
+      console.error('[Props API] custom analyze error:', err);
+      res.status(500).json({ error: 'Failed to analyze player' });
     }
   });
 

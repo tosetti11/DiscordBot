@@ -983,6 +983,65 @@
           <p class="slip-subtitle">Handy betting utilities</p>
         </div>
 
+        <!-- NBA Player Props Analyzer (full-width above the grid) -->
+        <div class="tool-card props-analyzer-card" id="props-tool">
+          <h3 class="card-title">🏀 NBA Player Props Analyzer</h3>
+          <p class="props-subtitle">Select a game, pick a player, and get data-driven prop recommendations based on season stats, recent trends, matchup history, and more.</p>
+
+          <!-- Step 1: Pick a game -->
+          <div id="props-step-games" class="props-step">
+            <div class="props-step-header">
+              <span class="props-step-num">1</span>
+              <span>Select Today's Game</span>
+              <button class="btn btn-sm btn-outline" onclick="propsLoadGames()" id="props-refresh-btn" title="Refresh games">↻</button>
+            </div>
+            <div id="props-games-list" class="props-games-grid">
+              <div class="props-loading">Loading today's games...</div>
+            </div>
+            <div id="props-no-games" class="props-empty hidden">No NBA games scheduled today.</div>
+          </div>
+
+          <!-- Step 2: Pick a player -->
+          <div id="props-step-player" class="props-step hidden">
+            <div class="props-step-header">
+              <span class="props-step-num">2</span>
+              <span>Select Player</span>
+              <button class="btn btn-sm btn-outline" onclick="propsBackToGames()">← Back</button>
+            </div>
+            <div id="props-game-banner" class="props-game-banner"></div>
+            <div class="props-team-columns" id="props-rosters">
+              <div class="props-team-col">
+                <h4 id="props-away-team-name" class="props-team-label"></h4>
+                <div id="props-away-roster" class="props-roster-list"></div>
+              </div>
+              <div class="props-team-col">
+                <h4 id="props-home-team-name" class="props-team-label"></h4>
+                <div id="props-home-roster" class="props-roster-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Analysis results -->
+          <div id="props-step-results" class="props-step hidden">
+            <div class="props-step-header">
+              <span class="props-step-num">3</span>
+              <span>Analysis Results</span>
+              <button class="btn btn-sm btn-outline" onclick="propsBackToPlayer()">← Back</button>
+            </div>
+            <div id="props-player-banner" class="props-player-banner"></div>
+            <div id="props-analysis-cards" class="props-analysis-grid"></div>
+            <div id="props-game-log" class="props-gamelog-section hidden">
+              <h4>📋 Recent Game Log</h4>
+              <div class="props-gamelog-table-wrap">
+                <table id="props-gamelog-table" class="props-gamelog-table">
+                  <thead><tr id="props-gamelog-head"></tr></thead>
+                  <tbody id="props-gamelog-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="tools-layout">
           <!-- Odds Converter -->
           <div class="tool-card">
