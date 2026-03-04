@@ -108,74 +108,97 @@ async function getPlayerStats(playerId) {
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  // ESPN player game log endpoint
-  const season = new Date().getMonth() >= 9 ? new Date().getFullYear() + 1 : new Date().getFullYear();
-  const logUrl = `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${playerId}/gamelog?season=${season}`;
-  const statsUrl = `https://site.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${playerId}/stats`;
+  // Correct ESPN gamelog endpoint (site.api, NOT site.web.api)
+  const logUrl = `https://site.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${playerId}/gamelog`;
 
   try {
-    const [logRes, statsRes] = await Promise.all([
-      fetch(logUrl).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(statsUrl).then(r => r.ok ? r.json() : null).catch(() => null),
-    ]);
+    const logRes = await fetch(logUrl).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!logRes) {
+      return { seasonAvg: {}, gameLog: [], playerId };
+    }
 
-    // Parse season averages
-    let seasonAvg = {};
-    if (statsRes?.resultSet || statsRes?.statistics) {
-      // Try to extract from ESPN stats response
-      const statsSplit = statsRes.statistics?.splits?.categories || statsRes.splits?.categories || [];
-      for (const cat of statsSplit) {
-        for (const stat of (cat.stats || [])) {
-          seasonAvg[stat.abbreviation?.toLowerCase() || stat.name?.toLowerCase()] = stat.value;
+    // Stat column labels (e.g. ['MIN','FG','FG%','3PT','3P%','FT','FT%','REB','AST','BLK','STL','PF','TO','PTS'])
+    const labels = (logRes.labels || []).map(l => l.toLowerCase());
+    const names = (logRes.names || []).map(n => n.toLowerCase());
+
+    // Build label→index map for the stats we care about
+    // labels: MIN, FG, FG%, 3PT, 3P%, FT, FT%, REB, AST, BLK, STL, PF, TO, PTS
+    const labelMap = {};
+    labels.forEach((l, i) => { labelMap[l] = i; });
+
+    // Map from our stat keys to gamelog label indices
+    const STAT_LABEL_MAP = {
+      min: labelMap['min'],
+      pts: labelMap['pts'],
+      reb: labelMap['reb'],
+      ast: labelMap['ast'],
+      blk: labelMap['blk'],
+      stl: labelMap['stl'],
+      to: labelMap['to'],
+      fg3: labelMap['3pt'],  // "3PT" label contains "made-attempted"
+      pf: labelMap['pf'],
+      fg: labelMap['fg'],
+    };
+
+    // Parse a raw stats array into our stat object
+    function parseStats(statsArr) {
+      const result = {};
+      for (const [key, idx] of Object.entries(STAT_LABEL_MAP)) {
+        if (idx === undefined || !statsArr[idx]) continue;
+        const raw = String(statsArr[idx]);
+        // Handle "made-attempted" format (e.g. "7-16" for 3PT)
+        if (raw.includes('-') && key !== 'min') {
+          const parts = raw.split('-');
+          result[key] = parseFloat(parts[0]); // just the "made" value
+        } else {
+          const val = parseFloat(raw);
+          if (!isNaN(val)) result[key] = val;
         }
+      }
+      return result;
+    }
+
+    // Events map: eventId → {gameDate, opponent, atVs, gameResult, ...}
+    const eventsMap = logRes.events || {};
+
+    // Parse season averages from the "Regular Season" seasonType summary
+    let seasonAvg = {};
+    const regSeason = (logRes.seasonTypes || []).find(st =>
+      st.displayName?.toLowerCase().includes('regular')
+    );
+
+    if (regSeason?.summary?.stats) {
+      const avgRow = regSeason.summary.stats.find(s => s.type === 'avg');
+      if (avgRow?.stats) {
+        seasonAvg = parseStats(avgRow.stats);
       }
     }
 
-    // Parse game log
+    // Collect game log entries from regular season categories (months)
+    // Categories are ordered most-recent-first: [april, march, feb, ...]
+    // Events within each category are also most-recent-first
     let gameLog = [];
-    if (logRes) {
-      const categories = logRes.categories || logRes.seasonTypes?.[0]?.categories || [];
-      const events = logRes.events || logRes.seasonTypes?.[0]?.events || {};
-      
-      // The gamelog structure can vary — try to extract stat labels and values
-      let labels = [];
-      let gameEntries = [];
-      
-      for (const cat of categories) {
-        if (cat.name === 'offensive' || cat.type === 'offensive' || !labels.length) {
-          labels = (cat.labels || cat.names || []).map(l => (typeof l === 'string' ? l : l.abbreviation || l.name || '').toLowerCase());
-          gameEntries = cat.events || cat.totals || [];
-        }
-      }
 
-      // Map events to game log entries
-      const eventKeys = Object.keys(events);
-      for (let i = 0; i < eventKeys.length && i < 82; i++) {
-        const eventId = eventKeys[i];
-        const eventInfo = events[eventId];
-        const stats = {};
-        
-        // Find stat values for this event from categories
-        for (const cat of categories) {
-          const catEvents = cat.events || [];
-          const catEvent = catEvents.find(e => e.eventId === eventId) || catEvents[i];
-          if (catEvent?.stats) {
-            const catLabels = (cat.labels || cat.names || []).map(l => 
-              (typeof l === 'string' ? l : l.abbreviation || l.name || '').toLowerCase()
-            );
-            catEvent.stats.forEach((val, j) => {
-              if (catLabels[j]) stats[catLabels[j]] = val;
-            });
-          }
-        }
+    if (regSeason?.categories) {
+      for (const monthCat of regSeason.categories) {
+        // Skip the "Regular Season" totals row (no events)
+        if (!monthCat.events || monthCat.events.length === 0) continue;
 
-        if (Object.keys(stats).length > 0) {
+        for (const catEvent of monthCat.events) {
+          const eventId = catEvent.eventId;
+          const eventInfo = eventsMap[eventId] || {};
+          const stats = parseStats(catEvent.stats || []);
+
+          if (Object.keys(stats).length === 0) continue;
+
           gameLog.push({
-            date: eventInfo?.gameDate || null,
-            opponent: eventInfo?.opponent?.displayName || eventInfo?.opponent?.abbreviation || '',
-            opponentId: eventInfo?.opponent?.id || eventInfo?.opponentId || '',
-            homeAway: eventInfo?.homeAway || '',
-            result: eventInfo?.gameResult || '',
+            date: eventInfo.gameDate || null,
+            opponent: eventInfo.opponent?.abbreviation || eventInfo.opponent?.displayName || '',
+            opponentFull: eventInfo.opponent?.displayName || '',
+            opponentId: eventInfo.opponent?.id || '',
+            homeAway: eventInfo.atVs === 'vs' ? 'home' : 'away',
+            result: eventInfo.gameResult || '',
+            score: eventInfo.score || '',
             stats,
           });
         }
