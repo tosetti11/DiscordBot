@@ -398,6 +398,12 @@ if (!process.env.DISCORD_TOKEN) {
 
 // ─── Welcome DM on Member Join ───
 const { supabase } = require('./config/supabase');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+const WELCOME_CHANNEL_ID = '1478661003792351384';
+const LOGO_URL = 'https://thegamblingkingapp.com/TheGamblingKing.jpg';
+const BET_SLIP_URL = 'https://thegamblingkingapp.com/#slip';
+const INVITE_URL = 'https://discord.gg/VKmkdSrk';
 
 const DEFAULT_WELCOME_FIELDS = [
   { name: '🎰 Place Bets', value: 'Use `/enterbet` in any channel or visit the web app to submit your picks with our sleek bet slip.' },
@@ -425,21 +431,104 @@ client.on(Events.GuildMemberAdd, async (member) => {
     const description = wm.description || `Hey **${member.displayName}**, welcome to the server! Here's everything you need to get started:`;
     const fields = wm.fields || DEFAULT_WELCOME_FIELDS;
 
-    const dm = await member.createDM();
-    await dm.send({
-      embeds: [{
-        color: 0xf5c518,
-        title,
-        description: description.replace('{user}', member.displayName),
-        fields,
-        thumbnail: { url: 'https://thegamblingkingapp.com/TheGamblingKing.jpg' },
-        footer: { text: 'TheGamblingKing • Good luck out there 🎲' },
-      }],
-    });
-    console.log(`[Welcome] Sent DM to ${member.user.username}`);
+    // ─── Send DM ───
+    try {
+      const dm = await member.createDM();
+      await dm.send({
+        embeds: [{
+          color: 0xf5c518,
+          title,
+          description: description.replace('{user}', member.displayName),
+          fields,
+          thumbnail: { url: LOGO_URL },
+          footer: { text: 'TheGamblingKing • Good luck out there 🎲' },
+        }],
+      });
+      console.log(`[Welcome] Sent DM to ${member.user.username}`);
+    } catch (dmErr) {
+      console.log(`[Welcome] Could not DM ${member.user.username}: ${dmErr.message}`);
+    }
+
+    // ─── Post welcome embed to #new-members-welcome channel ───
+    try {
+      const welcomeChannel = await client.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
+      if (!welcomeChannel) return;
+
+      const welcomeEmbed = new EmbedBuilder()
+        .setColor(0xf5c518)
+        .setTitle(`👑 Welcome to TheGamblingKing, ${member.displayName}!`)
+        .setThumbnail(member.user.displayAvatarURL({ size: 128 }))
+        .setImage(LOGO_URL)
+        .setDescription([
+          `What's good **${member.displayName}**! You just joined the sharpest sports betting community on Discord. Here's how we roll:`,
+          '',
+          '**#JMM — Just Make Money** 💰',
+          'That\'s the motto. That\'s the mission. Every pick, every play — we\'re here to win.',
+        ].join('\n'))
+        .addFields(
+          {
+            name: '🎰 Place Your Bets',
+            value: [
+              '• Head to the **bet channels** (Daily Action, Parlay Mania, Over Under, etc.)',
+              '• Use the **[Bet Slip](https://thegamblingkingapp.com/#slip)** on the website or type `/enterbet` in Discord',
+              '• Post your picks for the community to see — don\'t be shy!',
+            ].join('\n'),
+          },
+          {
+            name: '✅ Close & Track Bets',
+            value: 'When your bet hits (or misses), bets get closed and your **record, ROI, and streaks** update automatically. Check your stats anytime with `/mystats` or on the web dashboard.',
+          },
+          {
+            name: '📊 Stats & Leaderboard',
+            value: 'Use `/leaderboard` to see who\'s running the server. Use `/advancedstats` for deep breakdowns by sport, bet type, and more. Everything is tracked — your record speaks for itself.',
+          },
+          {
+            name: '🐋 The Whales',
+            value: 'Keep an eye out for **Whale Bets** 🐋 — these are high-confidence plays from top bettors. When a whale drops a pick, pay attention. You can **tail** (follow) or **fade** (go against) any bet.',
+          },
+          {
+            name: '🤝 Community Betting',
+            value: 'This isn\'t a solo game. **Follow your favorite bettors** with `/follow` to get notified when they post a pick. React to bets to tail or fade. Talk trash. Share wins. We\'re all in this together.',
+          },
+          {
+            name: '📱 Get the App',
+            value: 'Visit **[thegamblingkingapp.com](https://thegamblingkingapp.com)** and add it to your home screen for instant access. Log in with Discord — your bets, stats, and leaderboard are all there.',
+          },
+          {
+            name: '⚠️ Bet Responsibly',
+            value: '**Only bet what you can afford to lose.** This is entertainment first. Set a unit size, stick to your bankroll, and never chase losses. We\'re here to have fun and make smart plays — not go broke.',
+          },
+          {
+            name: '📣 Spread the Word',
+            value: [
+              'Know someone who loves betting? Bring them in!',
+              '🔗 `https://discord.gg/VKmkdSrk`',
+              '🔗 `https://thegamblingkingapp.com`',
+            ].join('\n'),
+          },
+        )
+        .setFooter({ text: 'TheGamblingKing • Just Make Money #JMM 🏀🔥' })
+        .setTimestamp();
+
+      const buttonRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setLabel('🎟️  PLACE A BET NOW')
+          .setStyle(ButtonStyle.Link)
+          .setURL(BET_SLIP_URL),
+      );
+
+      await welcomeChannel.send({
+        content: `Welcome <@${member.id}>! 🎉`,
+        embeds: [welcomeEmbed],
+        components: [buttonRow],
+      });
+      console.log(`[Welcome] Posted channel welcome for ${member.user.username}`);
+    } catch (chErr) {
+      console.log(`[Welcome] Could not post channel welcome for ${member.user.username}: ${chErr.message}`);
+    }
+
   } catch (err) {
-    // User may have DMs disabled — that's fine
-    console.log(`[Welcome] Could not DM ${member.user.username}: ${err.message}`);
+    console.log(`[Welcome] Error for ${member.user.username}: ${err.message}`);
   }
 });
 
