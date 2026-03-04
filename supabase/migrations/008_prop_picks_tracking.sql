@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS prop_picks (
   vs_opponent_avg NUMERIC(6,1),
   vs_opponent_games INTEGER,
   trending        TEXT,                   -- up, down, stable
+  volatility      NUMERIC(4,2),           -- role-volatility score 0.00-1.00
+  volatility_label TEXT,                  -- very stable, stable, volatile, very volatile
   
   -- Results (filled in after game)
   actual_value    NUMERIC(6,1),           -- actual stat value from box score

@@ -4128,6 +4128,15 @@ function propsRenderPickCard(pick, rank, type) {
   const bookBadge = lineSource ? `<span class="props-book-badge">${lineSource}</span>` : '<span class="props-book-badge est">estimated</span>';
   const oddsStr = pick.bookOdds ? ` (${type === 'over' ? formatOdds(pick.bookOdds.over) : formatOdds(pick.bookOdds.under)})` : '';
 
+  // Volatility badge
+  const vol = a.volatility;
+  let volClass = 'vol-stable';
+  let volIcon = '🔒';
+  if (vol > 0.50) { volClass = 'vol-high'; volIcon = '⚠️'; }
+  else if (vol > 0.30) { volClass = 'vol-med'; volIcon = '🟡'; }
+  else if (vol > 0.15) { volClass = 'vol-low'; volIcon = '🟢'; }
+  const volBadge = vol != null ? `<span class="props-vol-badge ${volClass}" title="Role Volatility: ${vol} (${a.volatilityLabel})">${volIcon} ${a.volatilityLabel}</span>` : '';
+
   return `
     <div class="props-pick-card ${type}">
       <span class="props-pick-rank">${rank}</span>
@@ -4135,7 +4144,7 @@ function propsRenderPickCard(pick, rank, type) {
       <div class="props-pick-info">
         <div class="props-pick-name">${pick.player.name}</div>
         <div class="props-pick-detail">${pick.teamAbbr} · ${pick.matchup} · ${pick.stat.shortLabel} ${direction} ${a.propLine}${oddsStr} ${bookBadge}</div>
-        <div class="props-pick-detail">Avg: ${a.seasonAvg} · L5: ${a.avg5} ${trendIcon} · Hit: ${hitRate}%${vsOppStr}</div>
+        <div class="props-pick-detail">Avg: ${a.seasonAvg} · L5: ${a.avg5} ${trendIcon} · Hit: ${hitRate}%${vsOppStr} ${volBadge}</div>
       </div>
       <div class="props-pick-right">
         <div class="props-pick-prob ${type}">${prob}%</div>
@@ -4213,6 +4222,11 @@ async function propsShareTopPicks() {
       .props-pick-line { font-size:9px; color:#888; margin-top:2px; }
       .props-book-badge { font-size:8px; font-weight:600; text-transform:uppercase; padding:1px 4px; border-radius:3px; background:rgba(34,197,94,0.15); color:#22c55e; }
       .props-book-badge.est { background:rgba(245,158,11,0.15); color:#f59e0b; }
+      .props-vol-badge { font-size:8px; font-weight:600; padding:1px 4px; border-radius:3px; margin-left:4px; }
+      .props-vol-badge.vol-stable { background:rgba(34,197,94,0.12); color:#22c55e; }
+      .props-vol-badge.vol-low { background:rgba(34,197,94,0.12); color:#22c55e; }
+      .props-vol-badge.vol-med { background:rgba(245,158,11,0.12); color:#f59e0b; }
+      .props-vol-badge.vol-high { background:rgba(239,68,68,0.12); color:#ef4444; }
     `;
     wrapper.appendChild(styleSheet);
 
@@ -4460,6 +4474,19 @@ function propsGenerateSummary(p) {
     lines.push(`This was flagged as a high-confidence pick at ${p.probability}% probability.`);
   } else if (p.confidence === 'medium') {
     lines.push(`Rated as medium confidence at ${p.probability}% probability.`);
+  }
+
+  // Volatility
+  if (p.volatility != null) {
+    if (p.volatility <= 0.15) {
+      lines.push(`🔒 Very stable role (volatility ${p.volatility}) — this player's minutes and usage are extremely consistent.`);
+    } else if (p.volatility <= 0.30) {
+      lines.push(`🟢 Stable role (volatility ${p.volatility}) — minutes and usage are consistent enough to trust the numbers.`);
+    } else if (p.volatility <= 0.50) {
+      lines.push(`🟡 Moderate volatility (${p.volatility}) — this player's role can swing, which adds risk to the pick.`);
+    } else {
+      lines.push(`⚠️ High volatility (${p.volatility}) — minutes and usage are inconsistent. This player's role is unpredictable.`);
+    }
   }
 
   // Result

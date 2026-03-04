@@ -32,6 +32,8 @@ async function savePicks(picks, direction) {
     vs_opponent_avg: p.analysis.vsOpponent?.avg || null,
     vs_opponent_games: p.analysis.vsOpponent?.games || null,
     trending: p.analysis.trending,
+    volatility: p.analysis.volatility ?? null,
+    volatility_label: p.analysis.volatilityLabel || null,
     game_id: p.gameId || null,
   }));
 
@@ -298,6 +300,8 @@ async function getDailyHistory() {
       vsOpponentAvg: p.vs_opponent_avg ? parseFloat(p.vs_opponent_avg) : null,
       vsOpponentGames: p.vs_opponent_games,
       trending: p.trending,
+      volatility: p.volatility ? parseFloat(p.volatility) : null,
+      volatilityLabel: p.volatility_label || null,
       actualValue: p.actual_value !== null ? parseFloat(p.actual_value) : null,
       hit: p.hit,
       gameId: p.game_id,

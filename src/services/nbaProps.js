@@ -316,6 +316,7 @@ async function getPlayerStats(playerId) {
       fg3: labelMap['3pt'],  // "3PT" label contains "made-attempted"
       pf: labelMap['pf'],
       fg: labelMap['fg'],
+      fga: labelMap['fg'],   // We'll extract attempts from the "made-attempted" fg column
     };
 
     // Parse a raw stats array into our stat object
@@ -327,7 +328,12 @@ async function getPlayerStats(playerId) {
         // Handle "made-attempted" format (e.g. "7-16" for 3PT)
         if (raw.includes('-') && key !== 'min') {
           const parts = raw.split('-');
-          result[key] = parseFloat(parts[0]); // just the "made" value
+          if (key === 'fga') {
+            // For fga, extract the ATTEMPTED (second) value from "made-attempted"
+            result[key] = parseFloat(parts[1]);
+          } else {
+            result[key] = parseFloat(parts[0]); // just the "made" value
+          }
         } else {
           const val = parseFloat(raw);
           if (!isNaN(val)) result[key] = val;
@@ -461,6 +467,58 @@ function getStatValue(statsObj, statKey) {
 }
 
 /**
+ * Calculate role-volatility score for a player (0–1).
+ * Measures how stable a player's minutes and usage are.
+ *   0.0–0.15 = rock-solid role (e.g. franchise player)
+ *   0.15–0.30 = stable role
+ *   0.30–0.50 = moderate volatility
+ *   0.50+ = high volatility (bench/rotation risk)
+ *
+ * Uses coefficient of variation (stddev / mean) for both
+ * minutes and FGA over the last 10 games, weighted 50/50.
+ */
+function calcVolatility(gameLog) {
+  // Need at least 5 games to compute meaningful volatility
+  const recent = gameLog.slice(0, 10);
+  if (recent.length < 5) return { volatility: 0, minVol: 0, useVol: 0, label: 'unknown' };
+
+  function coeffVar(values) {
+    if (!values.length) return 0;
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    if (mean === 0) return 0;
+    const variance = values.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / values.length;
+    return Math.sqrt(variance) / mean;
+  }
+
+  // Minutes volatility
+  const minValues = recent.map(g => g.stats.min).filter(v => v != null && v > 0);
+  const minVol = minValues.length >= 5 ? coeffVar(minValues) : 0;
+
+  // Usage volatility (FGA as proxy for touches/usage)
+  const fgaValues = recent.map(g => g.stats.fga).filter(v => v != null && v > 0);
+  const useVol = fgaValues.length >= 5 ? coeffVar(fgaValues) : minVol; // fallback to minVol if no FGA data
+
+  // Weighted combination (no context layer yet — just min + usage)
+  const raw = 0.5 * minVol + 0.5 * useVol;
+  // Clamp to 0–1
+  const volatility = Math.min(1, Math.max(0, raw));
+
+  // Human-readable label
+  let label;
+  if (volatility <= 0.15) label = 'very stable';
+  else if (volatility <= 0.30) label = 'stable';
+  else if (volatility <= 0.50) label = 'volatile';
+  else label = 'very volatile';
+
+  return {
+    volatility: Math.round(volatility * 100) / 100,
+    minVol: Math.round(minVol * 100) / 100,
+    useVol: Math.round(useVol * 100) / 100,
+    label,
+  };
+}
+
+/**
  * Analyze a player for a specific stat category against a given opponent.
  * Returns hit rates, averages, trends, and a confidence score.
  */
@@ -517,6 +575,9 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId) {
   const variance = allValues.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / allValues.length;
   const stdDev = Math.sqrt(variance);
 
+  // ── Role Volatility ──
+  const vol = calcVolatility(gameLog);
+
   // ── Confidence Score ──
   // Weighted average of multiple signals to determine over/under probability
   let overProbability = 0;
@@ -546,6 +607,14 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId) {
   totalWeight += 10;
 
   overProbability = overProbability / totalWeight;
+
+  // ── Apply volatility adjustment ──
+  // Pull raw probability toward 50% based on volatility.
+  // AdjustedProb = 0.5 + (RawProb - 0.5) * (1 - volatility)
+  // This preserves direction but shrinks edge for volatile players.
+  const volAdj = 1 - vol.volatility;
+  overProbability = 0.5 + (overProbability - 0.5) * volAdj;
+
   const underProbability = 1 - overProbability;
 
   // Determine recommendation
@@ -589,6 +658,10 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId) {
     } : null,
     trending,
     stdDev: Math.round(stdDev * 10) / 10,
+    volatility: vol.volatility,
+    volatilityLabel: vol.label,
+    minVol: vol.minVol,
+    useVol: vol.useVol,
     overProbability: Math.round(overProbability * 100),
     underProbability: Math.round(underProbability * 100),
     recommendation,
