@@ -4174,19 +4174,20 @@ async function propsShareTopPicks() {
   try {
     // Build a standalone clone for cleaner image capture
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:700px;padding:24px;background:#1a1a2e;border-radius:12px;font-family:Inter,system-ui,sans-serif;color:#e0e0e0;z-index:-1;';
+    wrapper.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;padding:28px;background:#1a1a2e;border-radius:12px;font-family:Inter,system-ui,sans-serif;color:#e0e0e0;z-index:-1;';
     
     // Branded header
     const header = document.createElement('div');
-    header.style.cssText = 'text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1);';
+    header.style.cssText = 'text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.1);';
     header.innerHTML = `
-      <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px;">🔥 Today's Top Picks</div>
+      <div style="font-size:24px;font-weight:800;color:#fff;margin-bottom:4px;">🔥 Today's Top Picks</div>
       <div style="font-size:12px;color:#888;">TheGamblingKingApp.com · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</div>
     `;
     wrapper.appendChild(header);
 
-    // Clone the picks grid
+    // Clone the picks grid — but force single column for cleaner image
     const gridClone = content.querySelector('.props-top-picks-grid').cloneNode(true);
+    gridClone.style.cssText = 'display:flex;flex-direction:column;gap:20px;';
     wrapper.appendChild(gridClone);
 
     // Clone meta info
@@ -4202,21 +4203,21 @@ async function propsShareTopPicks() {
     // Apply styles to cloned elements
     const styleSheet = document.createElement('style');
     styleSheet.textContent = `
-      .props-top-picks-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-      .props-picks-col-title { font-size:14px; font-weight:700; margin-bottom:10px; text-align:center; }
+      .props-top-picks-grid { display:flex; flex-direction:column; gap:20px; }
+      .props-picks-col-title { font-size:15px; font-weight:700; margin-bottom:10px; text-align:center; }
       .props-picks-col-title.over { color:#22c55e; }
       .props-picks-col-title.under { color:#ef4444; }
       .props-picks-list { display:flex; flex-direction:column; gap:8px; }
-      .props-pick-card { display:flex; align-items:center; padding:8px 10px; border-radius:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); }
+      .props-pick-card { display:flex; align-items:center; padding:10px 12px; border-radius:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); gap:10px; }
       .props-pick-card.over { border-left:3px solid #22c55e; }
       .props-pick-card.under { border-left:3px solid #ef4444; }
-      .props-pick-rank { font-size:14px; font-weight:800; min-width:20px; color:#888; margin-right:8px; }
-      .props-pick-avatar { width:36px; height:36px; border-radius:50%; margin-right:10px; object-fit:cover; }
+      .props-pick-rank { font-size:15px; font-weight:800; min-width:22px; color:#888; text-align:center; flex-shrink:0; }
+      .props-pick-avatar { width:38px; height:38px; border-radius:50%; object-fit:cover; flex-shrink:0; }
       .props-pick-info { flex:1; min-width:0; }
-      .props-pick-name { font-size:13px; font-weight:700; color:#fff; }
-      .props-pick-detail { font-size:10px; color:#aaa; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-      .props-pick-right { text-align:right; margin-left:8px; }
-      .props-pick-prob { font-size:16px; font-weight:800; }
+      .props-pick-name { font-size:14px; font-weight:700; color:#fff; }
+      .props-pick-detail { font-size:11px; color:#aaa; margin-top:3px; line-height:1.4; word-break:break-word; }
+      .props-pick-right { text-align:right; margin-left:10px; flex-shrink:0; }
+      .props-pick-prob { font-size:18px; font-weight:800; }
       .props-pick-prob.over { color:#22c55e; }
       .props-pick-prob.under { color:#ef4444; }
       .props-pick-line { font-size:9px; color:#888; margin-top:2px; }

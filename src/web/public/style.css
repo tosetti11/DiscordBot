@@ -3115,6 +3115,7 @@ textarea {
 .props-pick-info {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 .props-pick-name {
   font-weight: 600;
@@ -3128,6 +3129,8 @@ textarea {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.4;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .props-pick-right {
@@ -3383,10 +3386,11 @@ textarea {
 .dh-pick-info {
   display: flex;
   flex-direction: column;
-  min-width: 100px;
+  min-width: 0;
+  flex: 1;
 }
-.dh-pick-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
-.dh-pick-detail { font-size: 11px; color: var(--text-muted); }
+.dh-pick-name { font-weight: 600; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dh-pick-detail { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .dh-pick-prop {
   display: flex;
@@ -3410,7 +3414,8 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  min-width: 80px;
+  min-width: 60px;
+  flex-shrink: 0;
 }
 .dh-pick-actual { font-size: 12px; color: var(--text-secondary); }
 .dh-pick-verdict {
@@ -3469,6 +3474,24 @@ textarea {
   .props-top-picks-grid {
     grid-template-columns: 1fr;
   }
+  .props-pick-card {
+    padding: 8px;
+    gap: 6px;
+  }
+  .props-pick-rank {
+    font-size: 14px;
+    width: 18px;
+  }
+  .props-pick-avatar {
+    width: 28px;
+    height: 28px;
+  }
+  .props-pick-detail {
+    font-size: 10px;
+  }
+  .props-pick-prob {
+    font-size: 15px;
+  }
   .props-games-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -3492,9 +3515,40 @@ textarea {
   }
   .dh-pick-main {
     flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px;
   }
-  .dh-pick-info { min-width: auto; }
-  .dh-pick-result { min-width: auto; }
+  .dh-pick-info {
+    min-width: 0;
+    flex: 1 1 calc(100% - 80px);
+  }
+  .dh-pick-prop {
+    flex: 0 0 auto;
+    font-size: 12px;
+  }
+  .dh-pick-result {
+    min-width: auto;
+    flex: 0 0 auto;
+  }
+  .dh-pick-avatar {
+    width: 24px;
+    height: 24px;
+  }
+  .dh-pick-expand {
+    display: none;
+  }
+  .props-top-picks-actions {
+    flex-shrink: 0;
+  }
+  .props-top-picks-header h4 {
+    font-size: 14px;
+  }
+  .props-vol-badge {
+    font-size: 8px;
+  }
+  .props-book-badge {
+    font-size: 8px;
+  }
 }
 @media (max-width: 480px) {
   .props-games-grid {
