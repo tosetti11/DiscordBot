@@ -9,10 +9,60 @@ const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/e
 const { BRACKET, ROUND_NAMES, REGIONS, STANDARD_SCORING, MAX_SCORE,
   R1_SEED_MATCHUPS, calculateScore, calculateMaxPossible } = require('../services/bracketStructure');
 
+const { EmbedBuilder } = require('discord.js');
+
 const KING_DISCORD_ID = '1338301556973633577';
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const ENTRY_FEE = 50;
 
 module.exports = function mountBracketRoutes(app, { jwt, JWT_SECRET, discordClient, path }) {
+
+  // ─── Update the pool tracker message in Discord ───
+  async function updatePoolTracker(tournament) {
+    try {
+      if (!tournament.tracker_message_id || !tournament.tracker_channel_id) return;
+      if (!discordClient) return;
+
+      const channel = await discordClient.channels.fetch(tournament.tracker_channel_id).catch(() => null);
+      if (!channel) return;
+
+      const entries = await bracketDb.getEntries(tournament.id);
+      const entryCount = entries.length;
+      const pot = entryCount * ENTRY_FEE;
+
+      const embed = new EmbedBuilder()
+        .setTitle('\u{1F3C6} BRACKET POOL TRACKER')
+        .setColor(0xf9a825)
+        .setDescription([
+          '```',
+          `   ENTRIES:  ${entryCount}`,
+          `   POT:      $${pot.toLocaleString()}`,
+          '```',
+          '',
+          '\u{1F4B0} **Payouts**',
+          `> \u{1F947} 1st — **$${Math.floor(pot * 0.7).toLocaleString()}** (70%)`,
+          `> \u{1F948} 2nd — **$${Math.floor(pot * 0.2).toLocaleString()}** (20%)`,
+          `> \u{1F949} 3rd — **$${Math.floor(pot * 0.1).toLocaleString()}** (10%)`,
+          '',
+          `**$${ENTRY_FEE} buy-in** \u2022 The more people, the bigger the bag \u{1F4B8}`,
+          '',
+          '\u{1F517} **[Fill Out Your Bracket](https://thegamblingkingapp.com/bracket)**',
+          '\u{1F4E8} **[Invite Friends to the Server](https://discord.gg/VKmkdSrk)**',
+          '',
+          '**#JMM** \u{1F3C0}\u{1F525}',
+        ].join('\n'))
+        .setFooter({ text: 'Updates automatically when someone joins \u2022 thegamblingkingapp.com/bracket' })
+        .setTimestamp();
+
+      const msg = await channel.messages.fetch(tournament.tracker_message_id).catch(() => null);
+      if (msg) {
+        await msg.edit({ embeds: [embed] });
+        console.log(`[Bracket] Pool tracker updated: ${entryCount} entries, $${pot} pot`);
+      }
+    } catch (err) {
+      console.error('[Bracket] Failed to update pool tracker:', err.message);
+    }
+  }
 
   // ─── Bracket Auth Middleware ───
   // Accepts either Discord JWT (fk_token) or email JWT (bracket_token)
@@ -418,6 +468,7 @@ module.exports = function mountBracketRoutes(app, { jwt, JWT_SECRET, discordClie
           auth_type: 'discord',
         });
         res.json({ entry, existing: false });
+        updatePoolTracker(tournament);
       } else {
         existing = await bracketDb.getEntryByEmailUserId(tournament.id, u.emailUserId);
         if (existing) return res.json({ entry: existing, existing: true });
@@ -430,6 +481,7 @@ module.exports = function mountBracketRoutes(app, { jwt, JWT_SECRET, discordClie
           auth_type: 'email',
         });
         res.json({ entry, existing: false });
+        updatePoolTracker(tournament);
       }
     } catch (err) {
       console.error('[Bracket] Create entry error:', err);
@@ -530,6 +582,8 @@ module.exports = function mountBracketRoutes(app, { jwt, JWT_SECRET, discordClie
       if (!isAdmin(req.user)) return res.status(403).json({ error: 'Admin only' });
       await bracketDb.deleteEntry(req.params.entryId);
       res.json({ success: true });
+      const tournament = await bracketDb.getActiveTournament();
+      if (tournament) updatePoolTracker(tournament);
     } catch (err) {
       res.status(500).json({ error: 'Failed to delete entry' });
     }
