@@ -253,6 +253,76 @@ async function getPicksByDate(date) {
   }));
 }
 
+/**
+ * Get all picks grouped by date, with daily stats.
+ * Returns an array of day objects sorted newest-first.
+ */
+async function getDailyHistory() {
+  const { data, error } = await supabase
+    .from('prop_picks')
+    .select('*')
+    .order('generated_date', { ascending: false })
+    .order('direction')
+    .order('rank');
+
+  if (error) {
+    console.error('[PropPicks] Daily history error:', error.message);
+    return [];
+  }
+
+  if (!data || !data.length) return [];
+
+  // Group by date
+  const byDate = {};
+  for (const p of data) {
+    const d = p.generated_date;
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push({
+      id: p.id,
+      playerName: p.player_name,
+      playerId: p.player_id,
+      teamAbbr: p.team_abbr,
+      matchup: p.matchup,
+      headshot: p.headshot_url,
+      direction: p.direction,
+      statKey: p.stat_key,
+      statLabel: p.stat_label,
+      propLine: parseFloat(p.prop_line),
+      probability: p.probability,
+      confidence: p.confidence,
+      rank: p.rank,
+      seasonAvg: p.season_avg ? parseFloat(p.season_avg) : null,
+      l5Avg: p.l5_avg ? parseFloat(p.l5_avg) : null,
+      l10Avg: p.l10_avg ? parseFloat(p.l10_avg) : null,
+      hitRateSeason: p.hit_rate_season ? parseFloat(p.hit_rate_season) : null,
+      vsOpponentAvg: p.vs_opponent_avg ? parseFloat(p.vs_opponent_avg) : null,
+      vsOpponentGames: p.vs_opponent_games,
+      trending: p.trending,
+      actualValue: p.actual_value !== null ? parseFloat(p.actual_value) : null,
+      hit: p.hit,
+      gameId: p.game_id,
+    });
+  }
+
+  // Build array with daily stats
+  const days = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+  return days.map(date => {
+    const picks = byDate[date];
+    const resolved = picks.filter(p => p.hit !== null);
+    const hits = resolved.filter(p => p.hit === true);
+    return {
+      date,
+      picks,
+      total: picks.length,
+      resolved: resolved.length,
+      hits: hits.length,
+      misses: resolved.length - hits.length,
+      hitRate: resolved.length ? Math.round((hits.length / resolved.length) * 100) : null,
+      pending: picks.length - resolved.length,
+    };
+  });
+}
+
 module.exports = {
   savePicks,
   getUnresolvedPicks,
@@ -260,4 +330,5 @@ module.exports = {
   resolvePickBatch,
   getAccuracyStats,
   getPicksByDate,
+  getDailyHistory,
 };

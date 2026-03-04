@@ -4139,98 +4139,214 @@ function propsRenderPickCard(pick, rank, type) {
 }
 
 // ═══════════════════════════════════════════════
-//  Prop Picks Accuracy Dashboard
+//  Prop Picks — Daily History & Pick Tracker
 // ═══════════════════════════════════════════════
 
 async function propsLoadAccuracy() {
+  // Now delegated to daily history view
+  await propsLoadDailyHistory();
+}
+
+async function propsLoadDailyHistory() {
   try {
-    const res = await fetch('/api/props/accuracy', {
+    const res = await fetch('/api/props/daily-history', {
       headers: { 'Content-Type': 'application/json' }
     });
     if (!res.ok) return;
-    const stats = await res.json();
-    propsRenderAccuracy(stats);
+    const days = await res.json();
+    propsRenderDailyHistory(days);
   } catch (err) {
-    console.error('[Props] Accuracy load error:', err);
+    console.error('[Props] Daily history load error:', err);
   }
 }
 
-function propsRenderAccuracy(stats) {
+function propsRenderDailyHistory(days) {
   const emptyEl = document.getElementById('props-accuracy-empty');
-  const statsRow = document.getElementById('props-accuracy-stats');
-  const breakdowns = document.getElementById('props-accuracy-breakdowns');
-  const recentSection = document.getElementById('props-recent-picks-section');
+  const heroStats = document.getElementById('props-hero-stats');
+  const historyEl = document.getElementById('props-daily-history');
 
-  if (!stats || stats.totalPicks === 0) {
+  if (!days || !days.length) {
     if (emptyEl) emptyEl.classList.remove('hidden');
-    if (statsRow) statsRow.classList.add('hidden');
-    if (breakdowns) breakdowns.classList.add('hidden');
-    if (recentSection) recentSection.classList.add('hidden');
+    if (heroStats) heroStats.classList.add('hidden');
+    if (historyEl) historyEl.classList.add('hidden');
     return;
   }
 
   if (emptyEl) emptyEl.classList.add('hidden');
-  if (statsRow) statsRow.classList.remove('hidden');
-  if (breakdowns) breakdowns.classList.remove('hidden');
-  if (recentSection) recentSection.classList.remove('hidden');
+  if (heroStats) heroStats.classList.remove('hidden');
+  if (historyEl) historyEl.classList.remove('hidden');
 
-  // Main stats
-  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  setVal('acc-overall', stats.hitRate + '%');
-  setVal('acc-record', `${stats.totalHits}-${stats.totalPicks - stats.totalHits}`);
-  setVal('acc-over', stats.overStats.rate + '%');
-  setVal('acc-over-record', `${stats.overStats.hits}-${stats.overStats.total - stats.overStats.hits}`);
-  setVal('acc-under', stats.underStats.rate + '%');
-  setVal('acc-under-record', `${stats.underStats.hits}-${stats.underStats.total - stats.underStats.hits}`);
+  // Calculate overall stats
+  let totalResolved = 0, totalHits = 0;
+  let overResolved = 0, overHits = 0;
+  let underResolved = 0, underHits = 0;
+  for (const day of days) {
+    for (const p of day.picks) {
+      if (p.hit !== null) {
+        totalResolved++;
+        if (p.hit) totalHits++;
+        if (p.direction === 'over') { overResolved++; if (p.hit) overHits++; }
+        else { underResolved++; if (p.hit) underHits++; }
+      }
+    }
+  }
+
+  // Hero stats
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl('hero-hit-pct', totalResolved ? Math.round((totalHits / totalResolved) * 100) + '%' : '—');
+  setEl('hero-record', totalResolved ? `${totalHits}-${totalResolved - totalHits} (${totalResolved} picks)` : '');
+  setEl('hero-over-pct', overResolved ? Math.round((overHits / overResolved) * 100) + '%' : '—');
+  setEl('hero-under-pct', underResolved ? Math.round((underHits / underResolved) * 100) + '%' : '—');
 
   // Streak
-  if (stats.streak && stats.streak.current > 0) {
-    const icon = stats.streak.type === 'hit' ? '🔥' : '❄️';
-    setVal('acc-streak', `${icon} ${stats.streak.current}`);
-    setVal('acc-streak-type', stats.streak.type === 'hit' ? 'Hits' : 'Misses');
+  const allPicks = days.flatMap(d => d.picks).filter(p => p.hit !== null);
+  let streak = { count: 0, type: null };
+  for (const p of allPicks) {
+    const t = p.hit ? 'hit' : 'miss';
+    if (!streak.type) { streak.type = t; streak.count = 1; }
+    else if (t === streak.type) streak.count++;
+    else break;
+  }
+  if (streak.count > 0) {
+    setEl('hero-streak', (streak.type === 'hit' ? '🔥 ' : '❄️ ') + streak.count);
   } else {
-    setVal('acc-streak', '—');
-    setVal('acc-streak-type', '\u00A0');
+    setEl('hero-streak', '—');
   }
 
-  // Time periods
-  const fmtPeriod = (s) => s.total ? `${s.rate}% (${s.hits}/${s.total})` : '—';
-  setVal('acc-7d', fmtPeriod(stats.last7Days));
-  setVal('acc-30d', fmtPeriod(stats.last30Days));
+  // Render daily sections
+  historyEl.innerHTML = days.map(day => {
+    const dateObj = new Date(day.date + 'T12:00:00');
+    const dateLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const pctText = day.hitRate !== null ? `${day.hitRate}%` : 'Pending';
+    const pctClass = day.hitRate !== null ? (day.hitRate >= 60 ? 'good' : day.hitRate >= 40 ? 'ok' : 'bad') : 'pending';
+    const recordText = day.resolved ? `${day.hits}-${day.misses}` : '';
+    const pendingBadge = day.pending > 0 ? `<span class="dh-pending-badge">${day.pending} pending</span>` : '';
 
-  // By confidence
-  for (const level of ['high', 'medium', 'low']) {
-    const c = stats.byConfidence?.[level];
-    setVal(`acc-conf-${level}`, c && c.total ? `${c.rate}% (${c.hits}/${c.total})` : '—');
+    const overs = day.picks.filter(p => p.direction === 'over');
+    const unders = day.picks.filter(p => p.direction === 'under');
+
+    return `
+      <div class="dh-day" data-date="${day.date}">
+        <div class="dh-day-header" onclick="this.parentElement.classList.toggle('open')">
+          <span class="dh-day-date">${dateLabel}</span>
+          <span class="dh-day-record">${recordText}</span>
+          ${pendingBadge}
+          <span class="dh-day-pct ${pctClass}">${pctText}</span>
+          <span class="dh-chevron">▸</span>
+        </div>
+        <div class="dh-day-body">
+          ${overs.length ? `<h5 class="dh-section-title over">📈 OVERs</h5>` : ''}
+          ${overs.map(p => propsRenderHistoryPick(p)).join('')}
+          ${unders.length ? `<h5 class="dh-section-title under">📉 UNDERs</h5>` : ''}
+          ${unders.map(p => propsRenderHistoryPick(p)).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function propsRenderHistoryPick(p) {
+  const icon = p.hit === true ? '✅' : p.hit === false ? '❌' : '⏳';
+  const resultClass = p.hit === true ? 'hit' : p.hit === false ? 'miss' : 'pending';
+  const dir = p.direction.toUpperCase();
+  const actualText = p.actualValue !== null ? `Actual: ${p.actualValue}` : '';
+  const hitMissLabel = p.hit === true ? 'HIT' : p.hit === false ? 'MISS' : '';
+
+  return `
+    <div class="dh-pick ${resultClass}" onclick="propsToggleBreakdown(this)">
+      <div class="dh-pick-main">
+        <span class="dh-pick-icon">${icon}</span>
+        ${p.headshot ? `<img class="dh-pick-avatar" src="${p.headshot}" alt="" loading="lazy">` : ''}
+        <div class="dh-pick-info">
+          <span class="dh-pick-name">${p.playerName}</span>
+          <span class="dh-pick-detail">${p.teamAbbr} · ${p.matchup}</span>
+        </div>
+        <div class="dh-pick-prop">
+          <span class="dh-pick-dir ${p.direction}">${dir} ${p.statLabel} ${p.propLine}</span>
+          <span class="dh-pick-conf">${p.confidence}</span>
+        </div>
+        <div class="dh-pick-result">
+          ${actualText ? `<span class="dh-pick-actual">${actualText}</span>` : ''}
+          ${hitMissLabel ? `<span class="dh-pick-verdict ${resultClass}">${hitMissLabel}</span>` : ''}
+        </div>
+        <span class="dh-pick-expand">▸</span>
+      </div>
+      <div class="dh-pick-breakdown">
+        ${propsGenerateSummary(p)}
+      </div>
+    </div>`;
+}
+
+function propsToggleBreakdown(el) {
+  el.classList.toggle('expanded');
+}
+
+function propsGenerateSummary(p) {
+  const lines = [];
+  const dir = p.direction === 'over' ? 'OVER' : 'UNDER';
+  const stat = p.statLabel;
+  const line = p.propLine;
+
+  // Main thesis
+  if (p.direction === 'over') {
+    if (p.seasonAvg !== null && p.seasonAvg > line) {
+      lines.push(`${p.playerName} averages ${p.seasonAvg} ${stat} this season, already above the ${line} line.`);
+    } else if (p.seasonAvg !== null) {
+      lines.push(`${p.playerName} averages ${p.seasonAvg} ${stat} this season with a line set at ${line}.`);
+    }
+  } else {
+    if (p.seasonAvg !== null && p.seasonAvg < line) {
+      lines.push(`${p.playerName} averages ${p.seasonAvg} ${stat} this season, already under the ${line} line.`);
+    } else if (p.seasonAvg !== null) {
+      lines.push(`${p.playerName} averages ${p.seasonAvg} ${stat} this season with a line set at ${line}.`);
+    }
   }
 
-  // By stat
-  for (const key of ['pts', 'reb', 'ast', 'fg3']) {
-    const s = stats.byStat?.[key];
-    setVal(`acc-stat-${key}`, s && s.total ? `${s.rate}% (${s.hits}/${s.total})` : '—');
+  // Recent trend
+  if (p.l5Avg !== null && p.seasonAvg !== null) {
+    const diff = p.l5Avg - p.seasonAvg;
+    if (p.direction === 'over' && diff > 0) {
+      lines.push(`He's trending up — averaging ${p.l5Avg} over his last 5 games, ${Math.abs(diff).toFixed(1)} above his season average.`);
+    } else if (p.direction === 'over' && diff < 0) {
+      lines.push(`His last 5 average of ${p.l5Avg} is slightly below his season mark, but the probability model still favors the over.`);
+    } else if (p.direction === 'under' && diff < 0) {
+      lines.push(`He's trending down — averaging just ${p.l5Avg} over his last 5 games, ${Math.abs(diff).toFixed(1)} below his season average.`);
+    } else if (p.direction === 'under' && diff > 0) {
+      lines.push(`His recent 5-game average of ${p.l5Avg} is slightly higher, but the matchup and consistency favor the under.`);
+    }
   }
 
-  // Recent picks
-  const recentList = document.getElementById('props-recent-list');
-  if (recentList && stats.recentPicks?.length) {
-    recentList.innerHTML = stats.recentPicks.map(p => {
-      const icon = p.hit === true ? '✅' : p.hit === false ? '❌' : '⏳';
-      const resultText = p.actualValue !== null
-        ? `Actual: ${p.actualValue} ${p.hit ? '(HIT)' : '(MISS)'}`
-        : 'Pending';
-      const dirClass = p.direction === 'over' ? 'over' : 'under';
-      return `
-        <div class="props-recent-row ${p.hit === true ? 'hit' : p.hit === false ? 'miss' : 'pending'}">
-          <span class="props-recent-icon">${icon}</span>
-          <span class="props-recent-date">${p.date}</span>
-          ${p.headshot ? `<img class="props-recent-avatar" src="${p.headshot}" alt="" loading="lazy">` : ''}
-          <span class="props-recent-player">${p.playerName}</span>
-          <span class="props-recent-prop ${dirClass}">${p.direction.toUpperCase()} ${p.statLabel} ${p.propLine}</span>
-          <span class="props-recent-conf">${p.confidence}</span>
-          <span class="props-recent-result">${resultText}</span>
-        </div>`;
-    }).join('');
+  // Hit rate
+  if (p.hitRateSeason !== null) {
+    const hitsOver = Math.round(p.hitRateSeason);
+    if (p.direction === 'over') {
+      lines.push(`He's gone over this line in ${hitsOver}% of games this season.`);
+    } else {
+      lines.push(`He's stayed under this line in ${100 - hitsOver}% of games this season.`);
+    }
   }
+
+  // Matchup history
+  if (p.vsOpponentAvg !== null && p.vsOpponentGames > 0) {
+    lines.push(`Against this opponent he's averaged ${p.vsOpponentAvg} ${stat} across ${p.vsOpponentGames} game${p.vsOpponentGames > 1 ? 's' : ''} this season.`);
+  }
+
+  // Confidence
+  if (p.confidence === 'high') {
+    lines.push(`This was flagged as a high-confidence pick at ${p.probability}% probability.`);
+  } else if (p.confidence === 'medium') {
+    lines.push(`Rated as medium confidence at ${p.probability}% probability.`);
+  }
+
+  // Result
+  if (p.actualValue !== null) {
+    if (p.hit) {
+      lines.push(`✅ Result: He finished with ${p.actualValue} ${stat} — pick hit.`);
+    } else {
+      lines.push(`❌ Result: He finished with ${p.actualValue} ${stat} — pick missed.`);
+    }
+  }
+
+  return `<div class="dh-summary">${lines.map(l => `<p>${l}</p>`).join('')}</div>`;
 }
 
 async function propsCheckResults() {
@@ -4246,7 +4362,6 @@ async function propsCheckResults() {
     });
     const data = await res.json();
 
-    // Show a quick status
     if (data.resolved > 0) {
       showToast(`Resolved ${data.resolved} picks!`);
     } else if (data.unresolved === 0) {
@@ -4255,8 +4370,7 @@ async function propsCheckResults() {
       showToast(`Games not finished yet (${data.unresolved} pending)`);
     }
 
-    // Refresh accuracy stats
-    await propsLoadAccuracy();
+    await propsLoadDailyHistory();
   } catch (err) {
     console.error('[Props] Resolve error:', err);
     showToast('Error checking results');

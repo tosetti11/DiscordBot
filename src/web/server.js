@@ -2589,6 +2589,17 @@ Rules:
     }
   });
 
+  // Get all picks grouped by day with daily stats
+  app.get('/api/props/daily-history', authMiddleware, ownerMiddleware, async (req, res) => {
+    try {
+      const days = await propPicksDb.getDailyHistory();
+      res.json(days);
+    } catch (err) {
+      console.error('[Props API] daily-history error:', err);
+      res.status(500).json({ error: 'Failed to fetch daily history' });
+    }
+  });
+
   // Submit a bet
   app.post('/api/bets', authMiddleware, postLimiter, async (req, res) => {
     try {
