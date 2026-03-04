@@ -2990,7 +2990,155 @@ textarea {
   white-space: nowrap;
 }
 
+/* Top Picks Section */
+.props-top-picks-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.props-top-picks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.props-top-picks-header h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.props-top-picks-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: opacity .2s;
+}
+.btn-accent:hover { opacity: .85; }
+.btn-accent:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.props-top-picks-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.props-picks-col-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.props-picks-col-title.over { color: #22c55e; }
+.props-picks-col-title.under { color: #ef4444; }
+
+.props-picks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.props-pick-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: border-color .2s;
+}
+.props-pick-card:hover { border-color: var(--accent); }
+.props-pick-card.over { border-left: 3px solid #22c55e; }
+.props-pick-card.under { border-left: 3px solid #ef4444; }
+
+.props-pick-rank {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-muted);
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.props-pick-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.props-pick-info {
+  flex: 1;
+  min-width: 0;
+}
+.props-pick-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.props-pick-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.props-pick-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+.props-pick-prob {
+  font-size: 18px;
+  font-weight: 800;
+}
+.props-pick-prob.over { color: #22c55e; }
+.props-pick-prob.under { color: #ef4444; }
+.props-pick-line {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.props-top-picks-meta {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.props-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
 @media (max-width: 768px) {
+  .props-top-picks-grid {
+    grid-template-columns: 1fr;
+  }
   .props-games-grid {
     grid-template-columns: 1fr 1fr;
   }

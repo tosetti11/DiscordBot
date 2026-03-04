@@ -988,6 +988,33 @@
           <h3 class="card-title">🏀 NBA Player Props Analyzer</h3>
           <p class="props-subtitle">Select a game, pick a player, and get data-driven prop recommendations based on season stats, recent trends, matchup history, and more.</p>
 
+          <!-- Top Picks Section -->
+          <div id="props-top-picks" class="props-top-picks-section">
+            <div class="props-top-picks-header">
+              <h4>🔥 Today's Top Picks</h4>
+              <button class="btn btn-sm btn-accent" onclick="propsGenerateTopPicks()" id="props-top-picks-btn">Generate Top Picks</button>
+            </div>
+            <p class="props-top-picks-desc">Scans every player in tonight's games and surfaces the strongest OVER and UNDER props based on season averages, recent trends, hit rates, and matchup data.</p>
+            <div id="props-top-picks-content" class="hidden">
+              <div class="props-top-picks-grid">
+                <div class="props-picks-col">
+                  <h5 class="props-picks-col-title over">📈 Top 5 OVERs</h5>
+                  <div id="props-overs-list" class="props-picks-list"></div>
+                </div>
+                <div class="props-picks-col">
+                  <h5 class="props-picks-col-title under">📉 Top 5 UNDERs</h5>
+                  <div id="props-unders-list" class="props-picks-list"></div>
+                </div>
+              </div>
+              <div id="props-top-picks-meta" class="props-top-picks-meta"></div>
+            </div>
+            <div id="props-top-picks-loading" class="hidden">
+              <div class="props-loading">Scanning all players across today's games... this may take 30-60 seconds</div>
+            </div>
+          </div>
+
+          <hr class="props-divider">
+
           <!-- Step 1: Pick a game -->
           <div id="props-step-games" class="props-step">
             <div class="props-step-header">

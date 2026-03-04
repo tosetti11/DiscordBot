@@ -2514,6 +2514,17 @@ Rules:
     }
   });
 
+  // Generate top 5 OVER and top 5 UNDER picks across all today's games
+  app.get('/api/props/top-picks', authMiddleware, async (req, res) => {
+    try {
+      const result = await nbaProps.generateTopPicks();
+      res.json(result);
+    } catch (err) {
+      console.error('[Props API] top-picks error:', err);
+      res.status(500).json({ error: 'Failed to generate top picks' });
+    }
+  });
+
   // Submit a bet
   app.post('/api/bets', authMiddleware, postLimiter, async (req, res) => {
     try {

@@ -481,6 +481,110 @@ async function autoAnalyzePlayer(playerId, opponentTeamId) {
   };
 }
 
+/**
+ * Generate top 5 OVER and top 5 UNDER picks across all of today's games.
+ * - Fetches every roster for today's games
+ * - Filters to "key" players (20+ games, 15+ min avg)
+ * - Runs auto-analysis on each player
+ * - Ranks by over/under probability and returns best picks
+ */
+async function generateTopPicks() {
+  const cacheKey = 'top-picks-today';
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const games = await getTodaysNBAGames();
+  if (!games.length) return { overs: [], unders: [], gamesScanned: 0, playersScanned: 0 };
+
+  // Collect all (player, opponentId, game) tuples
+  const playerTasks = [];
+  for (const game of games) {
+    const [awayRoster, homeRoster] = await Promise.all([
+      getTeamRoster(game.away.id),
+      getTeamRoster(game.home.id),
+    ]);
+    for (const p of awayRoster) {
+      playerTasks.push({ player: p, opponentId: game.home.id, game, teamName: game.away.name, teamAbbr: game.away.abbreviation });
+    }
+    for (const p of homeRoster) {
+      playerTasks.push({ player: p, opponentId: game.away.id, game, teamName: game.home.name, teamAbbr: game.home.abbreviation });
+    }
+  }
+
+  // Analyze players in batches of 6 to avoid hammering ESPN
+  const allPicks = []; // { player, teamName, game, stat, analysis }
+  let playersScanned = 0;
+  const BATCH_SIZE = 6;
+
+  for (let i = 0; i < playerTasks.length; i += BATCH_SIZE) {
+    const batch = playerTasks.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async ({ player, opponentId, game, teamName, teamAbbr }) => {
+        const stats = await getPlayerStats(player.id);
+        // Filter: need enough games and meaningful minutes
+        if (stats.gameLog.length < 10) return null;
+        const avgMin = getStatValue(stats.seasonAvg, 'min');
+        if (avgMin !== null && avgMin < 15) return null;
+
+        playersScanned++;
+
+        // Run analysis on key stat categories (PTS, REB, AST, 3PM)
+        const keyCats = STAT_CATEGORIES.filter(c => ['pts', 'reb', 'ast', 'fg3'].includes(c.key));
+        const picks = [];
+        for (const cat of keyCats) {
+          const validGames = stats.gameLog.filter(g => getStatValue(g.stats, cat.key) !== null);
+          if (validGames.length < 10) continue;
+
+          const values = validGames.map(g => getStatValue(g.stats, cat.key));
+          const avg = values.reduce((a, b) => a + b, 0) / values.length;
+          const propLine = Math.round(avg * 2) / 2;
+          if (propLine <= 0) continue;
+
+          const analysis = analyzePlayerProp(stats, cat.key, propLine, opponentId);
+          if (!analysis) continue;
+
+          picks.push({
+            player: { id: player.id, name: player.name, position: player.position, headshot: player.headshot },
+            teamName,
+            teamAbbr,
+            matchup: `${game.away.abbreviation} @ ${game.home.abbreviation}`,
+            stat: cat,
+            analysis,
+          });
+        }
+        return picks;
+      })
+    );
+
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value) {
+        allPicks.push(...r.value);
+      }
+    }
+  }
+
+  // Sort for best overs (highest overProbability) and best unders (highest underProbability)
+  const overCandidates = allPicks
+    .filter(p => p.analysis.overProbability >= 58)
+    .sort((a, b) => b.analysis.overProbability - a.analysis.overProbability);
+
+  const underCandidates = allPicks
+    .filter(p => p.analysis.underProbability >= 58)
+    .sort((a, b) => b.analysis.underProbability - a.analysis.underProbability);
+
+  const result = {
+    overs: overCandidates.slice(0, 5),
+    unders: underCandidates.slice(0, 5),
+    gamesScanned: games.length,
+    playersScanned,
+    totalAnalyzed: allPicks.length,
+    generatedAt: new Date().toISOString(),
+  };
+
+  setCache(cacheKey, result);
+  return result;
+}
+
 module.exports = {
   getTodaysNBAGames,
   getTeamRoster,
@@ -489,5 +593,6 @@ module.exports = {
   analyzePlayerProp,
   analyzePlayerForGame,
   autoAnalyzePlayer,
+  generateTopPicks,
   STAT_CATEGORIES,
 };

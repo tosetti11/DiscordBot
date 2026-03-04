@@ -4061,6 +4061,81 @@ function propsBackToPlayer() {
   propsSelectedPlayer = null;
 }
 
+// ── Top Picks ──
+
+async function propsGenerateTopPicks() {
+  const btn = document.getElementById('props-top-picks-btn');
+  const content = document.getElementById('props-top-picks-content');
+  const loading = document.getElementById('props-top-picks-loading');
+
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  content.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/props/top-picks');
+    const data = await res.json();
+
+    if (data.error) {
+      loading.innerHTML = `<div class="props-empty">${data.error}</div>`;
+      return;
+    }
+
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+
+    // Render overs
+    const oversList = document.getElementById('props-overs-list');
+    oversList.innerHTML = data.overs.length
+      ? data.overs.map((p, i) => propsRenderPickCard(p, i + 1, 'over')).join('')
+      : '<div class="props-empty">No strong OVER picks found today</div>';
+
+    // Render unders
+    const undersList = document.getElementById('props-unders-list');
+    undersList.innerHTML = data.unders.length
+      ? data.unders.map((p, i) => propsRenderPickCard(p, i + 1, 'under')).join('')
+      : '<div class="props-empty">No strong UNDER picks found today</div>';
+
+    // Meta info
+    const meta = document.getElementById('props-top-picks-meta');
+    const time = data.generatedAt ? new Date(data.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    meta.textContent = `Scanned ${data.gamesScanned} games · ${data.playersScanned} players analyzed · ${data.totalAnalyzed} props evaluated · Generated at ${time}`;
+
+    btn.textContent = 'Refresh Picks';
+  } catch (err) {
+    loading.innerHTML = '<div class="props-empty">Failed to generate picks. Try again.</div>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function propsRenderPickCard(pick, rank, type) {
+  const a = pick.analysis;
+  const prob = type === 'over' ? a.overProbability : a.underProbability;
+  const direction = type === 'over' ? 'OVER' : 'UNDER';
+  const headshot = pick.player.headshot || '';
+  const trendIcon = a.trending === 'up' ? '📈' : a.trending === 'down' ? '📉' : '➡️';
+  const vsOppStr = a.vsOpponent ? ` · vs opp: ${a.vsOpponent.avg} (${a.vsOpponent.games}g)` : '';
+  const hitRate = type === 'over' ? a.hitRateSeason : (100 - a.hitRateSeason);
+
+  return `
+    <div class="props-pick-card ${type}">
+      <span class="props-pick-rank">${rank}</span>
+      ${headshot ? `<img class="props-pick-avatar" src="${headshot}" alt="" loading="lazy">` : ''}
+      <div class="props-pick-info">
+        <div class="props-pick-name">${pick.player.name}</div>
+        <div class="props-pick-detail">${pick.teamAbbr} · ${pick.matchup} · ${pick.stat.shortLabel} ${direction} ${a.propLine}</div>
+        <div class="props-pick-detail">Avg: ${a.seasonAvg} · L5: ${a.avg5} ${trendIcon} · Hit: ${hitRate}%${vsOppStr}</div>
+      </div>
+      <div class="props-pick-right">
+        <div class="props-pick-prob ${type}">${prob}%</div>
+        <div class="props-pick-line">${a.confidence}</div>
+      </div>
+    </div>
+  `;
+}
+
 // ═══════════════════════════════════════════════
 //  Admin Analytics
 // ═══════════════════════════════════════════════
