@@ -2546,6 +2546,7 @@ textarea {
   max-width: 960px;
   margin: 0 auto;
   padding: 32px 24px;
+  overflow-x: hidden;
 }
 
 .tools-header {
@@ -2855,9 +2856,10 @@ textarea {
 /* Analysis cards */
 .props-analysis-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
+  overflow: hidden;
 }
 
 .props-result-card {
@@ -2865,6 +2867,8 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px;
+  overflow: hidden;
+  min-width: 0;
 }
 .props-result-card.high { border-left: 3px solid #22c55e; }
 .props-result-card.medium { border-left: 3px solid #f59e0b; }
@@ -2875,11 +2879,15 @@ textarea {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .props-stat-label {
   font-weight: 700;
   font-size: 14px;
   color: var(--text-primary);
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 .props-recommendation {
   font-weight: 700;
@@ -2917,13 +2925,19 @@ textarea {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
+  gap: 8px;
 }
 .props-stat-row .label {
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 .props-stat-row .value {
   color: var(--text-secondary);
   font-weight: 600;
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .props-stat-row .value.green { color: #22c55e; }
 .props-stat-row .value.red { color: #ef4444; }
@@ -3501,6 +3515,33 @@ textarea {
   .props-analysis-grid {
     grid-template-columns: 1fr;
   }
+  .props-result-card {
+    padding: 12px;
+  }
+  .props-stat-label {
+    font-size: 13px;
+  }
+  .props-recommendation {
+    font-size: 11px;
+    padding: 2px 8px;
+  }
+  .props-line-number {
+    font-size: 20px;
+  }
+  .props-stat-row {
+    font-size: 11px;
+  }
+  .props-player-banner {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .props-player-banner img {
+    width: 36px;
+    height: 36px;
+  }
+  .props-player-banner .player-name {
+    font-size: 14px;
+  }
   .props-hero-stats {
     flex-direction: column;
   }
@@ -3553,6 +3594,21 @@ textarea {
 @media (max-width: 480px) {
   .props-games-grid {
     grid-template-columns: 1fr;
+  }
+  .tools-container {
+    padding: 16px 10px;
+  }
+  .main-content {
+    padding: 16px 8px 80px;
+  }
+  .props-top-picks-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .props-confidence-bar {
+    flex-wrap: wrap;
+    gap: 4px;
   }
 }
 
