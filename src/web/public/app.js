@@ -4109,6 +4109,8 @@ async function propsGenerateTopPicks() {
     // Show share button
     const shareBtn = document.getElementById('props-share-btn');
     if (shareBtn) shareBtn.classList.remove('hidden');
+    // Refresh pick tracker to reflect the new/updated picks
+    propsLoadDailyHistory();
   } catch (err) {
     loading.innerHTML = '<div class="props-empty">Failed to generate picks. Try again.</div>';
   } finally {

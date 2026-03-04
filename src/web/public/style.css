@@ -3011,6 +3011,7 @@ textarea {
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;
+  overflow: hidden;
 }
 
 .props-top-picks-header {
@@ -3221,6 +3222,7 @@ textarea {
   background: var(--bg-surface);
   border-radius: 10px;
   border: 1px solid var(--border);
+  overflow: hidden;
 }
 
 .props-accuracy-header {
@@ -3392,6 +3394,7 @@ textarea {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
+  overflow: hidden;
 }
 
 .dh-pick-icon { font-size: 16px; flex-shrink: 0; }
@@ -3601,6 +3604,15 @@ textarea {
   .main-content {
     padding: 16px 8px 80px;
   }
+  .tool-card {
+    padding: 12px;
+  }
+  .props-top-picks-section {
+    padding: 10px;
+  }
+  .props-accuracy-section {
+    padding: 10px;
+  }
   .props-top-picks-header {
     flex-direction: column;
     align-items: flex-start;
@@ -3609,6 +3621,20 @@ textarea {
   .props-confidence-bar {
     flex-wrap: wrap;
     gap: 4px;
+  }
+  .props-pick-card {
+    padding: 8px 6px;
+    gap: 6px;
+  }
+  .dh-pick-main {
+    padding: 6px;
+  }
+  .dh-pick-prop {
+    min-width: 0;
+  }
+  .dh-pick-dir {
+    font-size: 11px;
+    white-space: nowrap;
   }
 }
 
