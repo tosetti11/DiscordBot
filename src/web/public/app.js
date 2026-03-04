@@ -4106,6 +4106,9 @@ async function propsGenerateTopPicks() {
     meta.innerHTML = `${lineLabel} · Scanned ${data.gamesScanned} games · ${data.playersScanned} players · ${data.totalAnalyzed} props · ${time}`;
 
     btn.textContent = 'Refresh Picks';
+    // Show share button
+    const shareBtn = document.getElementById('props-share-btn');
+    if (shareBtn) shareBtn.classList.remove('hidden');
   } catch (err) {
     loading.innerHTML = '<div class="props-empty">Failed to generate picks. Try again.</div>';
   } finally {
@@ -4145,6 +4148,119 @@ function propsRenderPickCard(pick, rank, type) {
 function formatOdds(odds) {
   if (odds === null || odds === undefined) return '';
   return odds > 0 ? `+${odds}` : `${odds}`;
+}
+
+// ═══════════════════════════════════════════════
+//  Prop Picks — Share as Image
+// ═══════════════════════════════════════════════
+
+async function propsShareTopPicks() {
+  const shareBtn = document.getElementById('props-share-btn');
+  const content = document.getElementById('props-top-picks-content');
+  if (!content || content.classList.contains('hidden')) return;
+
+  shareBtn.disabled = true;
+  shareBtn.textContent = '⏳ Capturing...';
+
+  try {
+    // Build a standalone clone for cleaner image capture
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:700px;padding:24px;background:#1a1a2e;border-radius:12px;font-family:Inter,system-ui,sans-serif;color:#e0e0e0;z-index:-1;';
+    
+    // Branded header
+    const header = document.createElement('div');
+    header.style.cssText = 'text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1);';
+    header.innerHTML = `
+      <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px;">🔥 Today's Top Picks</div>
+      <div style="font-size:12px;color:#888;">TheGamblingKingApp.com · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+    `;
+    wrapper.appendChild(header);
+
+    // Clone the picks grid
+    const gridClone = content.querySelector('.props-top-picks-grid').cloneNode(true);
+    wrapper.appendChild(gridClone);
+
+    // Clone meta info
+    const meta = document.getElementById('props-top-picks-meta');
+    if (meta && meta.textContent) {
+      const metaClone = meta.cloneNode(true);
+      metaClone.style.cssText = 'font-size:10px;color:#666;text-align:center;margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);';
+      wrapper.appendChild(metaClone);
+    }
+
+    document.body.appendChild(wrapper);
+
+    // Apply styles to cloned elements
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = `
+      .props-top-picks-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+      .props-picks-col-title { font-size:14px; font-weight:700; margin-bottom:10px; text-align:center; }
+      .props-picks-col-title.over { color:#22c55e; }
+      .props-picks-col-title.under { color:#ef4444; }
+      .props-picks-list { display:flex; flex-direction:column; gap:8px; }
+      .props-pick-card { display:flex; align-items:center; padding:8px 10px; border-radius:8px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); }
+      .props-pick-card.over { border-left:3px solid #22c55e; }
+      .props-pick-card.under { border-left:3px solid #ef4444; }
+      .props-pick-rank { font-size:14px; font-weight:800; min-width:20px; color:#888; margin-right:8px; }
+      .props-pick-avatar { width:36px; height:36px; border-radius:50%; margin-right:10px; object-fit:cover; }
+      .props-pick-info { flex:1; min-width:0; }
+      .props-pick-name { font-size:13px; font-weight:700; color:#fff; }
+      .props-pick-detail { font-size:10px; color:#aaa; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .props-pick-right { text-align:right; margin-left:8px; }
+      .props-pick-prob { font-size:16px; font-weight:800; }
+      .props-pick-prob.over { color:#22c55e; }
+      .props-pick-prob.under { color:#ef4444; }
+      .props-pick-line { font-size:9px; color:#888; margin-top:2px; }
+      .props-book-badge { font-size:8px; font-weight:600; text-transform:uppercase; padding:1px 4px; border-radius:3px; background:rgba(34,197,94,0.15); color:#22c55e; }
+      .props-book-badge.est { background:rgba(245,158,11,0.15); color:#f59e0b; }
+    `;
+    wrapper.appendChild(styleSheet);
+
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: '#1a1a2e',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+
+    document.body.removeChild(wrapper);
+
+    // Convert to blob and trigger download
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+
+      // Try clipboard first (modern browsers)
+      try {
+        if (navigator.clipboard && navigator.clipboard.write) {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          shareBtn.textContent = '✅ Copied!';
+          setTimeout(() => { shareBtn.textContent = '📤 Share'; }, 2000);
+          return;
+        }
+      } catch (clipErr) {
+        // Clipboard not available, fall through to download
+      }
+
+      // Fallback: download the image
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `top-picks-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      shareBtn.textContent = '✅ Saved!';
+      setTimeout(() => { shareBtn.textContent = '📤 Share'; }, 2000);
+    }, 'image/png');
+
+  } catch (err) {
+    console.error('[Props] Share error:', err);
+    shareBtn.textContent = '❌ Error';
+    setTimeout(() => { shareBtn.textContent = '📤 Share'; }, 2000);
+  } finally {
+    shareBtn.disabled = false;
+  }
 }
 
 // ═══════════════════════════════════════════════

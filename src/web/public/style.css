@@ -3005,6 +3005,11 @@ textarea {
   justify-content: space-between;
   margin-bottom: 6px;
 }
+.props-top-picks-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .props-top-picks-header h4 {
   font-size: 16px;
   font-weight: 700;
@@ -3030,6 +3035,26 @@ textarea {
 }
 .btn-accent:hover { opacity: .85; }
 .btn-accent:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.btn-share {
+  background: rgba(255,255,255,0.08);
+  color: #e0e0e0;
+  border: 1px solid rgba(255,255,255,0.12);
+  cursor: pointer;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 12px;
+  transition: all .2s;
+}
+.btn-share:hover {
+  background: rgba(255,255,255,0.14);
+  border-color: rgba(255,255,255,0.2);
+}
+.btn-share:disabled {
   opacity: .5;
   cursor: not-allowed;
 }

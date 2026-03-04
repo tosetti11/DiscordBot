@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=34">
+  <link rel="stylesheet" href="/style.css?v=35">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -1347,7 +1347,10 @@
         <div id="props-top-picks" class="props-top-picks-section">
           <div class="props-top-picks-header">
             <h4>🔥 Today's Top Picks</h4>
-            <button class="btn btn-sm btn-accent" onclick="propsGenerateTopPicks()" id="props-top-picks-btn">Generate Top Picks</button>
+            <div class="props-top-picks-actions">
+              <button class="btn btn-sm btn-share hidden" onclick="propsShareTopPicks()" id="props-share-btn" title="Share as image">📤 Share</button>
+              <button class="btn btn-sm btn-accent" onclick="propsGenerateTopPicks()" id="props-top-picks-btn">Generate Top Picks</button>
+            </div>
           </div>
           <p class="props-top-picks-desc">Scans every player in tonight's games and surfaces the strongest OVER and UNDER props based on season averages, recent trends, hit rates, and matchup data.</p>
           <div id="props-top-picks-content" class="hidden">
@@ -1671,6 +1674,7 @@
     </div>
   </div>
 
-  <script src="/app.js?v=44"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="/app.js?v=45"></script>
 </body>
 </html>
