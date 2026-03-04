@@ -4102,7 +4102,8 @@ async function propsGenerateTopPicks() {
     // Meta info
     const meta = document.getElementById('props-top-picks-meta');
     const time = data.generatedAt ? new Date(data.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
-    meta.textContent = `Scanned ${data.gamesScanned} games · ${data.playersScanned} players analyzed · ${data.totalAnalyzed} props evaluated · Generated at ${time}`;
+    const lineLabel = data.usingRealLines ? '✅ Using real sportsbook lines' : '⚠️ Using estimated lines (no API key)';
+    meta.innerHTML = `${lineLabel} · Scanned ${data.gamesScanned} games · ${data.playersScanned} players · ${data.totalAnalyzed} props · ${time}`;
 
     btn.textContent = 'Refresh Picks';
   } catch (err) {
@@ -4120,6 +4121,9 @@ function propsRenderPickCard(pick, rank, type) {
   const trendIcon = a.trending === 'up' ? '📈' : a.trending === 'down' ? '📉' : '➡️';
   const vsOppStr = a.vsOpponent ? ` · vs opp: ${a.vsOpponent.avg} (${a.vsOpponent.games}g)` : '';
   const hitRate = type === 'over' ? a.hitRateSeason : (100 - a.hitRateSeason);
+  const lineSource = pick.lineSource && pick.lineSource !== 'generated' ? pick.lineSource : '';
+  const bookBadge = lineSource ? `<span class="props-book-badge">${lineSource}</span>` : '<span class="props-book-badge est">estimated</span>';
+  const oddsStr = pick.bookOdds ? ` (${type === 'over' ? formatOdds(pick.bookOdds.over) : formatOdds(pick.bookOdds.under)})` : '';
 
   return `
     <div class="props-pick-card ${type}">
@@ -4127,7 +4131,7 @@ function propsRenderPickCard(pick, rank, type) {
       ${headshot ? `<img class="props-pick-avatar" src="${headshot}" alt="" loading="lazy">` : ''}
       <div class="props-pick-info">
         <div class="props-pick-name">${pick.player.name}</div>
-        <div class="props-pick-detail">${pick.teamAbbr} · ${pick.matchup} · ${pick.stat.shortLabel} ${direction} ${a.propLine}</div>
+        <div class="props-pick-detail">${pick.teamAbbr} · ${pick.matchup} · ${pick.stat.shortLabel} ${direction} ${a.propLine}${oddsStr} ${bookBadge}</div>
         <div class="props-pick-detail">Avg: ${a.seasonAvg} · L5: ${a.avg5} ${trendIcon} · Hit: ${hitRate}%${vsOppStr}</div>
       </div>
       <div class="props-pick-right">
@@ -4136,6 +4140,11 @@ function propsRenderPickCard(pick, rank, type) {
       </div>
     </div>
   `;
+}
+
+function formatOdds(odds) {
+  if (odds === null || odds === undefined) return '';
+  return odds > 0 ? `+${odds}` : `${odds}`;
 }
 
 // ═══════════════════════════════════════════════

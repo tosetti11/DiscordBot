@@ -1,22 +1,200 @@
 /**
  * NBA Player Props Analysis Service
- * Uses ESPN + NBA.com unofficial APIs (free, no key required).
+ * Uses ESPN APIs for player stats + The Odds API for real sportsbook lines.
  *
  * Fetches player season stats, game logs, matchup history,
- * and opponent defensive rankings to generate prop recommendations.
+ * and real prop lines from DraftKings/FanDuel to generate
+ * data-driven prop recommendations.
  */
 
 // ── Cache ──
 const cache = new Map();
 const CACHE_TTL = 5 * 60_000; // 5 min
+const ODDS_CACHE_TTL = 30 * 60_000; // 30 min — real lines don't change that fast
 
 function getCached(key) {
   const e = cache.get(key);
   if (e && Date.now() - e.ts < CACHE_TTL) return e.data;
   return null;
 }
+function getCachedOdds(key) {
+  const e = cache.get(key);
+  if (e && Date.now() - e.ts < ODDS_CACHE_TTL) return e.data;
+  return null;
+}
 function setCache(key, data) {
   cache.set(key, { data, ts: Date.now() });
+}
+
+// ── The Odds API (real sportsbook lines) ──
+const ODDS_API_KEY = process.env.ODDS_API_KEY || '';
+const ODDS_API_BASE = 'https://api.the-odds-api.com/v4';
+
+// Map our internal stat keys to Odds API market keys
+const STAT_TO_MARKET = {
+  pts: 'player_points',
+  reb: 'player_rebounds',
+  ast: 'player_assists',
+  fg3: 'player_threes',
+};
+
+// Reverse map: market key → our stat key
+const MARKET_TO_STAT = {};
+for (const [k, v] of Object.entries(STAT_TO_MARKET)) MARKET_TO_STAT[v] = k;
+
+/**
+ * Normalize a player name for fuzzy matching
+ * "LeBron James" → "lebron james"
+ * "P.J. Washington" → "pj washington"
+ */
+function normalizeName(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/[.']/g, '')   // remove periods and apostrophes
+    .replace(/\s+/g, ' ')   // collapse whitespace
+    .trim();
+}
+
+/**
+ * Fetch today's NBA events from The Odds API (FREE — no quota cost)
+ */
+async function fetchOddsApiEvents() {
+  if (!ODDS_API_KEY) return [];
+  const cacheKey = 'odds-api-events';
+  const cached = getCachedOdds(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const url = `${ODDS_API_BASE}/sports/basketball_nba/events?apiKey=${ODDS_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error(`[Props] Odds API events ${res.status}: ${res.statusText}`);
+      return [];
+    }
+    const events = await res.json();
+    setCache(cacheKey, events);
+    console.log(`[Props] Odds API: ${events.length} NBA events found`);
+    return events;
+  } catch (err) {
+    console.error('[Props] Odds API events error:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Fetch player props for a single event from The Odds API.
+ * Markets: player_points, player_rebounds, player_assists, player_threes
+ * Cost: 4 credits per event (4 markets × 1 region)
+ */
+async function fetchEventProps(eventId) {
+  if (!ODDS_API_KEY) return null;
+  const cacheKey = `odds-props-${eventId}`;
+  const cached = getCachedOdds(cacheKey);
+  if (cached) return cached;
+
+  const markets = Object.values(STAT_TO_MARKET).join(',');
+  const url = `${ODDS_API_BASE}/sports/basketball_nba/events/${eventId}/odds`
+    + `?apiKey=${ODDS_API_KEY}&regions=us&markets=${markets}&oddsFormat=american&bookmakers=draftkings,fanduel`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error(`[Props] Odds API event props ${res.status}: ${res.statusText}`);
+      // Log remaining quota
+      const remaining = res.headers.get('x-requests-remaining');
+      if (remaining) console.log(`[Props] Odds API quota remaining: ${remaining}`);
+      return null;
+    }
+
+    const remaining = res.headers.get('x-requests-remaining');
+    const used = res.headers.get('x-requests-used');
+    console.log(`[Props] Odds API quota: ${used} used, ${remaining} remaining`);
+
+    const data = await res.json();
+    setCache(cacheKey, data);
+    return data;
+  } catch (err) {
+    console.error('[Props] Odds API event props error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Fetch all player prop lines for today's games.
+ * Returns a map: { "lebron james": { pts: 25.5, reb: 7.5, ast: 8.5, fg3: 2.5 }, ... }
+ * Each entry also has odds: { "lebron james": { pts: { line: 25.5, overOdds: -110, underOdds: -110, book: "draftkings" } } }
+ */
+async function fetchAllTodaysProps() {
+  const cacheKey = 'all-todays-props';
+  const cached = getCachedOdds(cacheKey);
+  if (cached) return cached;
+
+  if (!ODDS_API_KEY) {
+    console.log('[Props] No ODDS_API_KEY set — using generated lines');
+    return null;
+  }
+
+  const events = await fetchOddsApiEvents();
+  if (!events.length) return null;
+
+  // Filter to today's events only (not yet started or recently started)
+  const now = new Date();
+  const todayEvents = events.filter(ev => {
+    const start = new Date(ev.commence_time);
+    const diffHours = (start - now) / (1000 * 60 * 60);
+    return diffHours > -3 && diffHours < 24; // within a reasonable window
+  });
+
+  console.log(`[Props] Fetching props for ${todayEvents.length} events...`);
+
+  const propMap = {}; // normalized player name → { pts: {line, overOdds, underOdds, book}, ... }
+
+  for (const event of todayEvents) {
+    const data = await fetchEventProps(event.id);
+    if (!data || !data.bookmakers) continue;
+
+    // Prefer DraftKings, fall back to FanDuel, fall back to first available
+    const dk = data.bookmakers.find(b => b.key === 'draftkings');
+    const fd = data.bookmakers.find(b => b.key === 'fanduel');
+    const book = dk || fd || data.bookmakers[0];
+    if (!book) continue;
+
+    const bookName = book.title || book.key;
+
+    for (const market of (book.markets || [])) {
+      const statKey = MARKET_TO_STAT[market.key];
+      if (!statKey) continue;
+
+      for (const outcome of (market.outcomes || [])) {
+        if (outcome.name !== 'Over' || outcome.point === undefined) continue;
+
+        const playerName = normalizeName(outcome.description);
+        if (!playerName) continue;
+
+        if (!propMap[playerName]) propMap[playerName] = {};
+        propMap[playerName][statKey] = {
+          line: outcome.point,
+          overOdds: outcome.price,
+          underOdds: null, // will fill below
+          book: bookName,
+        };
+      }
+
+      // Fill underOdds
+      for (const outcome of (market.outcomes || [])) {
+        if (outcome.name !== 'Under' || outcome.point === undefined) continue;
+        const playerName = normalizeName(outcome.description);
+        if (propMap[playerName]?.[statKey]) {
+          propMap[playerName][statKey].underOdds = outcome.price;
+        }
+      }
+    }
+  }
+
+  const playerCount = Object.keys(propMap).length;
+  console.log(`[Props] Got real prop lines for ${playerCount} players`);
+  setCache(cacheKey, propMap);
+  return propMap;
 }
 
 // ── ESPN helpers ──
@@ -483,10 +661,8 @@ async function autoAnalyzePlayer(playerId, opponentTeamId) {
 
 /**
  * Generate top 5 OVER and top 5 UNDER picks across all of today's games.
- * - Fetches every roster for today's games
- * - Filters to "key" players (20+ games, 15+ min avg)
- * - Runs auto-analysis on each player
- * - Ranks by over/under probability and returns best picks
+ * Now fetches REAL sportsbook lines from The Odds API (DraftKings/FanDuel).
+ * Falls back to generated lines if no API key is configured.
  */
 async function generateTopPicks() {
   const cacheKey = 'top-picks-today';
@@ -495,6 +671,11 @@ async function generateTopPicks() {
 
   const games = await getTodaysNBAGames();
   if (!games.length) return { overs: [], unders: [], gamesScanned: 0, playersScanned: 0 };
+
+  // Fetch real prop lines from The Odds API (returns null if no key)
+  const realProps = await fetchAllTodaysProps();
+  const usingRealLines = !!realProps;
+  console.log(`[Props] Using ${usingRealLines ? 'REAL sportsbook' : 'generated'} prop lines`);
 
   // Collect all (player, opponentId, game) tuples
   const playerTasks = [];
@@ -512,7 +693,7 @@ async function generateTopPicks() {
   }
 
   // Analyze players in batches of 6 to avoid hammering ESPN
-  const allPicks = []; // { player, teamName, game, stat, analysis }
+  const allPicks = [];
   let playersScanned = 0;
   const BATCH_SIZE = 6;
 
@@ -528,6 +709,10 @@ async function generateTopPicks() {
 
         playersScanned++;
 
+        // Look up real prop lines for this player
+        const playerNameNorm = normalizeName(player.name);
+        const playerProps = realProps ? realProps[playerNameNorm] : null;
+
         // Run analysis on key stat categories (PTS, REB, AST, 3PM)
         const keyCats = STAT_CATEGORIES.filter(c => ['pts', 'reb', 'ast', 'fg3'].includes(c.key));
         const picks = [];
@@ -537,7 +722,25 @@ async function generateTopPicks() {
 
           const values = validGames.map(g => getStatValue(g.stats, cat.key));
           const avg = values.reduce((a, b) => a + b, 0) / values.length;
-          const propLine = Math.round(avg * 2) / 2;
+
+          // Use REAL line from sportsbook, or fall back to generated
+          let propLine;
+          let lineSource = 'generated';
+          let bookOdds = null;
+
+          if (playerProps && playerProps[cat.key]) {
+            propLine = playerProps[cat.key].line;
+            lineSource = playerProps[cat.key].book || 'sportsbook';
+            bookOdds = {
+              over: playerProps[cat.key].overOdds,
+              under: playerProps[cat.key].underOdds,
+              book: playerProps[cat.key].book,
+            };
+          } else {
+            // No sportsbook line available — generate from average
+            propLine = Math.round(avg * 2) / 2;
+          }
+
           if (propLine <= 0) continue;
 
           const analysis = analyzePlayerProp(stats, cat.key, propLine, opponentId);
@@ -551,6 +754,8 @@ async function generateTopPicks() {
             gameId: game.id,
             stat: cat,
             analysis,
+            lineSource,
+            bookOdds,
           });
         }
         return picks;
@@ -565,13 +770,23 @@ async function generateTopPicks() {
   }
 
   // Sort for best overs (highest overProbability) and best unders (highest underProbability)
+  // Prioritize picks with real sportsbook lines over generated ones
   const overCandidates = allPicks
     .filter(p => p.analysis.overProbability >= 58)
-    .sort((a, b) => b.analysis.overProbability - a.analysis.overProbability);
+    .sort((a, b) => {
+      // Real lines first, then by probability
+      if (a.lineSource !== 'generated' && b.lineSource === 'generated') return -1;
+      if (a.lineSource === 'generated' && b.lineSource !== 'generated') return 1;
+      return b.analysis.overProbability - a.analysis.overProbability;
+    });
 
   const underCandidates = allPicks
     .filter(p => p.analysis.underProbability >= 58)
-    .sort((a, b) => b.analysis.underProbability - a.analysis.underProbability);
+    .sort((a, b) => {
+      if (a.lineSource !== 'generated' && b.lineSource === 'generated') return -1;
+      if (a.lineSource === 'generated' && b.lineSource !== 'generated') return 1;
+      return b.analysis.underProbability - a.analysis.underProbability;
+    });
 
   const result = {
     overs: overCandidates.slice(0, 5),
@@ -579,6 +794,7 @@ async function generateTopPicks() {
     gamesScanned: games.length,
     playersScanned,
     totalAnalyzed: allPicks.length,
+    usingRealLines,
     generatedAt: new Date().toISOString(),
   };
 
@@ -675,5 +891,6 @@ module.exports = {
   autoAnalyzePlayer,
   generateTopPicks,
   resolvePicksFromESPN,
+  fetchAllTodaysProps,
   STAT_CATEGORIES,
 };
