@@ -4252,8 +4252,8 @@ function propsRenderHistoryPick(p) {
   const hitMissLabel = p.hit === true ? 'HIT' : p.hit === false ? 'MISS' : '';
 
   return `
-    <div class="dh-pick ${resultClass}" onclick="propsToggleBreakdown(this)">
-      <div class="dh-pick-main">
+    <div class="dh-pick ${resultClass}">
+      <div class="dh-pick-main" onclick="propsToggleBreakdown(this.parentElement)">
         <span class="dh-pick-icon">${icon}</span>
         ${p.headshot ? `<img class="dh-pick-avatar" src="${p.headshot}" alt="" loading="lazy">` : ''}
         <div class="dh-pick-info">
