@@ -209,6 +209,14 @@ function createWebServer() {
     }
   }
 
+  // Owner-only middleware (must follow authMiddleware)
+  function ownerMiddleware(req, res, next) {
+    if (req.user.discordId !== SITE_OWNER_ID) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    next();
+  }
+
   // ─── OAuth2 Routes ───
 
   // Redirect to Discord OAuth2
@@ -2465,7 +2473,7 @@ Rules:
   // ══════════════════════════════════════════════════════════════
 
   // Get today's NBA games
-  app.get('/api/props/games', authMiddleware, async (req, res) => {
+  app.get('/api/props/games', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const games = await nbaProps.getTodaysNBAGames();
       res.json(games);
@@ -2476,7 +2484,7 @@ Rules:
   });
 
   // Get roster for a team
-  app.get('/api/props/roster/:teamId', authMiddleware, async (req, res) => {
+  app.get('/api/props/roster/:teamId', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const roster = await nbaProps.getTeamRoster(req.params.teamId);
       res.json(roster);
@@ -2487,7 +2495,7 @@ Rules:
   });
 
   // Analyze a player: auto-generate lines based on season averages
-  app.get('/api/props/analyze/:playerId', authMiddleware, async (req, res) => {
+  app.get('/api/props/analyze/:playerId', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const { playerId } = req.params;
       const { opponentId } = req.query;
@@ -2502,7 +2510,7 @@ Rules:
   });
 
   // Analyze a player with custom prop lines
-  app.post('/api/props/analyze', authMiddleware, async (req, res) => {
+  app.post('/api/props/analyze', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const { playerId, opponentId, propLines } = req.body;
       if (!playerId || !opponentId) return res.status(400).json({ error: 'playerId and opponentId required' });
@@ -2516,7 +2524,7 @@ Rules:
   });
 
   // Generate top 5 OVER and top 5 UNDER picks across all today's games
-  app.get('/api/props/top-picks', authMiddleware, async (req, res) => {
+  app.get('/api/props/top-picks', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const result = await nbaProps.generateTopPicks();
       res.json(result);
@@ -2535,7 +2543,7 @@ Rules:
   });
 
   // Get pick accuracy stats
-  app.get('/api/props/accuracy', authMiddleware, async (req, res) => {
+  app.get('/api/props/accuracy', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const stats = await propPicksDb.getAccuracyStats();
       res.json(stats || { totalPicks: 0 });
@@ -2546,7 +2554,7 @@ Rules:
   });
 
   // Resolve yesterday's picks by checking ESPN box scores
-  app.post('/api/props/resolve', authMiddleware, async (req, res) => {
+  app.post('/api/props/resolve', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       // Get yesterday's date (or provided date)
       const date = req.body.date || (() => {
@@ -2571,7 +2579,7 @@ Rules:
   });
 
   // Get picks for a specific date
-  app.get('/api/props/history/:date', authMiddleware, async (req, res) => {
+  app.get('/api/props/history/:date', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const picks = await propPicksDb.getPicksByDate(req.params.date);
       res.json(picks);

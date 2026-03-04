@@ -1459,6 +1459,7 @@ function switchPage(page) {
     install: document.getElementById('install-page'),
     analytics: document.getElementById('analytics-page'),
     announce: document.getElementById('announce-page'),
+    props: document.getElementById('props-page'),
     scoreboard: document.getElementById('scoreboard-page'),
   };
 
@@ -1479,7 +1480,7 @@ function switchPage(page) {
   if (page === 'following') initFollowingPage();
   if (page === 'closebets') initCloseBetsPage();
   if (page === 'scoreboard') initScoreboardPage();
-  if (page === 'tools') initPropsIfNeeded();
+  if (page === 'props') initPropsIfNeeded();
 }
 
 // ═══════════════════════════════════════════════
@@ -4270,12 +4271,14 @@ async function propsCheckResults() {
 // ═══════════════════════════════════════════════
 
 async function checkOwnerFeatures() {
-  // Analytics: owner-only (try the endpoint)
+  // Analytics + Props: owner-only (try the endpoint)
   try {
     const res = await fetch('/api/analytics');
     if (res.ok) {
       const navLink = document.getElementById('nav-analytics');
       if (navLink) navLink.classList.remove('hidden');
+      const propsLink = document.getElementById('nav-props');
+      if (propsLink) propsLink.classList.remove('hidden');
     }
   } catch (e) {}
 

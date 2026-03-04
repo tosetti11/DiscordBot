@@ -99,6 +99,9 @@
             <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="reminders" id="nav-reminders" onclick="switchPage('reminders')">
               <span class="sidebar-icon">⏰</span> Reminders
             </a>
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="props" id="nav-props" onclick="switchPage('props')">
+              <span class="sidebar-icon">🏀</span> Props
+            </a>
             <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="analytics" id="nav-analytics" onclick="switchPage('analytics')">
               <span class="sidebar-icon">📈</span> Analytics
             </a>
@@ -983,193 +986,6 @@
           <p class="slip-subtitle">Handy betting utilities</p>
         </div>
 
-        <!-- NBA Player Props Analyzer (full-width above the grid) -->
-        <div class="tool-card props-analyzer-card" id="props-tool">
-          <h3 class="card-title">🏀 NBA Player Props Analyzer</h3>
-          <p class="props-subtitle">Select a game, pick a player, and get data-driven prop recommendations based on season stats, recent trends, matchup history, and more.</p>
-
-          <!-- Top Picks Section -->
-          <div id="props-top-picks" class="props-top-picks-section">
-            <div class="props-top-picks-header">
-              <h4>🔥 Today's Top Picks</h4>
-              <button class="btn btn-sm btn-accent" onclick="propsGenerateTopPicks()" id="props-top-picks-btn">Generate Top Picks</button>
-            </div>
-            <p class="props-top-picks-desc">Scans every player in tonight's games and surfaces the strongest OVER and UNDER props based on season averages, recent trends, hit rates, and matchup data.</p>
-            <div id="props-top-picks-content" class="hidden">
-              <div class="props-top-picks-grid">
-                <div class="props-picks-col">
-                  <h5 class="props-picks-col-title over">📈 Top 5 OVERs</h5>
-                  <div id="props-overs-list" class="props-picks-list"></div>
-                </div>
-                <div class="props-picks-col">
-                  <h5 class="props-picks-col-title under">📉 Top 5 UNDERs</h5>
-                  <div id="props-unders-list" class="props-picks-list"></div>
-                </div>
-              </div>
-              <div id="props-top-picks-meta" class="props-top-picks-meta"></div>
-            </div>
-            <div id="props-top-picks-loading" class="hidden">
-              <div class="props-loading">Scanning all players across today's games... this may take 30-60 seconds</div>
-            </div>
-          </div>
-
-          <!-- Pick Accuracy Dashboard -->
-          <div id="props-accuracy" class="props-accuracy-section">
-            <div class="props-accuracy-header">
-              <h4>📊 Pick Tracker</h4>
-              <div class="props-accuracy-actions">
-                <button class="btn btn-sm btn-outline" onclick="propsCheckResults()" id="props-resolve-btn">Check Results</button>
-                <button class="btn btn-sm btn-outline" onclick="propsLoadAccuracy()" id="props-accuracy-refresh" title="Refresh stats">↻</button>
-              </div>
-            </div>
-
-            <div id="props-accuracy-content" class="props-accuracy-content">
-              <!-- Stats cards row -->
-              <div class="props-accuracy-stats" id="props-accuracy-stats">
-                <div class="props-stat-card">
-                  <div class="props-stat-value" id="acc-overall">—</div>
-                  <div class="props-stat-label">Hit Rate</div>
-                  <div class="props-stat-sub" id="acc-record">0-0</div>
-                </div>
-                <div class="props-stat-card over-card">
-                  <div class="props-stat-value" id="acc-over">—</div>
-                  <div class="props-stat-label">OVERs</div>
-                  <div class="props-stat-sub" id="acc-over-record">0-0</div>
-                </div>
-                <div class="props-stat-card under-card">
-                  <div class="props-stat-value" id="acc-under">—</div>
-                  <div class="props-stat-label">UNDERs</div>
-                  <div class="props-stat-sub" id="acc-under-record">0-0</div>
-                </div>
-                <div class="props-stat-card streak-card">
-                  <div class="props-stat-value" id="acc-streak">—</div>
-                  <div class="props-stat-label">Streak</div>
-                  <div class="props-stat-sub" id="acc-streak-type">&nbsp;</div>
-                </div>
-              </div>
-
-              <!-- Time period + breakdowns -->
-              <div class="props-accuracy-breakdowns" id="props-accuracy-breakdowns">
-                <div class="props-breakdown-group">
-                  <h5>📅 Time Period</h5>
-                  <div class="props-breakdown-row">
-                    <span>Last 7 Days</span>
-                    <span id="acc-7d" class="props-breakdown-val">—</span>
-                  </div>
-                  <div class="props-breakdown-row">
-                    <span>Last 30 Days</span>
-                    <span id="acc-30d" class="props-breakdown-val">—</span>
-                  </div>
-                </div>
-                <div class="props-breakdown-group">
-                  <h5>🎯 By Confidence</h5>
-                  <div class="props-breakdown-row">
-                    <span>🟢 High</span>
-                    <span id="acc-conf-high" class="props-breakdown-val">—</span>
-                  </div>
-                  <div class="props-breakdown-row">
-                    <span>🟡 Medium</span>
-                    <span id="acc-conf-medium" class="props-breakdown-val">—</span>
-                  </div>
-                  <div class="props-breakdown-row">
-                    <span>🔴 Low</span>
-                    <span id="acc-conf-low" class="props-breakdown-val">—</span>
-                  </div>
-                </div>
-                <div class="props-breakdown-group">
-                  <h5>📈 By Stat</h5>
-                  <div class="props-breakdown-row">
-                    <span>Points</span>
-                    <span id="acc-stat-pts" class="props-breakdown-val">—</span>
-                  </div>
-                  <div class="props-breakdown-row">
-                    <span>Rebounds</span>
-                    <span id="acc-stat-reb" class="props-breakdown-val">—</span>
-                  </div>
-                  <div class="props-breakdown-row">
-                    <span>Assists</span>
-                    <span id="acc-stat-ast" class="props-breakdown-val">—</span>
-                  </div>
-                  <div class="props-breakdown-row">
-                    <span>3-Pointers</span>
-                    <span id="acc-stat-fg3" class="props-breakdown-val">—</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Recent picks table -->
-              <div class="props-recent-picks" id="props-recent-picks-section">
-                <h5>🕒 Recent Picks</h5>
-                <div id="props-recent-list" class="props-recent-list"></div>
-              </div>
-
-              <!-- Empty state -->
-              <div id="props-accuracy-empty" class="props-accuracy-empty hidden">
-                <p>No tracked picks yet. Generate Top Picks on a game day to start tracking!</p>
-              </div>
-            </div>
-
-            <div id="props-resolve-loading" class="hidden">
-              <div class="props-loading">Checking ESPN box scores for results...</div>
-            </div>
-          </div>
-
-          <hr class="props-divider">
-
-          <!-- Step 1: Pick a game -->
-          <div id="props-step-games" class="props-step">
-            <div class="props-step-header">
-              <span class="props-step-num">1</span>
-              <span>Select Today's Game</span>
-              <button class="btn btn-sm btn-outline" onclick="propsLoadGames()" id="props-refresh-btn" title="Refresh games">↻</button>
-            </div>
-            <div id="props-games-list" class="props-games-grid">
-              <div class="props-loading">Loading today's games...</div>
-            </div>
-            <div id="props-no-games" class="props-empty hidden">No NBA games scheduled today.</div>
-          </div>
-
-          <!-- Step 2: Pick a player -->
-          <div id="props-step-player" class="props-step hidden">
-            <div class="props-step-header">
-              <span class="props-step-num">2</span>
-              <span>Select Player</span>
-              <button class="btn btn-sm btn-outline" onclick="propsBackToGames()">← Back</button>
-            </div>
-            <div id="props-game-banner" class="props-game-banner"></div>
-            <div class="props-team-columns" id="props-rosters">
-              <div class="props-team-col">
-                <h4 id="props-away-team-name" class="props-team-label"></h4>
-                <div id="props-away-roster" class="props-roster-list"></div>
-              </div>
-              <div class="props-team-col">
-                <h4 id="props-home-team-name" class="props-team-label"></h4>
-                <div id="props-home-roster" class="props-roster-list"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 3: Analysis results -->
-          <div id="props-step-results" class="props-step hidden">
-            <div class="props-step-header">
-              <span class="props-step-num">3</span>
-              <span>Analysis Results</span>
-              <button class="btn btn-sm btn-outline" onclick="propsBackToPlayer()">← Back</button>
-            </div>
-            <div id="props-player-banner" class="props-player-banner"></div>
-            <div id="props-analysis-cards" class="props-analysis-grid"></div>
-            <div id="props-game-log" class="props-gamelog-section hidden">
-              <h4>📋 Recent Game Log</h4>
-              <div class="props-gamelog-table-wrap">
-                <table id="props-gamelog-table" class="props-gamelog-table">
-                  <thead><tr id="props-gamelog-head"></tr></thead>
-                  <tbody id="props-gamelog-body"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div class="tools-layout">
           <!-- Odds Converter -->
           <div class="tool-card">
@@ -1512,6 +1328,200 @@
           </div>
 
           <div id="welcome-status" class="announce-status hidden"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Props Analyzer Page (owner only) -->
+  <main id="props-page" class="main-content hidden">
+    <div class="tools-container">
+      <div class="tools-header">
+        <h2>🏀 NBA Player Props Analyzer</h2>
+        <p class="slip-subtitle">Data-driven prop recommendations based on season stats, recent trends, matchup history, and more.</p>
+      </div>
+
+      <div class="tool-card props-analyzer-card" id="props-tool">
+
+        <!-- Top Picks Section -->
+        <div id="props-top-picks" class="props-top-picks-section">
+          <div class="props-top-picks-header">
+            <h4>🔥 Today's Top Picks</h4>
+            <button class="btn btn-sm btn-accent" onclick="propsGenerateTopPicks()" id="props-top-picks-btn">Generate Top Picks</button>
+          </div>
+          <p class="props-top-picks-desc">Scans every player in tonight's games and surfaces the strongest OVER and UNDER props based on season averages, recent trends, hit rates, and matchup data.</p>
+          <div id="props-top-picks-content" class="hidden">
+            <div class="props-top-picks-grid">
+              <div class="props-picks-col">
+                <h5 class="props-picks-col-title over">📈 Top 5 OVERs</h5>
+                <div id="props-overs-list" class="props-picks-list"></div>
+              </div>
+              <div class="props-picks-col">
+                <h5 class="props-picks-col-title under">📉 Top 5 UNDERs</h5>
+                <div id="props-unders-list" class="props-picks-list"></div>
+              </div>
+            </div>
+            <div id="props-top-picks-meta" class="props-top-picks-meta"></div>
+          </div>
+          <div id="props-top-picks-loading" class="hidden">
+            <div class="props-loading">Scanning all players across today's games... this may take 30-60 seconds</div>
+          </div>
+        </div>
+
+        <!-- Pick Accuracy Dashboard -->
+        <div id="props-accuracy" class="props-accuracy-section">
+          <div class="props-accuracy-header">
+            <h4>📊 Pick Tracker</h4>
+            <div class="props-accuracy-actions">
+              <button class="btn btn-sm btn-outline" onclick="propsCheckResults()" id="props-resolve-btn">Check Results</button>
+              <button class="btn btn-sm btn-outline" onclick="propsLoadAccuracy()" id="props-accuracy-refresh" title="Refresh stats">↻</button>
+            </div>
+          </div>
+
+          <div id="props-accuracy-content" class="props-accuracy-content">
+            <!-- Stats cards row -->
+            <div class="props-accuracy-stats" id="props-accuracy-stats">
+              <div class="props-stat-card">
+                <div class="props-stat-value" id="acc-overall">—</div>
+                <div class="props-stat-label">Hit Rate</div>
+                <div class="props-stat-sub" id="acc-record">0-0</div>
+              </div>
+              <div class="props-stat-card over-card">
+                <div class="props-stat-value" id="acc-over">—</div>
+                <div class="props-stat-label">OVERs</div>
+                <div class="props-stat-sub" id="acc-over-record">0-0</div>
+              </div>
+              <div class="props-stat-card under-card">
+                <div class="props-stat-value" id="acc-under">—</div>
+                <div class="props-stat-label">UNDERs</div>
+                <div class="props-stat-sub" id="acc-under-record">0-0</div>
+              </div>
+              <div class="props-stat-card streak-card">
+                <div class="props-stat-value" id="acc-streak">—</div>
+                <div class="props-stat-label">Streak</div>
+                <div class="props-stat-sub" id="acc-streak-type">&nbsp;</div>
+              </div>
+            </div>
+
+            <!-- Time period + breakdowns -->
+            <div class="props-accuracy-breakdowns" id="props-accuracy-breakdowns">
+              <div class="props-breakdown-group">
+                <h5>📅 Time Period</h5>
+                <div class="props-breakdown-row">
+                  <span>Last 7 Days</span>
+                  <span id="acc-7d" class="props-breakdown-val">—</span>
+                </div>
+                <div class="props-breakdown-row">
+                  <span>Last 30 Days</span>
+                  <span id="acc-30d" class="props-breakdown-val">—</span>
+                </div>
+              </div>
+              <div class="props-breakdown-group">
+                <h5>🎯 By Confidence</h5>
+                <div class="props-breakdown-row">
+                  <span>🟢 High</span>
+                  <span id="acc-conf-high" class="props-breakdown-val">—</span>
+                </div>
+                <div class="props-breakdown-row">
+                  <span>🟡 Medium</span>
+                  <span id="acc-conf-medium" class="props-breakdown-val">—</span>
+                </div>
+                <div class="props-breakdown-row">
+                  <span>🔴 Low</span>
+                  <span id="acc-conf-low" class="props-breakdown-val">—</span>
+                </div>
+              </div>
+              <div class="props-breakdown-group">
+                <h5>📈 By Stat</h5>
+                <div class="props-breakdown-row">
+                  <span>Points</span>
+                  <span id="acc-stat-pts" class="props-breakdown-val">—</span>
+                </div>
+                <div class="props-breakdown-row">
+                  <span>Rebounds</span>
+                  <span id="acc-stat-reb" class="props-breakdown-val">—</span>
+                </div>
+                <div class="props-breakdown-row">
+                  <span>Assists</span>
+                  <span id="acc-stat-ast" class="props-breakdown-val">—</span>
+                </div>
+                <div class="props-breakdown-row">
+                  <span>3-Pointers</span>
+                  <span id="acc-stat-fg3" class="props-breakdown-val">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent picks table -->
+            <div class="props-recent-picks" id="props-recent-picks-section">
+              <h5>🕒 Recent Picks</h5>
+              <div id="props-recent-list" class="props-recent-list"></div>
+            </div>
+
+            <!-- Empty state -->
+            <div id="props-accuracy-empty" class="props-accuracy-empty hidden">
+              <p>No tracked picks yet. Generate Top Picks on a game day to start tracking!</p>
+            </div>
+          </div>
+
+          <div id="props-resolve-loading" class="hidden">
+            <div class="props-loading">Checking ESPN box scores for results...</div>
+          </div>
+        </div>
+
+        <hr class="props-divider">
+
+        <!-- Step 1: Pick a game -->
+        <div id="props-step-games" class="props-step">
+          <div class="props-step-header">
+            <span class="props-step-num">1</span>
+            <span>Select Today's Game</span>
+            <button class="btn btn-sm btn-outline" onclick="propsLoadGames()" id="props-refresh-btn" title="Refresh games">↻</button>
+          </div>
+          <div id="props-games-list" class="props-games-grid">
+            <div class="props-loading">Loading today's games...</div>
+          </div>
+          <div id="props-no-games" class="props-empty hidden">No NBA games scheduled today.</div>
+        </div>
+
+        <!-- Step 2: Pick a player -->
+        <div id="props-step-player" class="props-step hidden">
+          <div class="props-step-header">
+            <span class="props-step-num">2</span>
+            <span>Select Player</span>
+            <button class="btn btn-sm btn-outline" onclick="propsBackToGames()">← Back</button>
+          </div>
+          <div id="props-game-banner" class="props-game-banner"></div>
+          <div class="props-team-columns" id="props-rosters">
+            <div class="props-team-col">
+              <h4 id="props-away-team-name" class="props-team-label"></h4>
+              <div id="props-away-roster" class="props-roster-list"></div>
+            </div>
+            <div class="props-team-col">
+              <h4 id="props-home-team-name" class="props-team-label"></h4>
+              <div id="props-home-roster" class="props-roster-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Analysis results -->
+        <div id="props-step-results" class="props-step hidden">
+          <div class="props-step-header">
+            <span class="props-step-num">3</span>
+            <span>Analysis Results</span>
+            <button class="btn btn-sm btn-outline" onclick="propsBackToPlayer()">← Back</button>
+          </div>
+          <div id="props-player-banner" class="props-player-banner"></div>
+          <div id="props-analysis-cards" class="props-analysis-grid"></div>
+          <div id="props-game-log" class="props-gamelog-section hidden">
+            <h4>📋 Recent Game Log</h4>
+            <div class="props-gamelog-table-wrap">
+              <table id="props-gamelog-table" class="props-gamelog-table">
+                <thead><tr id="props-gamelog-head"></tr></thead>
+                <tbody id="props-gamelog-body"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
