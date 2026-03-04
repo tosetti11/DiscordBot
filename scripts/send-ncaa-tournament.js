@@ -227,7 +227,7 @@ async function main() {
       // 7. Bottom buttons
       await channel.send({
         content: '**Ready to fill out your bracket? Lock it in 👇**',
-        components: [topRow, mainRow, inviteRow],
+        components: [topRow, mainRow, bottomDecor],
       });
 
       // Save tracker message ID to tournament

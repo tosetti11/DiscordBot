@@ -1013,6 +1013,107 @@
             </div>
           </div>
 
+          <!-- Pick Accuracy Dashboard -->
+          <div id="props-accuracy" class="props-accuracy-section">
+            <div class="props-accuracy-header">
+              <h4>📊 Pick Tracker</h4>
+              <div class="props-accuracy-actions">
+                <button class="btn btn-sm btn-outline" onclick="propsCheckResults()" id="props-resolve-btn">Check Results</button>
+                <button class="btn btn-sm btn-outline" onclick="propsLoadAccuracy()" id="props-accuracy-refresh" title="Refresh stats">↻</button>
+              </div>
+            </div>
+
+            <div id="props-accuracy-content" class="props-accuracy-content">
+              <!-- Stats cards row -->
+              <div class="props-accuracy-stats" id="props-accuracy-stats">
+                <div class="props-stat-card">
+                  <div class="props-stat-value" id="acc-overall">—</div>
+                  <div class="props-stat-label">Hit Rate</div>
+                  <div class="props-stat-sub" id="acc-record">0-0</div>
+                </div>
+                <div class="props-stat-card over-card">
+                  <div class="props-stat-value" id="acc-over">—</div>
+                  <div class="props-stat-label">OVERs</div>
+                  <div class="props-stat-sub" id="acc-over-record">0-0</div>
+                </div>
+                <div class="props-stat-card under-card">
+                  <div class="props-stat-value" id="acc-under">—</div>
+                  <div class="props-stat-label">UNDERs</div>
+                  <div class="props-stat-sub" id="acc-under-record">0-0</div>
+                </div>
+                <div class="props-stat-card streak-card">
+                  <div class="props-stat-value" id="acc-streak">—</div>
+                  <div class="props-stat-label">Streak</div>
+                  <div class="props-stat-sub" id="acc-streak-type">&nbsp;</div>
+                </div>
+              </div>
+
+              <!-- Time period + breakdowns -->
+              <div class="props-accuracy-breakdowns" id="props-accuracy-breakdowns">
+                <div class="props-breakdown-group">
+                  <h5>📅 Time Period</h5>
+                  <div class="props-breakdown-row">
+                    <span>Last 7 Days</span>
+                    <span id="acc-7d" class="props-breakdown-val">—</span>
+                  </div>
+                  <div class="props-breakdown-row">
+                    <span>Last 30 Days</span>
+                    <span id="acc-30d" class="props-breakdown-val">—</span>
+                  </div>
+                </div>
+                <div class="props-breakdown-group">
+                  <h5>🎯 By Confidence</h5>
+                  <div class="props-breakdown-row">
+                    <span>🟢 High</span>
+                    <span id="acc-conf-high" class="props-breakdown-val">—</span>
+                  </div>
+                  <div class="props-breakdown-row">
+                    <span>🟡 Medium</span>
+                    <span id="acc-conf-medium" class="props-breakdown-val">—</span>
+                  </div>
+                  <div class="props-breakdown-row">
+                    <span>🔴 Low</span>
+                    <span id="acc-conf-low" class="props-breakdown-val">—</span>
+                  </div>
+                </div>
+                <div class="props-breakdown-group">
+                  <h5>📈 By Stat</h5>
+                  <div class="props-breakdown-row">
+                    <span>Points</span>
+                    <span id="acc-stat-pts" class="props-breakdown-val">—</span>
+                  </div>
+                  <div class="props-breakdown-row">
+                    <span>Rebounds</span>
+                    <span id="acc-stat-reb" class="props-breakdown-val">—</span>
+                  </div>
+                  <div class="props-breakdown-row">
+                    <span>Assists</span>
+                    <span id="acc-stat-ast" class="props-breakdown-val">—</span>
+                  </div>
+                  <div class="props-breakdown-row">
+                    <span>3-Pointers</span>
+                    <span id="acc-stat-fg3" class="props-breakdown-val">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recent picks table -->
+              <div class="props-recent-picks" id="props-recent-picks-section">
+                <h5>🕒 Recent Picks</h5>
+                <div id="props-recent-list" class="props-recent-list"></div>
+              </div>
+
+              <!-- Empty state -->
+              <div id="props-accuracy-empty" class="props-accuracy-empty hidden">
+                <p>No tracked picks yet. Generate Top Picks on a game day to start tracking!</p>
+              </div>
+            </div>
+
+            <div id="props-resolve-loading" class="hidden">
+              <div class="props-loading">Checking ESPN box scores for results...</div>
+            </div>
+          </div>
+
           <hr class="props-divider">
 
           <!-- Step 1: Pick a game -->

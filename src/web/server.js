@@ -22,6 +22,7 @@ const { generateBetCardImage } = require('../utils/betCardImage');
 const { generateScoreboardImage } = require('../utils/scoreboardImage');
 const espn = require('../services/espn');
 const nbaProps = require('../services/nbaProps');
+const propPicksDb = require('../database/propPicks');
 const remindersDb = require('../database/reminders');
 const { notifyFollowers } = require('../utils/notifications');
 
@@ -2519,9 +2520,64 @@ Rules:
     try {
       const result = await nbaProps.generateTopPicks();
       res.json(result);
+
+      // Fire-and-forget: save picks to DB for tracking
+      try {
+        await propPicksDb.savePicks(result.overs, 'over');
+        await propPicksDb.savePicks(result.unders, 'under');
+      } catch (e) {
+        console.error('[Props] Failed to save picks to DB:', e.message);
+      }
     } catch (err) {
       console.error('[Props API] top-picks error:', err);
       res.status(500).json({ error: 'Failed to generate top picks' });
+    }
+  });
+
+  // Get pick accuracy stats
+  app.get('/api/props/accuracy', authMiddleware, async (req, res) => {
+    try {
+      const stats = await propPicksDb.getAccuracyStats();
+      res.json(stats || { totalPicks: 0 });
+    } catch (err) {
+      console.error('[Props API] accuracy error:', err);
+      res.status(500).json({ error: 'Failed to fetch accuracy stats' });
+    }
+  });
+
+  // Resolve yesterday's picks by checking ESPN box scores
+  app.post('/api/props/resolve', authMiddleware, async (req, res) => {
+    try {
+      // Get yesterday's date (or provided date)
+      const date = req.body.date || (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        return d.toISOString().slice(0, 10);
+      })();
+
+      const unresolved = await propPicksDb.getUnresolvedPicks(date);
+      if (!unresolved.length) {
+        return res.json({ message: 'No unresolved picks for ' + date, resolved: 0 });
+      }
+
+      const resolutions = await nbaProps.resolvePicksFromESPN(unresolved);
+      const resolved = await propPicksDb.resolvePickBatch(resolutions);
+
+      res.json({ date, unresolvedCount: unresolved.length, resolved, resolutions: resolutions.length });
+    } catch (err) {
+      console.error('[Props API] resolve error:', err);
+      res.status(500).json({ error: 'Failed to resolve picks' });
+    }
+  });
+
+  // Get picks for a specific date
+  app.get('/api/props/history/:date', authMiddleware, async (req, res) => {
+    try {
+      const picks = await propPicksDb.getPicksByDate(req.params.date);
+      res.json(picks);
+    } catch (err) {
+      console.error('[Props API] history error:', err);
+      res.status(500).json({ error: 'Failed to fetch pick history' });
     }
   });
 

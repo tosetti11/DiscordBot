@@ -3823,6 +3823,7 @@ function initPropsIfNeeded() {
   if (propsInitialized) return;
   propsInitialized = true;
   propsLoadGames();
+  propsLoadAccuracy();
 }
 
 async function propsLoadGames() {
@@ -4134,6 +4135,134 @@ function propsRenderPickCard(pick, rank, type) {
       </div>
     </div>
   `;
+}
+
+// ═══════════════════════════════════════════════
+//  Prop Picks Accuracy Dashboard
+// ═══════════════════════════════════════════════
+
+async function propsLoadAccuracy() {
+  try {
+    const res = await fetch('/api/props/accuracy', {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) return;
+    const stats = await res.json();
+    propsRenderAccuracy(stats);
+  } catch (err) {
+    console.error('[Props] Accuracy load error:', err);
+  }
+}
+
+function propsRenderAccuracy(stats) {
+  const emptyEl = document.getElementById('props-accuracy-empty');
+  const statsRow = document.getElementById('props-accuracy-stats');
+  const breakdowns = document.getElementById('props-accuracy-breakdowns');
+  const recentSection = document.getElementById('props-recent-picks-section');
+
+  if (!stats || stats.totalPicks === 0) {
+    if (emptyEl) emptyEl.classList.remove('hidden');
+    if (statsRow) statsRow.classList.add('hidden');
+    if (breakdowns) breakdowns.classList.add('hidden');
+    if (recentSection) recentSection.classList.add('hidden');
+    return;
+  }
+
+  if (emptyEl) emptyEl.classList.add('hidden');
+  if (statsRow) statsRow.classList.remove('hidden');
+  if (breakdowns) breakdowns.classList.remove('hidden');
+  if (recentSection) recentSection.classList.remove('hidden');
+
+  // Main stats
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setVal('acc-overall', stats.hitRate + '%');
+  setVal('acc-record', `${stats.totalHits}-${stats.totalPicks - stats.totalHits}`);
+  setVal('acc-over', stats.overStats.rate + '%');
+  setVal('acc-over-record', `${stats.overStats.hits}-${stats.overStats.total - stats.overStats.hits}`);
+  setVal('acc-under', stats.underStats.rate + '%');
+  setVal('acc-under-record', `${stats.underStats.hits}-${stats.underStats.total - stats.underStats.hits}`);
+
+  // Streak
+  if (stats.streak && stats.streak.current > 0) {
+    const icon = stats.streak.type === 'hit' ? '🔥' : '❄️';
+    setVal('acc-streak', `${icon} ${stats.streak.current}`);
+    setVal('acc-streak-type', stats.streak.type === 'hit' ? 'Hits' : 'Misses');
+  } else {
+    setVal('acc-streak', '—');
+    setVal('acc-streak-type', '\u00A0');
+  }
+
+  // Time periods
+  const fmtPeriod = (s) => s.total ? `${s.rate}% (${s.hits}/${s.total})` : '—';
+  setVal('acc-7d', fmtPeriod(stats.last7Days));
+  setVal('acc-30d', fmtPeriod(stats.last30Days));
+
+  // By confidence
+  for (const level of ['high', 'medium', 'low']) {
+    const c = stats.byConfidence?.[level];
+    setVal(`acc-conf-${level}`, c && c.total ? `${c.rate}% (${c.hits}/${c.total})` : '—');
+  }
+
+  // By stat
+  for (const key of ['pts', 'reb', 'ast', 'fg3']) {
+    const s = stats.byStat?.[key];
+    setVal(`acc-stat-${key}`, s && s.total ? `${s.rate}% (${s.hits}/${s.total})` : '—');
+  }
+
+  // Recent picks
+  const recentList = document.getElementById('props-recent-list');
+  if (recentList && stats.recentPicks?.length) {
+    recentList.innerHTML = stats.recentPicks.map(p => {
+      const icon = p.hit === true ? '✅' : p.hit === false ? '❌' : '⏳';
+      const resultText = p.actualValue !== null
+        ? `Actual: ${p.actualValue} ${p.hit ? '(HIT)' : '(MISS)'}`
+        : 'Pending';
+      const dirClass = p.direction === 'over' ? 'over' : 'under';
+      return `
+        <div class="props-recent-row ${p.hit === true ? 'hit' : p.hit === false ? 'miss' : 'pending'}">
+          <span class="props-recent-icon">${icon}</span>
+          <span class="props-recent-date">${p.date}</span>
+          ${p.headshot ? `<img class="props-recent-avatar" src="${p.headshot}" alt="" loading="lazy">` : ''}
+          <span class="props-recent-player">${p.playerName}</span>
+          <span class="props-recent-prop ${dirClass}">${p.direction.toUpperCase()} ${p.statLabel} ${p.propLine}</span>
+          <span class="props-recent-conf">${p.confidence}</span>
+          <span class="props-recent-result">${resultText}</span>
+        </div>`;
+    }).join('');
+  }
+}
+
+async function propsCheckResults() {
+  const btn = document.getElementById('props-resolve-btn');
+  const loading = document.getElementById('props-resolve-loading');
+  if (btn) btn.disabled = true;
+  if (loading) loading.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/props/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+
+    // Show a quick status
+    if (data.resolved > 0) {
+      showToast(`Resolved ${data.resolved} picks!`);
+    } else if (data.unresolved === 0) {
+      showToast('No pending picks to resolve');
+    } else {
+      showToast(`Games not finished yet (${data.unresolved} pending)`);
+    }
+
+    // Refresh accuracy stats
+    await propsLoadAccuracy();
+  } catch (err) {
+    console.error('[Props] Resolve error:', err);
+    showToast('Error checking results');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (loading) loading.classList.add('hidden');
+  }
 }
 
 // ═══════════════════════════════════════════════

@@ -102,6 +102,32 @@ client.once(Events.ClientReady, (c) => {
   // Polls ESPN every 2 minutes for NCAA tournament results
   startBracketUpdater();
 
+  // ─── Prop Picks Auto-Resolver ───
+  // Resolves yesterday's prop picks every 5 minutes (checks ESPN box scores)
+  const propPicksDb = require('./database/propPicks');
+  const nbaProps = require('./services/nbaProps');
+
+  setInterval(async () => {
+    try {
+      // Resolve yesterday's picks
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dateStr = yesterday.toISOString().slice(0, 10);
+
+      const unresolved = await propPicksDb.getUnresolvedPicks(dateStr);
+      if (unresolved.length === 0) return;
+
+      const resolutions = await nbaProps.resolvePicksFromESPN(unresolved);
+      if (resolutions.length > 0) {
+        const count = await propPicksDb.resolvePickBatch(resolutions);
+        console.log(`[Props Resolver] Resolved ${count}/${unresolved.length} picks for ${dateStr}`);
+      }
+    } catch (err) {
+      console.error('[Props Resolver] Error:', err.message);
+    }
+  }, 5 * 60_000); // 5 minutes
+  console.log('   🏀 Prop picks auto-resolver started (5min interval)');
+
   // ─── Live Scoreboard Poller [DISABLED] ───
   // Feature dormant. To re-enable: uncomment this setInterval block and the console.log below it.
   // Also re-enable: placeholder posting in server.js (~lines 2596, 2687), 📡 button in app.js (~line 2547),

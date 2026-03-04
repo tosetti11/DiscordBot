@@ -548,6 +548,7 @@ async function generateTopPicks() {
             teamName,
             teamAbbr,
             matchup: `${game.away.abbreviation} @ ${game.home.abbreviation}`,
+            gameId: game.id,
             stat: cat,
             analysis,
           });
@@ -585,6 +586,85 @@ async function generateTopPicks() {
   return result;
 }
 
+/**
+ * Resolve unresolved picks by fetching ESPN box scores.
+ * Looks up each game's summary to find the player's actual stats.
+ */
+async function resolvePicksFromESPN(unresolvedPicks) {
+  if (!unresolvedPicks.length) return [];
+
+  // Group picks by game_id to minimize API calls
+  const byGame = {};
+  for (const pick of unresolvedPicks) {
+    if (!pick.game_id) continue;
+    if (!byGame[pick.game_id]) byGame[pick.game_id] = [];
+    byGame[pick.game_id].push(pick);
+  }
+
+  const resolutions = [];
+
+  for (const [gameId, picks] of Object.entries(byGame)) {
+    try {
+      // Fetch game summary from ESPN
+      const url = `https://site.api.espn.com/apis/site/v2/sports/${ESPN_NBA}/summary?event=${gameId}`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const summary = await res.json();
+
+      // Check if game is final
+      const state = summary.header?.competitions?.[0]?.status?.type?.state;
+      if (state !== 'post') continue; // Game not finished yet
+
+      // Build a map of playerId -> stats from box score
+      const playerStatsMap = {};
+      const boxscore = summary.boxscore;
+      if (boxscore?.players) {
+        for (const team of boxscore.players) {
+          // team.statistics[0] has the stat categories
+          const statLabels = (team.statistics?.[0]?.labels || []).map(l => l.toLowerCase());
+          for (const athlete of (team.statistics?.[0]?.athletes || [])) {
+            const pid = athlete.athlete?.id;
+            if (!pid) continue;
+            const stats = {};
+            (athlete.stats || []).forEach((val, idx) => {
+              if (statLabels[idx]) {
+                const raw = String(val);
+                // Handle "made-attempted" format
+                if (raw.includes('-') && statLabels[idx] !== 'min') {
+                  stats[statLabels[idx]] = parseFloat(raw.split('-')[0]);
+                } else {
+                  const num = parseFloat(raw);
+                  if (!isNaN(num)) stats[statLabels[idx]] = num;
+                }
+              }
+            });
+            playerStatsMap[pid] = stats;
+          }
+        }
+      }
+
+      // Resolve each pick for this game
+      for (const pick of picks) {
+        const pStats = playerStatsMap[pick.player_id];
+        if (!pStats) continue;
+
+        // Map our stat_key to the box score key
+        const BOX_MAP = { pts: 'pts', reb: 'reb', ast: 'ast', fg3: '3pt', stl: 'stl', blk: 'blk', to: 'to' };
+        const boxKey = BOX_MAP[pick.stat_key] || pick.stat_key;
+        let actualValue = pStats[boxKey];
+        if (actualValue === undefined) actualValue = pStats[pick.stat_key];
+        if (actualValue === undefined) continue;
+
+        resolutions.push({ pickId: pick.id, actualValue });
+      }
+    } catch (err) {
+      console.error(`[Props] Failed to resolve game ${gameId}:`, err.message);
+    }
+  }
+
+  return resolutions;
+}
+
 module.exports = {
   getTodaysNBAGames,
   getTeamRoster,
@@ -594,5 +674,6 @@ module.exports = {
   analyzePlayerForGame,
   autoAnalyzePlayer,
   generateTopPicks,
+  resolvePicksFromESPN,
   STAT_CATEGORIES,
 };
