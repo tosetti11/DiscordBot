@@ -2499,13 +2499,18 @@ Rules:
     }
   });
 
-  // Analyze a player: auto-generate lines based on season averages (uses real sportsbook lines when available)
+  // Analyze a player: auto-generate lines based on season averages (uses real sportsbook lines + matchup context)
   app.get('/api/props/analyze/:playerId', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const { playerId } = req.params;
-      const { opponentId, playerName } = req.query;
+      const { opponentId, playerName, playerTeamId, homeAway, overUnder, spread } = req.query;
       if (!opponentId) return res.status(400).json({ error: 'opponentId query param required' });
-      const result = await nbaProps.autoAnalyzePlayer(playerId, opponentId, playerName || null);
+      const gameCtx = {
+        playerTeamId: playerTeamId || null,
+        homeAway: homeAway || null,
+        odds: (overUnder || spread) ? { overUnder: overUnder || null, spread: spread || null } : null,
+      };
+      const result = await nbaProps.autoAnalyzePlayer(playerId, opponentId, playerName || null, gameCtx);
       if (result.error) return res.status(404).json(result);
       res.json(result);
     } catch (err) {

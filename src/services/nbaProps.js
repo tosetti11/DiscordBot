@@ -399,6 +399,93 @@ async function getPlayerStats(playerId) {
 }
 
 /**
+ * Get full team stats (offensive, defensive, general).
+ * Returns per-game averages + totals for pace calculation.
+ */
+async function getTeamFullStats(teamId) {
+  const cacheKey = `team-full-stats-${teamId}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const season = new Date().getMonth() >= 9 ? new Date().getFullYear() + 1 : new Date().getFullYear();
+
+  try {
+    // Fetch both endpoints in parallel: team record (avgPointsAgainst) + team statistics (totals)
+    const [recordRes, statsRes] = await Promise.all([
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/${ESPN_NBA}/teams/${teamId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`https://site.api.espn.com/apis/site/v2/sports/${ESPN_NBA}/teams/${teamId}/statistics?season=${season}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+
+    // Parse record stats (avgPointsFor, avgPointsAgainst, gamesPlayed)
+    const recStats = {};
+    const recItems = recordRes?.team?.record?.items?.[0]?.stats || [];
+    for (const s of recItems) {
+      recStats[s.name] = s.value;
+    }
+
+    // Parse team totals from statistics endpoint
+    const totals = {};
+    const cats = statsRes?.results?.stats?.categories || statsRes?.statistics?.splits?.categories || [];
+    for (const cat of (Array.isArray(cats) ? cats : [])) {
+      const catName = (cat.displayName || '').toLowerCase();
+      for (const stat of (cat.stats || [])) {
+        const key = (stat.abbreviation || stat.name || '').toLowerCase();
+        if (key) totals[`${catName}_${key}`] = stat.value;
+      }
+    }
+
+    const gp = recStats.gamesPlayed || 82;
+
+    // Compute pace: Pace ≈ (FGA + 0.44 * FTA - ORB + TO) per game
+    const fga = totals['offensive_fga'] || 0;
+    const fta = totals['offensive_fta'] || 0;
+    const orb = totals['offensive_or'] || totals['defensive_or'] || 0;
+    const to  = totals['offensive_to'] || 0;
+    const possessions = fga + 0.44 * fta - orb + to;
+    const pace = possessions / gp;
+
+    // Opponent-allowed per-game averages
+    // ESPN doesn't give opponent stats by category, so we use avgPointsAgainst
+    // and estimate opponent rebounds/assists from the team's defensive stats
+    const ptsAllowed = recStats.avgPointsAgainst || 110;
+    const ptsFor = recStats.avgPointsFor || 110;
+
+    // For rebounds allowed: league avg ~44 RPG. We approximate from Defensive Rebounds
+    // (opponent's ORB ≈ team's total REB - team's DRB; but we only have totals)
+    // Better: use the team's points-allowed ratio vs league avg as a general defensive multiplier
+    const rebTotal = totals['general_reb'] || 0;
+    const dReb = totals['defensive_dr'] || 0;
+    const astTotal = totals['offensive_ast'] || 0;
+    const blkTotal = totals['defensive_blk'] || 0;
+    const stlTotal = totals['defensive_stl'] || 0;
+    const fg3Total = totals['offensive_3pm'] || 0;
+
+    const result = {
+      teamId,
+      gp,
+      pace: Math.round(pace * 10) / 10,
+      avgPtsFor: ptsFor,
+      avgPtsAllowed: ptsAllowed,
+      // Per-game own stats (for understanding team context)
+      rebPG: Math.round((rebTotal / gp) * 10) / 10,
+      astPG: Math.round((astTotal / gp) * 10) / 10,
+      blkPG: Math.round((blkTotal / gp) * 10) / 10,
+      stlPG: Math.round((stlTotal / gp) * 10) / 10,
+      fg3PG: Math.round((fg3Total / gp) * 10) / 10,
+      dRebPG: Math.round((dReb / gp) * 10) / 10,
+      // Raw totals for calcs
+      totals,
+    };
+
+    setCache(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error('[Props] Team full stats error:', err.message);
+    return null;
+  }
+}
+
+/**
  * Get opponent team defensive stats (what they allow per game)
  */
 async function getTeamDefensiveStats(teamId) {
@@ -429,6 +516,121 @@ async function getTeamDefensiveStats(teamId) {
     console.error('[Props] Team defense stats error:', err.message);
     return {};
   }
+}
+
+/**
+ * Build matchup context for a game.
+ * Fetches both teams' stats and computes:
+ *   - Pace factor (game pace vs league avg ~98)
+ *   - Defensive multiplier (opponent's pts allowed vs league avg ~112)
+ *   - Implied team total (from Vegas lines)
+ *   - Back-to-back detection
+ *
+ * @param {string} opponentTeamId - The opponent's ESPN team ID
+ * @param {string} playerTeamId - The player's own team ID
+ * @param {Object} gameOdds - { spread, overUnder } from ESPN scoreboard
+ * @param {Array} gameLog - Player's game log for B2B detection
+ * @param {string} homeAway - 'home' or 'away' (player's side)
+ * @returns {Object} matchupContext
+ */
+async function buildMatchupContext(opponentTeamId, playerTeamId, gameOdds, gameLog, homeAway) {
+  const NBA_AVG_PACE = 99.0;  // ~2025-26 league avg possessions/game
+  const NBA_AVG_PPG = 112.0;  // ~2025-26 league avg points/game
+
+  // Fetch both teams' stats in parallel
+  const [oppStats, playerTeamStats] = await Promise.all([
+    getTeamFullStats(opponentTeamId),
+    getTeamFullStats(playerTeamId),
+  ]);
+
+  // ── 1. Pace Factor ──
+  // Average both teams' pace to estimate game pace, compare to league avg
+  const oppPace = oppStats?.pace || NBA_AVG_PACE;
+  const ownPace = playerTeamStats?.pace || NBA_AVG_PACE;
+  const gamePace = (oppPace + ownPace) / 2;
+  const paceMultiplier = gamePace / NBA_AVG_PACE; // >1 = fast, <1 = slow
+
+  // ── 2. Defensive Multiplier ──
+  // How many pts the opponent allows vs league avg
+  const oppPtsAllowed = oppStats?.avgPtsAllowed || NBA_AVG_PPG;
+  const defMultiplier = oppPtsAllowed / NBA_AVG_PPG; // >1 = weak defense, <1 = strong defense
+
+  // ── 3. Implied Team Total ──
+  // From Vegas: impliedTotal = (overUnder / 2) ± (spread / 2)
+  // Spread: negative means favored. E.g. "BOS -5.5" means BOS favored.
+  // For the player's team: if they're favored, add half the spread; else subtract
+  let impliedTotal = null;
+  if (gameOdds?.overUnder) {
+    const ou = parseFloat(gameOdds.overUnder);
+    // Parse spread — format "BOS -5.5" or just "-5.5"
+    let spreadVal = 0;
+    if (gameOdds.spread) {
+      const spreadMatch = gameOdds.spread.match(/([-+]?\d+\.?\d*)/);
+      if (spreadMatch) {
+        spreadVal = parseFloat(spreadMatch[1]);
+        // ESPN spread is for the favorite. If the spread text contains the player's
+        // team abbreviation, they're the favored side.
+        // For simplicity: spread is negative for favorite. The team listed is the favorite.
+        // We'll adjust based on homeAway vs which team is in the spread text.
+      }
+    }
+    // Simple implied total: ou/2 gives average per team
+    // Then adjust by spread/2 (favorite scores more, underdog less)
+    // If we can't determine sides, just use ou/2
+    impliedTotal = ou / 2;
+    // Note: Positive spread adjustment for favorite, negative for underdog
+    // For now use simple ou/2 — still very useful as a game-environment signal
+  }
+
+  // ── 4. Back-to-Back Detection ──
+  const isB2B = detectBackToBack(gameLog);
+
+  return {
+    // Pace
+    gamePace: Math.round(gamePace * 10) / 10,
+    paceMultiplier: Math.round(paceMultiplier * 1000) / 1000,
+    oppPace: Math.round(oppPace * 10) / 10,
+    ownPace: Math.round(ownPace * 10) / 10,
+    paceLabel: gamePace >= 102 ? 'fast' : gamePace <= 96 ? 'slow' : 'average',
+
+    // Defense
+    defMultiplier: Math.round(defMultiplier * 1000) / 1000,
+    oppPtsAllowed: Math.round(oppPtsAllowed * 10) / 10,
+    defLabel: defMultiplier >= 1.04 ? 'weak defense' : defMultiplier <= 0.96 ? 'strong defense' : 'average defense',
+
+    // Implied total
+    impliedTotal: impliedTotal ? Math.round(impliedTotal * 10) / 10 : null,
+    overUnder: gameOdds?.overUnder || null,
+
+    // B2B
+    isB2B,
+
+    // Raw team stats for potential future use
+    oppStats,
+    playerTeamStats,
+  };
+}
+
+/**
+ * Detect if the player is on the second night of a back-to-back.
+ * Checks if the most recent game in their log was yesterday (ET).
+ */
+function detectBackToBack(gameLog) {
+  if (!gameLog || !gameLog.length) return false;
+
+  // Get the most recent game date
+  const lastGame = gameLog[0];
+  if (!lastGame?.date) return false;
+
+  const lastDate = new Date(lastGame.date);
+  // Compare to today in Eastern Time
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const yesterdayDate = new Date(todayET);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
+  const lastDateStr = lastDate.toISOString().slice(0, 10);
+
+  return lastDateStr === yesterdayStr;
 }
 
 // ── Prop Analysis ──
@@ -522,7 +724,7 @@ function calcVolatility(gameLog) {
  * Analyze a player for a specific stat category against a given opponent.
  * Returns hit rates, averages, trends, and a confidence score.
  */
-function analyzePlayerProp(playerStats, statKey, propLine, opponentId) {
+function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCtx = null) {
   const { seasonAvg, gameLog } = playerStats;
   const seasonVal = getStatValue(seasonAvg, statKey);
 
@@ -578,40 +780,98 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId) {
   // ── Role Volatility ──
   const vol = calcVolatility(gameLog);
 
+  // ── Build Matchup-Adjusted Projected Value ──
+  // Start from recent average, then adjust with matchup factors
+  let projectedValue = avg10; // L10 avg as baseline
+
+  // Matchup adjustments (if context available)
+  let paceAdj = 1.0;
+  let defAdj = 1.0;
+  let b2bAdj = 1.0;
+  let impliedTotalAdj = 1.0;
+
+  if (matchupCtx) {
+    // ── 1. Pace Factor ──
+    // Fast games inflate all counting stats proportionally
+    // Weight: apply 50% of the pace differential (don't over-adjust)
+    paceAdj = 1 + (matchupCtx.paceMultiplier - 1) * 0.5;
+
+    // ── 2. Defensive Multiplier ──
+    // Weak defense → boost, strong defense → diminish
+    // For pts: use the multiplier directly
+    // For reb/ast/fg3: dampen the effect (defense affects pts most)
+    const defSensitivity = { pts: 0.6, reb: 0.3, ast: 0.4, fg3: 0.5, stl: 0.2, blk: 0.2, to: 0.2 };
+    const sensitivity = defSensitivity[statKey] || 0.3;
+    defAdj = 1 + (matchupCtx.defMultiplier - 1) * sensitivity;
+
+    // ── 3. Implied Team Total ──
+    // If Vegas projects a high-scoring game, all counting stats go up
+    // Compare implied total to league avg (~112)
+    if (matchupCtx.impliedTotal) {
+      const impliedDiff = (matchupCtx.impliedTotal - 112) / 112;
+      // Pts gets full effect, others damped
+      const itSensitivity = { pts: 0.5, reb: 0.2, ast: 0.35, fg3: 0.4, stl: 0.1, blk: 0.1, to: 0.15 };
+      impliedTotalAdj = 1 + impliedDiff * (itSensitivity[statKey] || 0.2);
+    }
+
+    // ── 4. Back-to-Back ──
+    // Players average ~5-8% fewer counting stats on B2B
+    if (matchupCtx.isB2B) {
+      b2bAdj = 0.94; // 6% reduction
+    }
+  }
+
+  // Apply all multipliers to get matchup-adjusted projection
+  projectedValue = projectedValue * paceAdj * defAdj * impliedTotalAdj * b2bAdj;
+
   // ── Confidence Score ──
   // Weighted average of multiple signals to determine over/under probability
   let overProbability = 0;
   let totalWeight = 0;
 
-  // Season hit rate (weight 25%)
-  overProbability += hitRateSeason * 25;
-  totalWeight += 25;
-
-  // Last 10 hit rate (weight 30% — recent form matters most)
-  overProbability += hitRate10 * 30;
-  totalWeight += 30;
-
-  // Last 5 hit rate (weight 20%)
-  overProbability += hitRate5 * 20;
+  // Season hit rate (weight 20%)
+  overProbability += hitRateSeason * 20;
   totalWeight += 20;
 
-  // vs Opponent (weight 15% if data exists)
+  // Last 10 hit rate (weight 25% — recent form)
+  overProbability += hitRate10 * 25;
+  totalWeight += 25;
+
+  // Last 5 hit rate (weight 15%)
+  overProbability += hitRate5 * 15;
+  totalWeight += 15;
+
+  // vs Opponent (weight 10% if data exists)
   if (vsOppHitRate !== null && vsOppValues.length >= 1) {
-    overProbability += vsOppHitRate * 15;
-    totalWeight += 15;
+    overProbability += vsOppHitRate * 10;
+    totalWeight += 10;
   }
 
-  // Season avg vs line (weight 10%)
+  // Season avg vs line (weight 5%)
   const avgSignal = avg > propLine ? 0.65 : avg < propLine ? 0.35 : 0.5;
-  overProbability += avgSignal * 10;
-  totalWeight += 10;
+  overProbability += avgSignal * 5;
+  totalWeight += 5;
+
+  // ── 5. Matchup-Adjusted Projection vs Line (weight 25%) ──
+  // This is the KEY new signal — our adjusted projection compared to the prop line
+  // Convert to a 0-1 signal based on how far the projection is from the line
+  if (matchupCtx) {
+    const projDiff = projectedValue - propLine;
+    // Map difference to probability: each unit = ~8% confidence shift
+    // Cap at 0.2–0.8 to avoid extreme signals
+    const projSignal = Math.min(0.8, Math.max(0.2, 0.5 + projDiff * 0.08));
+    overProbability += projSignal * 25;
+    totalWeight += 25;
+  } else {
+    // Without matchup context, give more weight to season avg vs line
+    overProbability += avgSignal * 15;
+    totalWeight += 15;
+  }
 
   overProbability = overProbability / totalWeight;
 
   // ── Apply volatility adjustment ──
   // Pull raw probability toward 50% based on volatility.
-  // AdjustedProb = 0.5 + (RawProb - 0.5) * (1 - volatility)
-  // This preserves direction but shrinks edge for volatile players.
   const volAdj = 1 - vol.volatility;
   overProbability = 0.5 + (overProbability - 0.5) * volAdj;
 
@@ -662,6 +922,20 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId) {
     volatilityLabel: vol.label,
     minVol: vol.minVol,
     useVol: vol.useVol,
+    // Matchup context (new)
+    projectedValue: Math.round(projectedValue * 10) / 10,
+    matchup: matchupCtx ? {
+      paceLabel: matchupCtx.paceLabel,
+      gamePace: matchupCtx.gamePace,
+      defLabel: matchupCtx.defLabel,
+      oppPtsAllowed: matchupCtx.oppPtsAllowed,
+      impliedTotal: matchupCtx.impliedTotal,
+      isB2B: matchupCtx.isB2B,
+      paceAdj: Math.round(paceAdj * 1000) / 1000,
+      defAdj: Math.round(defAdj * 1000) / 1000,
+      b2bAdj,
+      impliedTotalAdj: Math.round(impliedTotalAdj * 1000) / 1000,
+    } : null,
     overProbability: Math.round(overProbability * 100),
     underProbability: Math.round(underProbability * 100),
     recommendation,
@@ -701,7 +975,7 @@ async function analyzePlayerForGame(playerId, opponentTeamId, propLines = {}) {
  * and generate analysis for each stat without requiring manual prop lines.
  * Now fetches REAL sportsbook lines from The Odds API when available.
  */
-async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null) {
+async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null, gameCtx = null) {
   const playerStats = await getPlayerStats(playerId);
   if (!playerStats.gameLog.length) {
     return { error: 'No game log data found for this player' };
@@ -713,6 +987,18 @@ async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null) {
   if (realProps && playerName) {
     const nameNorm = normalizeName(playerName);
     playerProps = realProps[nameNorm] || null;
+  }
+
+  // Build matchup context if we have game info
+  let matchupCtx = null;
+  if (gameCtx?.playerTeamId) {
+    matchupCtx = await buildMatchupContext(
+      opponentTeamId,
+      gameCtx.playerTeamId,
+      gameCtx.odds || null,
+      playerStats.gameLog,
+      gameCtx.homeAway || 'home'
+    );
   }
 
   const results = {};
@@ -743,7 +1029,7 @@ async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null) {
 
     if (propLine <= 0) continue;
 
-    const analysis = analyzePlayerProp(playerStats, cat.key, propLine, opponentTeamId);
+    const analysis = analyzePlayerProp(playerStats, cat.key, propLine, opponentTeamId, matchupCtx);
     if (analysis) {
       results[cat.key] = { ...analysis, label: cat.label, shortLabel: cat.shortLabel, lineSource, bookOdds };
     }
@@ -755,6 +1041,14 @@ async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null) {
     seasonAvg: playerStats.seasonAvg,
     analyses: results,
     usingRealLines: !!realProps,
+    matchupContext: matchupCtx ? {
+      gamePace: matchupCtx.gamePace,
+      paceLabel: matchupCtx.paceLabel,
+      defLabel: matchupCtx.defLabel,
+      oppPtsAllowed: matchupCtx.oppPtsAllowed,
+      impliedTotal: matchupCtx.impliedTotal,
+      isB2B: matchupCtx.isB2B,
+    } : null,
   };
 }
 
@@ -778,16 +1072,31 @@ async function generateTopPicks() {
 
   // Collect all (player, opponentId, game) tuples
   const playerTasks = [];
+  const matchupContextCache = {}; // gameId → { away: matchupCtx, home: matchupCtx }
+
   for (const game of games) {
     const [awayRoster, homeRoster] = await Promise.all([
       getTeamRoster(game.away.id),
       getTeamRoster(game.home.id),
     ]);
+
+    // Pre-build matchup context for each side of this game (cached per game)
+    try {
+      const [awayCtx, homeCtx] = await Promise.all([
+        buildMatchupContext(game.home.id, game.away.id, game.odds, [], 'away'),
+        buildMatchupContext(game.away.id, game.home.id, game.odds, [], 'home'),
+      ]);
+      matchupContextCache[game.id] = { away: awayCtx, home: homeCtx };
+    } catch (e) {
+      console.error(`[Props] Matchup context error for game ${game.id}:`, e.message);
+      matchupContextCache[game.id] = { away: null, home: null };
+    }
+
     for (const p of awayRoster) {
-      playerTasks.push({ player: p, opponentId: game.home.id, game, teamName: game.away.name, teamAbbr: game.away.abbreviation });
+      playerTasks.push({ player: p, opponentId: game.home.id, game, teamName: game.away.name, teamAbbr: game.away.abbreviation, side: 'away' });
     }
     for (const p of homeRoster) {
-      playerTasks.push({ player: p, opponentId: game.away.id, game, teamName: game.home.name, teamAbbr: game.home.abbreviation });
+      playerTasks.push({ player: p, opponentId: game.away.id, game, teamName: game.home.name, teamAbbr: game.home.abbreviation, side: 'home' });
     }
   }
 
@@ -799,7 +1108,7 @@ async function generateTopPicks() {
   for (let i = 0; i < playerTasks.length; i += BATCH_SIZE) {
     const batch = playerTasks.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
-      batch.map(async ({ player, opponentId, game, teamName, teamAbbr }) => {
+      batch.map(async ({ player, opponentId, game, teamName, teamAbbr, side }) => {
         const stats = await getPlayerStats(player.id);
         // Filter: need enough games and meaningful minutes
         if (stats.gameLog.length < 10) return null;
@@ -811,6 +1120,13 @@ async function generateTopPicks() {
         // Look up real prop lines for this player
         const playerNameNorm = normalizeName(player.name);
         const playerProps = realProps ? realProps[playerNameNorm] : null;
+
+        // Get pre-built matchup context for this side of the game
+        let matchupCtx = matchupContextCache[game.id]?.[side] || null;
+        // Update B2B detection with this specific player's game log
+        if (matchupCtx) {
+          matchupCtx = { ...matchupCtx, isB2B: detectBackToBack(stats.gameLog) };
+        }
 
         // Run analysis on key stat categories (PTS, REB, AST, 3PM)
         const keyCats = STAT_CATEGORIES.filter(c => ['pts', 'reb', 'ast', 'fg3'].includes(c.key));
@@ -842,7 +1158,7 @@ async function generateTopPicks() {
 
           if (propLine <= 0) continue;
 
-          const analysis = analyzePlayerProp(stats, cat.key, propLine, opponentId);
+          const analysis = analyzePlayerProp(stats, cat.key, propLine, opponentId, matchupCtx);
           if (!analysis) continue;
 
           picks.push({

@@ -3966,6 +3966,10 @@ function propsRenderRoster(players, opponentId) {
 async function propsSelectPlayer(playerId, opponentId, name, headshot, position) {
   propsSelectedPlayer = { id: playerId, opponentId, name, headshot, position };
 
+  // Determine player's team ID (opposite of opponent)
+  const playerTeamId = propsSelectedGame.home.id === opponentId ? propsSelectedGame.away.id : propsSelectedGame.home.id;
+  const homeAway = propsSelectedGame.home.id === opponentId ? 'away' : 'home';
+
   // Show step 3
   document.getElementById('props-step-results').classList.remove('hidden');
 
@@ -3978,13 +3982,22 @@ async function propsSelectPlayer(playerId, opponentId, name, headshot, position)
     </div>
   `;
 
-  // Analyze
+  // Analyze — pass game context for matchup analysis
   const grid = document.getElementById('props-analysis-cards');
   grid.innerHTML = '<div class="props-loading">Analyzing player stats...</div>';
   document.getElementById('props-game-log').classList.add('hidden');
 
   try {
-    const res = await fetch(`/api/props/analyze/${playerId}?opponentId=${opponentId}&playerName=${encodeURIComponent(name)}`);
+    const qs = new URLSearchParams({
+      opponentId,
+      playerName: name,
+      playerTeamId,
+      homeAway,
+    });
+    if (propsSelectedGame.odds?.overUnder) qs.set('overUnder', propsSelectedGame.odds.overUnder);
+    if (propsSelectedGame.odds?.spread) qs.set('spread', propsSelectedGame.odds.spread);
+
+    const res = await fetch(`/api/props/analyze/${playerId}?${qs.toString()}`);
     const data = await res.json();
 
     if (data.error) {
@@ -4000,7 +4013,29 @@ async function propsSelectPlayer(playerId, opponentId, name, headshot, position)
       return;
     }
 
-    grid.innerHTML = keys.map(key => propsRenderAnalysisCard(analyses[key])).join('');
+    // Render matchup context banner (if available)
+    let matchupBanner = '';
+    if (data.matchupContext) {
+      const mc = data.matchupContext;
+      const tags = [];
+      // Pace
+      const paceIcon = mc.paceLabel === 'fast' ? '🏃' : mc.paceLabel === 'slow' ? '🐢' : '⚖️';
+      tags.push(`<span class="props-matchup-tag ${mc.paceLabel}">${paceIcon} Pace: ${mc.gamePace}</span>`);
+      // Defense
+      const defIcon = mc.defLabel === 'weak defense' ? '🎯' : mc.defLabel === 'strong defense' ? '🛡️' : '⚖️';
+      tags.push(`<span class="props-matchup-tag ${mc.defLabel === 'weak defense' ? 'fast' : mc.defLabel === 'strong defense' ? 'slow' : ''}">${defIcon} ${mc.oppPtsAllowed} PPG Allowed</span>`);
+      // Implied total
+      if (mc.impliedTotal) {
+        tags.push(`<span class="props-matchup-tag">📊 Implied: ${mc.impliedTotal}</span>`);
+      }
+      // B2B
+      if (mc.isB2B) {
+        tags.push(`<span class="props-matchup-tag slow">⚠️ Back-to-Back</span>`);
+      }
+      matchupBanner = `<div class="props-matchup-banner">${tags.join('')}</div>`;
+    }
+
+    grid.innerHTML = matchupBanner + keys.map(key => propsRenderAnalysisCard(analyses[key])).join('');
 
     // Render game log
     propsRenderGameLog(data.gameLog || []);
@@ -4025,6 +4060,28 @@ function propsRenderAnalysisCard(a) {
   const bookBadge = lineSource ? `<span class="props-book-badge">${lineSource}</span>` : '<span class="props-book-badge est">estimated</span>';
   const oddsRow = a.bookOdds ? `<div class="props-stat-row"><span class="label">Book Odds</span><span class="value">O ${a.bookOdds.over > 0 ? '+' : ''}${a.bookOdds.over} / U ${a.bookOdds.under > 0 ? '+' : ''}${a.bookOdds.under}</span></div>` : '';
 
+  // Matchup context rows
+  let matchupRows = '';
+  if (a.matchup) {
+    const m = a.matchup;
+    // Projected value
+    matchupRows += `<div class="props-stat-row"><span class="label">Projected Value</span><span class="value ${a.projectedValue > a.propLine ? 'green' : a.projectedValue < a.propLine ? 'red' : ''}">${a.projectedValue}</span></div>`;
+    // Pace
+    const paceColor = m.paceLabel === 'fast' ? 'green' : m.paceLabel === 'slow' ? 'red' : '';
+    matchupRows += `<div class="props-stat-row"><span class="label">Game Pace</span><span class="value ${paceColor}">${m.gamePace} (${m.paceLabel})</span></div>`;
+    // Defense
+    const defColor = m.defLabel === 'weak defense' ? 'green' : m.defLabel === 'strong defense' ? 'red' : '';
+    matchupRows += `<div class="props-stat-row"><span class="label">Opp Defense</span><span class="value ${defColor}">${m.oppPtsAllowed} PPG allowed (${m.defLabel})</span></div>`;
+    // Implied total
+    if (m.impliedTotal) {
+      matchupRows += `<div class="props-stat-row"><span class="label">Implied Team Total</span><span class="value">${m.impliedTotal}</span></div>`;
+    }
+    // B2B
+    if (m.isB2B) {
+      matchupRows += `<div class="props-stat-row"><span class="label">Back-to-Back</span><span class="value red">⚠️ Yes (-6%)</span></div>`;
+    }
+  }
+
   return `
     <div class="props-result-card ${a.confidence}">
       <div class="props-stat-header">
@@ -4037,7 +4094,8 @@ function propsRenderAnalysisCard(a) {
       </div>
       <div class="props-stats-rows">
         ${oddsRow}
-        <div class="props-stat-row"><span class="label">Season Avg</span><span class="value">${a.seasonAvg}</span></div>
+        ${matchupRows}
+        <div class="props-stat-row" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;margin-top:4px"><span class="label">Season Avg</span><span class="value">${a.seasonAvg}</span></div>
         <div class="props-stat-row"><span class="label">Last 5 Avg</span><span class="value ${a.avg5 > a.propLine ? 'green' : a.avg5 < a.propLine ? 'red' : ''}">${a.avg5} ${trendIcon}</span></div>
         <div class="props-stat-row"><span class="label">Last 10 Avg</span><span class="value">${a.avg10}</span></div>
         <div class="props-stat-row"><span class="label">Home / Away Avg</span><span class="value">${a.homeAvg} / ${a.awayAvg}</span></div>
@@ -4277,6 +4335,10 @@ async function propsShareTopPicks() {
       .props-pick-line { font-size:9px; color:#888; margin-top:2px; }
       .props-book-badge { font-size:8px; font-weight:600; text-transform:uppercase; padding:1px 4px; border-radius:3px; background:rgba(34,197,94,0.15); color:#22c55e; }
       .props-book-badge.est { background:rgba(245,158,11,0.15); color:#f59e0b; }
+      .props-matchup-banner { display:flex; flex-wrap:wrap; gap:6px; padding:10px 12px; margin-bottom:12px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.06); grid-column:1/-1; }
+      .props-matchup-tag { font-size:11px; font-weight:600; padding:4px 8px; border-radius:6px; background:rgba(255,255,255,0.06); color:#ccc; white-space:nowrap; }
+      .props-matchup-tag.fast { background:rgba(34,197,94,0.12); color:#22c55e; }
+      .props-matchup-tag.slow { background:rgba(239,68,68,0.12); color:#ef4444; }
       .props-vol-badge { font-size:8px; font-weight:600; padding:1px 4px; border-radius:3px; margin-left:4px; }
       .props-vol-badge.vol-stable { background:rgba(34,197,94,0.12); color:#22c55e; }
       .props-vol-badge.vol-low { background:rgba(34,197,94,0.12); color:#22c55e; }

@@ -43,6 +43,14 @@ async function savePicks(picks, direction) {
     volatility: p.analysis.volatility ?? null,
     volatility_label: p.analysis.volatilityLabel || null,
     game_id: p.gameId || null,
+    // Matchup context (new)
+    projected_value: p.analysis.projectedValue ?? null,
+    game_pace: p.analysis.matchup?.gamePace ?? null,
+    pace_label: p.analysis.matchup?.paceLabel || null,
+    opp_pts_allowed: p.analysis.matchup?.oppPtsAllowed ?? null,
+    def_label: p.analysis.matchup?.defLabel || null,
+    implied_total: p.analysis.matchup?.impliedTotal ?? null,
+    is_b2b: p.analysis.matchup?.isB2B ?? false,
   }));
 
   const { error } = await supabase
