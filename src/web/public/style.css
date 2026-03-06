@@ -3148,6 +3148,30 @@ textarea {
   word-break: break-word;
 }
 
+.props-pick-matchup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.props-matchup-chip {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.props-matchup-chip.green {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+.props-matchup-chip.red {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
 .props-pick-right {
   text-align: right;
   flex-shrink: 0;

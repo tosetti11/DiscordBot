@@ -4249,6 +4249,31 @@ function propsRenderPickCard(pick, rank, type) {
   else if (vol > 0.15) { volClass = 'vol-low'; volIcon = '🟢'; }
   const volBadge = vol != null ? `<span class="props-vol-badge ${volClass}" title="Role Volatility: ${vol} (${a.volatilityLabel})">${volIcon} ${a.volatilityLabel}</span>` : '';
 
+  // Matchup context tags
+  let matchupLine = '';
+  if (a.matchup) {
+    const m = a.matchup;
+    const tags = [];
+    // Projected value
+    const projColor = a.projectedValue > a.propLine ? 'green' : a.projectedValue < a.propLine ? 'red' : '';
+    tags.push(`<span class="props-matchup-chip ${projColor}">Proj: ${a.projectedValue}</span>`);
+    // Pace
+    const paceColor = m.paceLabel === 'fast' ? 'green' : m.paceLabel === 'slow' ? 'red' : '';
+    tags.push(`<span class="props-matchup-chip ${paceColor}">${m.paceLabel === 'fast' ? '🏃' : m.paceLabel === 'slow' ? '🐢' : '⚖️'} ${m.gamePace} pace</span>`);
+    // Defense
+    const defColor = m.defLabel === 'weak defense' ? 'green' : m.defLabel === 'strong defense' ? 'red' : '';
+    tags.push(`<span class="props-matchup-chip ${defColor}">${m.defLabel === 'weak defense' ? '🎯' : m.defLabel === 'strong defense' ? '🛡️' : '⚖️'} ${m.oppPtsAllowed} PPG</span>`);
+    // Implied total
+    if (m.impliedTotal) {
+      tags.push(`<span class="props-matchup-chip">📊 IT ${m.impliedTotal}</span>`);
+    }
+    // B2B
+    if (m.isB2B) {
+      tags.push(`<span class="props-matchup-chip red">⚠️ B2B</span>`);
+    }
+    matchupLine = `<div class="props-pick-matchup">${tags.join('')}</div>`;
+  }
+
   return `
     <div class="props-pick-card ${type}">
       <span class="props-pick-rank">${rank}</span>
@@ -4257,6 +4282,7 @@ function propsRenderPickCard(pick, rank, type) {
         <div class="props-pick-name">${pick.player.name}</div>
         <div class="props-pick-detail">${pick.teamAbbr} · ${pick.matchup} · ${pick.stat.shortLabel} ${direction} ${a.propLine}${oddsStr} ${bookBadge}</div>
         <div class="props-pick-detail">Avg: ${a.seasonAvg} · L5: ${a.avg5} ${trendIcon} · Hit: ${hitRate}%${vsOppStr} ${volBadge}</div>
+        ${matchupLine}
       </div>
       <div class="props-pick-right">
         <div class="props-pick-prob ${type}">${prob}%</div>
@@ -4339,6 +4365,10 @@ async function propsShareTopPicks() {
       .props-matchup-tag { font-size:11px; font-weight:600; padding:4px 8px; border-radius:6px; background:rgba(255,255,255,0.06); color:#ccc; white-space:nowrap; }
       .props-matchup-tag.fast { background:rgba(34,197,94,0.12); color:#22c55e; }
       .props-matchup-tag.slow { background:rgba(239,68,68,0.12); color:#ef4444; }
+      .props-pick-matchup { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+      .props-matchup-chip { font-size:9px; font-weight:600; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.06); color:#aaa; white-space:nowrap; }
+      .props-matchup-chip.green { background:rgba(34,197,94,0.12); color:#22c55e; }
+      .props-matchup-chip.red { background:rgba(239,68,68,0.12); color:#ef4444; }
       .props-vol-badge { font-size:8px; font-weight:600; padding:1px 4px; border-radius:3px; margin-left:4px; }
       .props-vol-badge.vol-stable { background:rgba(34,197,94,0.12); color:#22c55e; }
       .props-vol-badge.vol-low { background:rgba(34,197,94,0.12); color:#22c55e; }
