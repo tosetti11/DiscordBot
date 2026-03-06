@@ -3,10 +3,12 @@ const { supabase } = require('../config/supabase');
 /**
  * Add a tailed bet entry
  */
-async function addTailedBet(betId, tailerDiscordId, tailed) {
+async function addTailedBet(betId, tailerDiscordId, tailed, tailedUnits = null) {
+  const row = { bet_id: betId, tailer_discord_id: tailerDiscordId, tailed };
+  if (tailedUnits !== null && tailedUnits !== undefined) row.tailed_units = tailedUnits;
   const { data, error } = await supabase
     .from('tailed_bets')
-    .upsert({ bet_id: betId, tailer_discord_id: tailerDiscordId, tailed }, { onConflict: ['bet_id', 'tailer_discord_id'] })
+    .upsert(row, { onConflict: ['bet_id', 'tailer_discord_id'] })
     .select()
     .single();
   if (error) throw error;
@@ -74,12 +76,13 @@ async function getTailStats(discordId) {
   let netUnits = 0;
   for (const t of closed) {
     const b = t.bets;
+    const units = t.tailed_units != null ? Number(t.tailed_units) : Number(b.units);
     if (b.status === 'win') {
       netUnits += b.odds_american >= 0
-        ? b.units * (b.odds_american / 100)
-        : b.units * (100 / Math.abs(b.odds_american));
+        ? units * (b.odds_american / 100)
+        : units * (100 / Math.abs(b.odds_american));
     } else if (b.status === 'loss') {
-      netUnits -= b.units;
+      netUnits -= units;
     }
   }
 
@@ -120,12 +123,13 @@ async function getWhaleTailStats(discordId) {
   let netUnits = 0;
   for (const t of closed) {
     const b = t.bets;
+    const units = t.tailed_units != null ? Number(t.tailed_units) : Number(b.units);
     if (b.status === 'win') {
       netUnits += b.odds_american >= 0
-        ? b.units * (b.odds_american / 100)
-        : b.units * (100 / Math.abs(b.odds_american));
+        ? units * (b.odds_american / 100)
+        : units * (100 / Math.abs(b.odds_american));
     } else if (b.status === 'loss') {
-      netUnits -= b.units;
+      netUnits -= units;
     }
   }
 
@@ -186,13 +190,14 @@ async function getTailStatsInGuild(discordId, guildId) {
   let unitsWagered = 0;
   for (const t of closed) {
     const b = t.bets;
-    unitsWagered += Number(b.units);
+    const units = t.tailed_units != null ? Number(t.tailed_units) : Number(b.units);
+    unitsWagered += units;
     if (b.status === 'win') {
       netUnits += b.odds_american >= 0
-        ? b.units * (b.odds_american / 100)
-        : b.units * (100 / Math.abs(b.odds_american));
+        ? units * (b.odds_american / 100)
+        : units * (100 / Math.abs(b.odds_american));
     } else if (b.status === 'loss') {
-      netUnits -= Number(b.units);
+      netUnits -= units;
     }
   }
   netUnits = Math.round(netUnits * 100) / 100;
@@ -208,8 +213,8 @@ async function getTailStatsInGuild(discordId, guildId) {
     avgOdds = avgDec >= 2 ? Math.round((avgDec - 1) * 100) : Math.round(-100 / (avgDec - 1));
   }
 
-  // Avg units
-  const allUnits = data.map(t => Number(t.bets.units));
+  // Avg units (use tailed_units when available)
+  const allUnits = data.map(t => t.tailed_units != null ? Number(t.tailed_units) : Number(t.bets.units));
   const avgUnits = allUnits.length > 0 ? Math.round((allUnits.reduce((a, b) => a + b, 0) / allUnits.length) * 100) / 100 : 0;
 
   // Streak (most recent closed first)
@@ -230,18 +235,19 @@ async function getTailStatsInGuild(discordId, guildId) {
   let bestBet = null, worstBet = null;
   for (const t of closed.filter(t => ['win', 'loss'].includes(t.bets.status))) {
     const b = t.bets;
+    const units = t.tailed_units != null ? Number(t.tailed_units) : Number(b.units);
     let payout = 0;
     if (b.status === 'win') {
       payout = b.odds_american >= 0
-        ? b.units * (b.odds_american / 100)
-        : b.units * (100 / Math.abs(b.odds_american));
+        ? units * (b.odds_american / 100)
+        : units * (100 / Math.abs(b.odds_american));
     } else {
-      payout = -b.units;
+      payout = -units;
     }
     payout = Math.round(payout * 100) / 100;
     const pickLabel = b.pick || (b.bet_type === 'parlay' ? `${(b.parlay_legs || []).length}-Leg Parlay` : b.slip_number || 'Bet');
-    if (!bestBet || payout > bestBet.payout) bestBet = { pick: pickLabel, payout, odds: b.odds_american, units: b.units, sport: b.sport };
-    if (!worstBet || payout < worstBet.payout) worstBet = { pick: pickLabel, payout, odds: b.odds_american, units: b.units, sport: b.sport };
+    if (!bestBet || payout > bestBet.payout) bestBet = { pick: pickLabel, payout, odds: b.odds_american, units, sport: b.sport };
+    if (!worstBet || payout < worstBet.payout) worstBet = { pick: pickLabel, payout, odds: b.odds_american, units, sport: b.sport };
   }
 
   return {

@@ -1108,8 +1108,12 @@ function createWebServer() {
       if (tailErr) throw tailErr;
       if (!tailRows || tailRows.length === 0) return res.json([]);
 
-      // Extract the bet objects, sorted newest first
-      let bets = tailRows.map(t => t.bets).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      // Extract the bet objects, sorted newest first, and include tailed_units
+      let bets = tailRows.map(t => {
+        const bet = { ...t.bets };
+        if (t.tailed_units != null) bet.tailed_units = t.tailed_units;
+        return bet;
+      }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
       // Filter by status if requested
       if (status && status !== 'all') {

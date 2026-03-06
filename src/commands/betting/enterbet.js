@@ -13,7 +13,7 @@ async function handleTailPoll(interaction) {
     // Block self-tailing: look up who owns this bet
     const { data: bet, error: betErr } = await supabase
       .from('bets')
-      .select('discord_id')
+      .select('discord_id, units')
       .eq('id', betId)
       .single();
     if (betErr) throw betErr;
@@ -22,65 +22,153 @@ async function handleTailPoll(interaction) {
       return interaction.reply({ content: '❌ You can\'t tail your own bet!', ephemeral: true });
     }
 
+    if (tailed) {
+      // Show modal asking how many units they want to tail with
+      const modal = new ModalBuilder()
+        .setCustomId(`tailbet_units_${betId}`)
+        .setTitle('Tail This Bet');
+
+      const unitsInput = new TextInputBuilder()
+        .setCustomId('tail_units')
+        .setLabel(`How many units? (Original: ${bet.units}u)`)
+        .setPlaceholder(String(bet.units))
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(10);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(unitsInput));
+      return interaction.showModal(modal);
+    }
+
+    // "No" (fade) — no modal needed
     // Check if user already has the same vote — toggle off if so
     const existing = await tailedBetsDb.getTailedBet(betId, userId);
     let isNewAction = false;
-    if (existing && existing.tailed === tailed) {
+    if (existing && existing.tailed === false) {
       // Same button clicked again — remove the vote
       await tailedBetsDb.removeTailedBet(betId, userId);
     } else {
       // New vote or switching vote
-      await tailedBetsDb.addTailedBet(betId, userId, tailed);
+      await tailedBetsDb.addTailedBet(betId, userId, false);
       isNewAction = true;
     }
 
-    // DM the bet owner when someone tails/fades (only on new action, not toggle-off)
+    // DM the bet owner when someone fades (only on new action)
     if (isNewAction && bet.discord_id !== userId) {
       const tailerName = interaction.user.displayName || interaction.user.username;
-      const action = tailed ? 'tailed' : 'faded';
-      // Fetch bet details for the DM
       const { data: betDetails } = await supabase
         .from('bets')
         .select('pick, odds_american')
         .eq('id', betId)
         .single();
-      notifyBetOwner(interaction.client, bet.discord_id, tailerName, action, betDetails || {});
+      notifyBetOwner(interaction.client, bet.discord_id, tailerName, 'faded', betDetails || {});
     }
 
-    // Fetch all tailers for this bet
-    const { data: allTails, error } = await supabase
-      .from('tailed_bets')
-      .select('*')
-      .eq('bet_id', betId);
-    if (error) throw error;
-
-    const yesUsers = (allTails || []).filter(t => t.tailed).map(t => `<@${t.tailer_discord_id}>`);
-    const noCount = (allTails || []).filter(t => !t.tailed).length;
-
-    // Update the poll message with the new stats
-    let pollContent = '**Are You Tailing This Bet?**\n\n';
-    pollContent += `👍 **Tailing (${yesUsers.length}):** ${yesUsers.length ? yesUsers.join(', ') : 'None'}\n`;
-    pollContent += `👎 **Fading (${noCount})**`;
-
-    // Keep the buttons
-    const pollRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`tailbet_yes_${betId}`)
-        .setLabel(`✅ Tail (${yesUsers.length})`)
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`tailbet_no_${betId}`)
-        .setLabel(`❌ Fade (${noCount})`)
-        .setStyle(ButtonStyle.Danger)
-    );
-
-    await interaction.update({ content: pollContent, components: [pollRow] });
+    await updateTailMessage(interaction, betId);
   } catch (err) {
     console.error('[TailPoll] Error:', err);
     try {
       await interaction.reply({ content: '❌ Error recording your vote. Please try again.', ephemeral: true });
     } catch (e) {
       // interaction may have already been responded to
+    }
+  }
+}
+
+async function handleTailUnitsModal(interaction) {
+  const betId = interaction.customId.replace('tailbet_units_', '');
+  const userId = interaction.user.id;
+  const unitsStr = interaction.fields.getTextInputValue('tail_units');
+  const tailedUnits = parseFloat(unitsStr);
+
+  if (isNaN(tailedUnits) || tailedUnits <= 0) {
+    return interaction.reply({ content: '❌ Please enter a valid number of units (e.g. 1, 2.5, 5).', ephemeral: true });
+  }
+
+  try {
+    // Check if user already tailed — toggle off if same
+    const existing = await tailedBetsDb.getTailedBet(betId, userId);
+    let isNewAction = false;
+    if (existing && existing.tailed === true) {
+      // Already tailed — update the units
+      await tailedBetsDb.addTailedBet(betId, userId, true, tailedUnits);
+      isNewAction = false;
+    } else {
+      // New tail
+      await tailedBetsDb.addTailedBet(betId, userId, true, tailedUnits);
+      isNewAction = true;
+    }
+
+    // DM the bet owner
+    if (isNewAction) {
+      const { data: bet } = await supabase
+        .from('bets')
+        .select('discord_id, pick, odds_american')
+        .eq('id', betId)
+        .single();
+      if (bet && bet.discord_id !== userId) {
+        const tailerName = interaction.user.displayName || interaction.user.username;
+        notifyBetOwner(interaction.client, bet.discord_id, tailerName, 'tailed', bet);
+      }
+    }
+
+    await updateTailMessage(interaction, betId);
+  } catch (err) {
+    console.error('[TailUnitsModal] Error:', err);
+    try {
+      await interaction.reply({ content: '❌ Error recording your tail. Please try again.', ephemeral: true });
+    } catch (e) {}
+  }
+}
+
+async function updateTailMessage(interaction, betId) {
+  // Fetch all tailers for this bet
+  const { data: allTails, error } = await supabase
+    .from('tailed_bets')
+    .select('*')
+    .eq('bet_id', betId);
+  if (error) throw error;
+
+  const yesTails = (allTails || []).filter(t => t.tailed);
+  const yesLabels = yesTails.map(t => {
+    const mention = `<@${t.tailer_discord_id}>`;
+    return t.tailed_units != null ? `${mention} (${t.tailed_units}u)` : mention;
+  });
+  const noCount = (allTails || []).filter(t => !t.tailed).length;
+
+  // Update the poll message with the new stats
+  let pollContent = '**Are You Tailing This Bet?**\n\n';
+  pollContent += `👍 **Tailing (${yesTails.length}):** ${yesTails.length ? yesLabels.join(', ') : 'None'}\n`;
+  pollContent += `👎 **Fading (${noCount})**`;
+
+  // Keep the buttons
+  const pollRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`tailbet_yes_${betId}`)
+      .setLabel(`✅ Tail (${yesTails.length})`)
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`tailbet_no_${betId}`)
+      .setLabel(`❌ Fade (${noCount})`)
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  // For button interactions use update(), for modal submits edit the message directly
+  if (interaction.isButton && interaction.isButton()) {
+    await interaction.update({ content: pollContent, components: [pollRow] });
+  } else {
+    // Modal submit — reply with confirmation and update the original message if possible
+    const tailUnits = interaction.fields ? interaction.fields.getTextInputValue('tail_units') : null;
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: `✅ Tailing with ${tailUnits}u!`, ephemeral: true });
+    }
+    // Try to update the original poll message via channel
+    try {
+      if (interaction.message) {
+        await interaction.message.edit({ content: pollContent, components: [pollRow] });
+      }
+    } catch (e) {
+      console.log('[TailPoll] Could not update poll message:', e.message);
     }
   }
 }
@@ -1517,4 +1605,5 @@ module.exports = {
   handleRetroResult,
   betSessions,
   handleTailPoll,
+  handleTailUnitsModal,
 };

@@ -2436,11 +2436,12 @@ function renderTailedBetCard(bet) {
   const whaleTag = bet.isWhale ? '<span class="ticket-tag tag-whale">🐋 WHALE</span>' : '';
 
   const oddsDisplay = bet.oddsAmerican ? (bet.oddsAmerican > 0 ? `+${bet.oddsAmerican}` : `${bet.oddsAmerican}`) : '—';
-  const unitsDisplay = bet.units || '—';
+  const tailedUnits = bet.tailed_units != null ? bet.tailed_units : null;
+  const unitsDisplay = tailedUnits != null ? tailedUnits : (bet.units || '—');
 
   let toWin = '—';
-  if (bet.units && bet.oddsAmerican) {
-    const u = Number(bet.units); const o = Number(bet.oddsAmerican);
+  if (unitsDisplay !== '—' && bet.oddsAmerican) {
+    const u = Number(unitsDisplay); const o = Number(bet.oddsAmerican);
     const w = o >= 0 ? u * (o / 100) : u * (100 / Math.abs(o));
     toWin = `+${fmtU(w)}u`;
   }
@@ -2475,7 +2476,7 @@ function renderTailedBetCard(bet) {
         <span class="ticket-sport-badge">${esc(sportName)}</span>
         ${wagerLabel ? `<span class="ticket-wager-type">${esc(wagerLabel)}</span>` : ''}
         ${whaleTag}
-        <span class="ticket-tag" style="background:rgba(100,181,246,0.12);color:#64b5f6;">🔗 Tailing ${esc(bet.displayName) || 'Unknown'}</span>
+        <span class="ticket-tag" style="background:rgba(100,181,246,0.12);color:#64b5f6;">🔗 Tailing ${esc(bet.displayName) || 'Unknown'}${tailedUnits != null ? ` (${tailedUnits}u)` : ''}</span>
       </div>
       <div class="ticket-pick">${pickText}</div>
       ${bet.teamA && bet.teamB ? `<div class="ticket-matchup">${esc(bet.teamA)} vs ${esc(bet.teamB)}</div>` : ''}

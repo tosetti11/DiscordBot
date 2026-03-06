@@ -413,6 +413,9 @@ async function handleModalSubmit(interaction) {
   if (id.startsWith('editbet2_modal_')) {
     return editbet.handleEditBetModal(interaction);
   }
+  if (id.startsWith('tailbet_units_')) {
+    return enterbet.handleTailUnitsModal(interaction);
+  }
 }
 
 // ─── Login ───
