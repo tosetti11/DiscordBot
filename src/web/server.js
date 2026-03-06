@@ -1809,7 +1809,7 @@ For a SINGLE bet:
   "futuresSelection": "<selection or null>",
   "oddsAmerican": "<American odds like -110, +150>",
   "wagerAmount": "<dollar wager/stake amount as a number, or null if not visible>",
-  "eventStartTime": "<game time if visible, or null>"
+  "eventStartTime": "<game date and time in format like 'Thu Mar 5 7:00 PM ET', or null>"
 }
 
 For a PARLAY (multiple legs):
@@ -1830,7 +1830,7 @@ For a PARLAY (multiple legs):
       "propDescription": "<prop description or null>",
       "futuresMarket": "<market or null>",
       "futuresSelection": "<selection or null>",
-      "eventStartTime": "<game time or null>"
+      "eventStartTime": "<game date and time in format like 'Thu Mar 5 7:00 PM ET', or null>"
     }
   ]
 }
@@ -1851,6 +1851,7 @@ Rules:
 - If you can detect the wager/stake amount in dollars, put it in wagerAmount (just the number, no $ sign)
 - If the slip has multiple bets/legs, return as parlay
 - Map the sport to the closest value from the valid sports list
+- For eventStartTime, ALWAYS format as "Day Mon DD H:MM AM/PM ET" (e.g. "Thu Mar 5 7:00 PM ET"). If only a time is visible (e.g. "7:00 PM"), assume today's date and use the full format. If no time is visible, use null.
 - Return ONLY valid JSON, no markdown or explanation`;
 
       // Process each image through OpenAI Vision

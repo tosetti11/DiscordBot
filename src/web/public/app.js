@@ -97,6 +97,41 @@ function getDefaultEventTime() {
   return `${y}-${m}-${d}T19:00`;
 }
 
+// ── Normalize a raw time string (from OCR) into full "Day Mon DD H:MM AM/PM TZ" format ──
+function normalizeEventTime(raw) {
+  if (!raw) return raw;
+  // Already in full format like "Thu Mar 5 7:00 PM EST" — leave it
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (days.some(d => raw.startsWith(d + ' '))) return raw;
+
+  // Try to parse a time-only string like "7pm", "7:00 PM", "19:00", etc.
+  const timeRx = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM)?$/i;
+  const m = raw.trim().match(timeRx);
+  if (m) {
+    let hours = parseInt(m[1], 10);
+    const mins = m[2] ? parseInt(m[2], 10) : 0;
+    const meridiem = m[3];
+    if (meridiem) {
+      const isPM = meridiem.toUpperCase() === 'PM';
+      if (isPM && hours < 12) hours += 12;
+      if (!isPM && hours === 12) hours = 0;
+    }
+    const dt = new Date();
+    dt.setHours(hours, mins, 0, 0);
+    return formatDateTimePretty(dt.toISOString().slice(0, 16));
+  }
+
+  // Try parsing as a full date string
+  const parsed = new Date(raw);
+  if (!isNaN(parsed.getTime())) {
+    return formatDateTimePretty(parsed.toISOString().slice(0, 16));
+  }
+
+  // Can't parse — return as-is
+  return raw;
+}
+
 // ── Format datetime-local value into readable string ──
 function formatDateTimePretty(datetimeStr) {
   if (!datetimeStr) return '';
@@ -1210,7 +1245,7 @@ function applySingleData(data) {
   }
 
   // Event time
-  if (data.eventStartTime) document.getElementById('event-time').value = data.eventStartTime;
+  if (data.eventStartTime) document.getElementById('event-time').value = normalizeEventTime(data.eventStartTime);
 }
 
 function applyParlayData(data) {
@@ -1315,7 +1350,7 @@ function applyParlayData(data) {
     // Event time
     if (leg.eventStartTime) {
       const el = document.querySelector(`.leg-event-time[data-leg="${i}"]`);
-      if (el) el.value = leg.eventStartTime;
+      if (el) el.value = normalizeEventTime(leg.eventStartTime);
     }
   });
 
