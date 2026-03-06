@@ -5,6 +5,14 @@
 const { supabase } = require('../config/supabase');
 
 /**
+ * Get today's date in Eastern time (matches ESPN's game date).
+ * Returns 'YYYY-MM-DD' string.
+ */
+function getEasternDate(d = new Date()) {
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+/**
  * Save a batch of top picks to the database.
  * Uses upsert to avoid duplicates if regenerated same day.
  */
@@ -12,7 +20,7 @@ async function savePicks(picks, direction) {
   if (!picks.length) return;
 
   const rows = picks.map((p, i) => ({
-    generated_date: new Date().toISOString().slice(0, 10),
+    generated_date: getEasternDate(),
     player_id: p.player.id,
     player_name: p.player.name,
     team_abbr: p.teamAbbr,

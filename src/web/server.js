@@ -2561,11 +2561,11 @@ Rules:
   // Resolve yesterday's picks by checking ESPN box scores
   app.post('/api/props/resolve', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
-      // Get yesterday's date (or provided date)
+      // Get yesterday's date in Eastern time (or provided date)
       const date = req.body.date || (() => {
         const d = new Date();
         d.setDate(d.getDate() - 1);
-        return d.toISOString().slice(0, 10);
+        return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       })();
 
       const unresolved = await propPicksDb.getUnresolvedPicks(date);
