@@ -127,10 +127,9 @@ async function resolvePickBatch(resolutions) {
 }
 
 /**
- * Get accuracy stats — overall and by time period.
+ * Get comprehensive accuracy stats for the model analytics dashboard.
  */
 async function getAccuracyStats() {
-  // All-time resolved picks
   const { data: allResolved, error } = await supabase
     .from('prop_picks')
     .select('*')
@@ -142,63 +141,106 @@ async function getAccuracyStats() {
     return null;
   }
 
-  if (!allResolved?.length) {
-    return {
-      totalPicks: 0,
-      totalHits: 0,
-      hitRate: 0,
-      overStats: { total: 0, hits: 0, rate: 0 },
-      underStats: { total: 0, hits: 0, rate: 0 },
-      byConfidence: {},
-      byStat: {},
-      last7Days: { total: 0, hits: 0, rate: 0 },
-      last30Days: { total: 0, hits: 0, rate: 0 },
-      recentPicks: [],
-      streak: { current: 0, type: null },
-    };
-  }
+  const empty = {
+    totalPicks: 0, totalHits: 0, hitRate: 0,
+    overStats: { total: 0, hits: 0, rate: 0 },
+    underStats: { total: 0, hits: 0, rate: 0 },
+    byConfidence: {}, byStat: {}, byProbBucket: {},
+    byVolatility: {}, byMatchup: {},
+    last7Days: { total: 0, hits: 0, rate: 0 },
+    last30Days: { total: 0, hits: 0, rate: 0 },
+    dailyLog: [], streak: { current: 0, type: null },
+    roi: { units: 0, wagers: 0, pct: 0 },
+    calibration: [],
+  };
+
+  if (!allResolved?.length) return empty;
+
+  const calc = (picks) => {
+    const t = picks.length, h = picks.filter(p => p.hit).length;
+    return { total: t, hits: h, misses: t - h, rate: t ? Math.round((h / t) * 100) : 0 };
+  };
 
   const totalPicks = allResolved.length;
   const totalHits = allResolved.filter(p => p.hit).length;
   const hitRate = Math.round((totalHits / totalPicks) * 100);
 
   // Over vs Under
-  const overs = allResolved.filter(p => p.direction === 'over');
-  const unders = allResolved.filter(p => p.direction === 'under');
-  const overStats = { total: overs.length, hits: overs.filter(p => p.hit).length, rate: overs.length ? Math.round((overs.filter(p => p.hit).length / overs.length) * 100) : 0 };
-  const underStats = { total: unders.length, hits: unders.filter(p => p.hit).length, rate: unders.length ? Math.round((unders.filter(p => p.hit).length / unders.length) * 100) : 0 };
+  const overStats = calc(allResolved.filter(p => p.direction === 'over'));
+  const underStats = calc(allResolved.filter(p => p.direction === 'under'));
 
   // By confidence
   const byConfidence = {};
   for (const level of ['high', 'medium', 'low']) {
-    const picks = allResolved.filter(p => p.confidence === level);
-    byConfidence[level] = {
-      total: picks.length,
-      hits: picks.filter(p => p.hit).length,
-      rate: picks.length ? Math.round((picks.filter(p => p.hit).length / picks.length) * 100) : 0,
-    };
+    byConfidence[level] = calc(allResolved.filter(p => p.confidence === level));
   }
 
   // By stat category
   const byStat = {};
+  const statLabels = { pts: 'Points', reb: 'Rebounds', ast: 'Assists', fg3: '3-Pointers' };
   for (const key of ['pts', 'reb', 'ast', 'fg3']) {
-    const picks = allResolved.filter(p => p.stat_key === key);
-    byStat[key] = {
-      total: picks.length,
-      hits: picks.filter(p => p.hit).length,
-      rate: picks.length ? Math.round((picks.filter(p => p.hit).length / picks.length) * 100) : 0,
-    };
+    const s = calc(allResolved.filter(p => p.stat_key === key));
+    s.label = statLabels[key];
+    byStat[key] = s;
   }
 
-  // Last 7 and 30 days
+  // By probability bucket
+  const byProbBucket = {};
+  const buckets = [
+    { key: '50-55', min: 50, max: 55, label: '50-55%' },
+    { key: '55-60', min: 55, max: 60, label: '55-60%' },
+    { key: '60-65', min: 60, max: 65, label: '60-65%' },
+    { key: '65-70', min: 65, max: 70, label: '65-70%' },
+    { key: '70+', min: 70, max: 101, label: '70%+' },
+  ];
+  for (const b of buckets) {
+    const picks = allResolved.filter(p => p.probability >= b.min && p.probability < b.max);
+    if (picks.length) byProbBucket[b.key] = { ...calc(picks), label: b.label };
+  }
+
+  // By volatility tier
+  const byVolatility = {};
+  const volTiers = [
+    { key: 'very-stable', min: 0, max: 0.15, label: '🔒 Very Stable' },
+    { key: 'stable', min: 0.15, max: 0.30, label: '🟢 Stable' },
+    { key: 'moderate', min: 0.30, max: 0.50, label: '🟡 Moderate' },
+    { key: 'high', min: 0.50, max: 2.0, label: '⚠️ High Vol' },
+  ];
+  for (const t of volTiers) {
+    const picks = allResolved.filter(p => p.volatility !== null && parseFloat(p.volatility) >= t.min && parseFloat(p.volatility) < t.max);
+    if (picks.length) byVolatility[t.key] = { ...calc(picks), label: t.label };
+  }
+
+  // By matchup factors
+  const byMatchup = {};
+  // Pace
+  const fastPace = allResolved.filter(p => p.pace_label === 'fast');
+  const slowPace = allResolved.filter(p => p.pace_label === 'slow');
+  const avgPace = allResolved.filter(p => p.pace_label === 'average');
+  if (fastPace.length) byMatchup.fastPace = { ...calc(fastPace), label: '🏃 Fast Pace' };
+  if (slowPace.length) byMatchup.slowPace = { ...calc(slowPace), label: '🐢 Slow Pace' };
+  if (avgPace.length) byMatchup.avgPace = { ...calc(avgPace), label: '⚖️ Avg Pace' };
+  // Defense
+  const weakDef = allResolved.filter(p => p.def_label === 'weak defense');
+  const strongDef = allResolved.filter(p => p.def_label === 'strong defense');
+  const avgDef = allResolved.filter(p => p.def_label === 'average defense');
+  if (weakDef.length) byMatchup.weakDef = { ...calc(weakDef), label: '🎯 Weak Defense' };
+  if (strongDef.length) byMatchup.strongDef = { ...calc(strongDef), label: '🛡️ Strong Defense' };
+  if (avgDef.length) byMatchup.avgDef = { ...calc(avgDef), label: '⚖️ Avg Defense' };
+  // B2B
+  const b2b = allResolved.filter(p => p.is_b2b === true);
+  const nonB2B = allResolved.filter(p => p.is_b2b === false || p.is_b2b === null);
+  if (b2b.length) byMatchup.b2b = { ...calc(b2b), label: '⚠️ Back-to-Back' };
+  if (nonB2B.length) byMatchup.nonB2B = { ...calc(nonB2B), label: '✅ Rested' };
+
+  // Time periods
   const now = new Date();
   const d7 = new Date(now); d7.setDate(d7.getDate() - 7);
   const d30 = new Date(now); d30.setDate(d30.getDate() - 30);
   const last7 = allResolved.filter(p => new Date(p.generated_date) >= d7);
   const last30 = allResolved.filter(p => new Date(p.generated_date) >= d30);
-
-  const last7Stats = { total: last7.length, hits: last7.filter(p => p.hit).length, rate: last7.length ? Math.round((last7.filter(p => p.hit).length / last7.length) * 100) : 0 };
-  const last30Stats = { total: last30.length, hits: last30.filter(p => p.hit).length, rate: last30.length ? Math.round((last30.filter(p => p.hit).length / last30.length) * 100) : 0 };
+  const last7Stats = calc(last7);
+  const last30Stats = calc(last30);
 
   // Current streak
   let streak = { current: 0, type: null };
@@ -208,40 +250,50 @@ async function getAccuracyStats() {
       streak.current = 1;
     } else if ((pick.hit && streak.type === 'hit') || (!pick.hit && streak.type === 'miss')) {
       streak.current++;
-    } else {
-      break;
-    }
+    } else break;
   }
 
-  // Recent picks for display (last 20)
-  const recentPicks = allResolved.slice(0, 20).map(p => ({
-    date: p.generated_date,
-    playerName: p.player_name,
-    teamAbbr: p.team_abbr,
-    matchup: p.matchup,
-    direction: p.direction,
-    statLabel: p.stat_label,
-    statKey: p.stat_key,
-    propLine: parseFloat(p.prop_line),
-    probability: p.probability,
-    confidence: p.confidence,
-    actualValue: p.actual_value !== null ? parseFloat(p.actual_value) : null,
-    hit: p.hit,
-    headshot: p.headshot_url,
-  }));
+  // ROI calculation (assuming flat 1-unit bets at -110)
+  // Win = +0.909 units, Loss = -1 unit
+  let unitsResult = 0;
+  const wagers = allResolved.length;
+  for (const p of allResolved) {
+    unitsResult += p.hit ? 0.909 : -1;
+  }
+  const roi = {
+    units: Math.round(unitsResult * 100) / 100,
+    wagers,
+    pct: wagers ? Math.round((unitsResult / wagers) * 10000) / 100 : 0,
+  };
+
+  // Calibration: for each probability bucket, are predicted % matching actual %?
+  const calibration = buckets.map(b => {
+    const picks = allResolved.filter(p => p.probability >= b.min && p.probability < b.max);
+    if (!picks.length) return null;
+    const actualHitRate = Math.round((picks.filter(p => p.hit).length / picks.length) * 100);
+    const avgPredicted = Math.round(picks.reduce((s, p) => s + p.probability, 0) / picks.length);
+    return { bucket: b.label, predicted: avgPredicted, actual: actualHitRate, count: picks.length };
+  }).filter(Boolean);
+
+  // Daily log: per-day W/L for chart
+  const dailyMap = {};
+  for (const p of allResolved) {
+    const d = p.generated_date;
+    if (!dailyMap[d]) dailyMap[d] = { date: d, total: 0, hits: 0 };
+    dailyMap[d].total++;
+    if (p.hit) dailyMap[d].hits++;
+  }
+  const dailyLog = Object.values(dailyMap)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(d => ({ ...d, rate: Math.round((d.hits / d.total) * 100) }));
 
   return {
-    totalPicks,
-    totalHits,
-    hitRate,
-    overStats,
-    underStats,
-    byConfidence,
-    byStat,
-    last7Days: last7Stats,
-    last30Days: last30Stats,
-    recentPicks,
-    streak,
+    totalPicks, totalHits, hitRate,
+    overStats, underStats,
+    byConfidence, byStat, byProbBucket,
+    byVolatility, byMatchup,
+    last7Days: last7Stats, last30Days: last30Stats,
+    dailyLog, streak, roi, calibration,
   };
 }
 

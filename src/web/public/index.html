@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=40">
+  <link rel="stylesheet" href="/style.css?v=41">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -1381,6 +1381,15 @@
             </div>
           </div>
 
+          <!-- Sub-tabs: History vs Analytics -->
+          <div class="props-tracker-tabs">
+            <button class="props-tracker-tab active" data-tab="history" onclick="propsTrackerTab('history')">📅 Daily History</button>
+            <button class="props-tracker-tab" data-tab="analytics" onclick="propsTrackerTab('analytics')">📈 Model Analytics</button>
+          </div>
+
+          <!-- ── History Tab Panel ── -->
+          <div id="props-tab-history" class="props-tab-panel">
+
           <!-- Overall Hit Rate Hero -->
           <div id="props-hero-stats" class="props-hero-stats">
             <div class="props-hero-main">
@@ -1414,6 +1423,15 @@
 
           <div id="props-resolve-loading" class="hidden">
             <div class="props-loading">Checking ESPN box scores for results...</div>
+          </div>
+
+          </div><!-- /props-tab-history -->
+
+          <!-- ── Analytics Tab Panel ── -->
+          <div id="props-tab-analytics" class="props-tab-panel hidden">
+            <div id="props-analytics-content">
+              <div class="props-loading">Loading model analytics...</div>
+            </div>
           </div>
         </div>
 
@@ -1675,6 +1693,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="/app.js?v=55"></script>
+  <script src="/app.js?v=56"></script>
 </body>
 </html>

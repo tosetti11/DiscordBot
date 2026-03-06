@@ -4425,6 +4425,188 @@ async function propsShareTopPicks() {
 }
 
 // ═══════════════════════════════════════════════
+//  Prop Picks — Tab Switching & Model Analytics
+// ═══════════════════════════════════════════════
+
+let propsAnalyticsLoaded = false;
+
+function propsTrackerTab(tab) {
+  document.querySelectorAll('.props-tracker-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('props-tab-history').classList.toggle('hidden', tab !== 'history');
+  document.getElementById('props-tab-analytics').classList.toggle('hidden', tab !== 'analytics');
+  if (tab === 'analytics' && !propsAnalyticsLoaded) {
+    propsLoadAnalytics();
+  }
+}
+
+async function propsLoadAnalytics() {
+  const container = document.getElementById('props-analytics-content');
+  if (!container) return;
+  container.innerHTML = '<div class="props-loading">Loading model analytics...</div>';
+
+  try {
+    const res = await fetch('/api/props/accuracy', { headers: { 'Content-Type': 'application/json' } });
+    if (!res.ok) throw new Error('Failed to load');
+    const s = await res.json();
+    propsAnalyticsLoaded = true;
+
+    if (!s.totalPicks) {
+      container.innerHTML = '<div class="ma-empty"><p>No resolved picks yet. Come back after games finish and you\'ve checked results!</p></div>';
+      return;
+    }
+
+    const rateColor = (rate) => rate >= 57 ? 'ma-green' : rate >= 52.4 ? 'ma-yellow' : 'ma-red';
+    const roiColor = s.roi.pct > 0 ? 'ma-green' : s.roi.pct < 0 ? 'ma-red' : '';
+    const roiSign = s.roi.units > 0 ? '+' : '';
+
+    // Build breakdown tables helper
+    const breakdownTable = (title, data) => {
+      const rows = Object.values(data);
+      if (!rows.length) return '';
+      return `
+        <div class="ma-breakdown">
+          <h5 class="ma-breakdown-title">${title}</h5>
+          <div class="ma-table">
+            ${rows.map(r => {
+              const pct = r.rate;
+              const barW = Math.max(pct, 2);
+              const color = rateColor(pct);
+              return `
+                <div class="ma-row">
+                  <span class="ma-row-label">${r.label || ''}</span>
+                  <div class="ma-row-bar-wrap">
+                    <div class="ma-row-bar ${color}" style="width:${barW}%"></div>
+                  </div>
+                  <span class="ma-row-val ${color}">${pct}%</span>
+                  <span class="ma-row-record">${r.hits}-${r.misses} (${r.total})</span>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    };
+
+    // Calibration table
+    let calibrationHtml = '';
+    if (s.calibration && s.calibration.length) {
+      calibrationHtml = `
+        <div class="ma-breakdown">
+          <h5 class="ma-breakdown-title">Calibration — Is the model well-calibrated?</h5>
+          <p class="ma-hint">If predicted % matches actual %, the model is calibrated. Big gaps mean over/under-confidence.</p>
+          <div class="ma-table">
+            ${s.calibration.map(c => {
+              const diff = c.actual - c.predicted;
+              const diffStr = diff > 0 ? `+${diff}%` : `${diff}%`;
+              const diffColor = Math.abs(diff) <= 5 ? 'ma-green' : Math.abs(diff) <= 10 ? 'ma-yellow' : 'ma-red';
+              return `
+                <div class="ma-row">
+                  <span class="ma-row-label">${c.bucket}</span>
+                  <span class="ma-row-val">Predicted: ${c.predicted}%</span>
+                  <span class="ma-row-val ${rateColor(c.actual)}">Actual: ${c.actual}%</span>
+                  <span class="ma-row-val ${diffColor}">${diffStr}</span>
+                  <span class="ma-row-record">(${c.count} picks)</span>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
+
+    // Daily log chart (simple text sparkline)
+    let dailyLogHtml = '';
+    if (s.dailyLog && s.dailyLog.length) {
+      dailyLogHtml = `
+        <div class="ma-breakdown">
+          <h5 class="ma-breakdown-title">Daily Performance Log</h5>
+          <div class="ma-daily-log">
+            ${s.dailyLog.map(d => {
+              const dateObj = new Date(d.date + 'T12:00:00');
+              const label = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              const color = rateColor(d.rate);
+              return `
+                <div class="ma-daily-entry">
+                  <span class="ma-daily-date">${label}</span>
+                  <div class="ma-daily-bar-wrap">
+                    <div class="ma-daily-bar ${color}" style="width:${Math.max(d.rate, 2)}%"></div>
+                  </div>
+                  <span class="ma-daily-val ${color}">${d.rate}%</span>
+                  <span class="ma-daily-record">${d.hits}/${d.total}</span>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
+
+    // Add labels to confidence data
+    const confLabels = { high: '🟢 High Conf', medium: '🟡 Medium Conf', low: '🟠 Low Conf' };
+    for (const [k, v] of Object.entries(s.byConfidence)) {
+      if (v) v.label = confLabels[k] || k;
+    }
+
+    container.innerHTML = `
+      <!-- Hero summary -->
+      <div class="ma-hero">
+        <div class="ma-hero-main">
+          <div class="ma-hero-pct ${rateColor(s.hitRate)}">${s.hitRate}%</div>
+          <div class="ma-hero-label">Overall Hit Rate</div>
+          <div class="ma-hero-record">${s.totalHits}-${s.totalPicks - s.totalHits} across ${s.totalPicks} picks</div>
+        </div>
+        <div class="ma-hero-cards">
+          <div class="ma-card">
+            <span class="ma-card-val ${rateColor(s.overStats.rate)}">${s.overStats.rate}%</span>
+            <span class="ma-card-lbl">OVERs (${s.overStats.total})</span>
+          </div>
+          <div class="ma-card">
+            <span class="ma-card-val ${rateColor(s.underStats.rate)}">${s.underStats.rate}%</span>
+            <span class="ma-card-lbl">UNDERs (${s.underStats.total})</span>
+          </div>
+          <div class="ma-card">
+            <span class="ma-card-val ${roiColor}">${roiSign}${s.roi.units}u</span>
+            <span class="ma-card-lbl">ROI: ${s.roi.pct > 0 ? '+' : ''}${s.roi.pct}%</span>
+          </div>
+          <div class="ma-card">
+            <span class="ma-card-val ${rateColor(s.last7Days.rate)}">${s.last7Days.total ? s.last7Days.rate + '%' : '—'}</span>
+            <span class="ma-card-lbl">Last 7d (${s.last7Days.total})</span>
+          </div>
+          <div class="ma-card">
+            <span class="ma-card-val ${rateColor(s.last30Days.rate)}">${s.last30Days.total ? s.last30Days.rate + '%' : '—'}</span>
+            <span class="ma-card-lbl">Last 30d (${s.last30Days.total})</span>
+          </div>
+          <div class="ma-card">
+            <span class="ma-card-val">${s.streak.type === 'hit' ? '🔥' : '❄️'} ${s.streak.current}</span>
+            <span class="ma-card-lbl">Streak</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Break-even reference -->
+      <div class="ma-reference">
+        <span class="ma-ref-label">📏 Break-even at -110:</span>
+        <span class="ma-ref-val">52.4%</span>
+        <span class="ma-ref-label">· Profit zone:</span>
+        <span class="ma-ref-val ma-green">53%+</span>
+        <span class="ma-ref-label">· Strong edge:</span>
+        <span class="ma-ref-val ma-green">55%+</span>
+        <span class="ma-ref-label">· Elite:</span>
+        <span class="ma-ref-val ma-green">58%+</span>
+      </div>
+
+      <!-- Breakdowns -->
+      ${breakdownTable('By Confidence Level', s.byConfidence)}
+      ${breakdownTable('By Stat Category', s.byStat)}
+      ${breakdownTable('By Probability Bucket', s.byProbBucket)}
+      ${breakdownTable('By Volatility Tier', s.byVolatility)}
+      ${breakdownTable('By Matchup Factor', s.byMatchup)}
+      ${calibrationHtml}
+      ${dailyLogHtml}
+
+      <button class="btn btn-sm btn-outline" style="margin-top:12px;" onclick="propsAnalyticsLoaded=false;propsLoadAnalytics();">↻ Refresh Analytics</button>
+    `;
+  } catch (err) {
+    console.error('[Props] Analytics load error:', err);
+    container.innerHTML = '<div class="ma-empty"><p>Error loading analytics. Try again later.</p></div>';
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  Prop Picks — Daily History & Pick Tracker
 // ═══════════════════════════════════════════════
 
