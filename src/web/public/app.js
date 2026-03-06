@@ -87,6 +87,16 @@ let currentUser = null;
 let guildPerms = {}; // { isAdmin, canWhale, roles } per guild
 let guildEmojis = []; // server emojis for current guild
 
+// ── Default datetime-local value: today at 7:00 PM ──
+function getDefaultEventTime() {
+  const now = new Date();
+  now.setHours(19, 0, 0, 0);
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}T19:00`;
+}
+
 // ── Format datetime-local value into readable string ──
 function formatDateTimePretty(datetimeStr) {
   if (!datetimeStr) return '';
@@ -572,7 +582,7 @@ function buildParlayLegs() {
     const legPicker = card.querySelector(`.leg-event-picker[data-leg="${i}"]`);
     const legTimeInput = card.querySelector(`.leg-event-time[data-leg="${i}"]`);
 
-    legCalBtn.addEventListener('click', () => { try { legPicker.showPicker(); } catch(e) { legPicker.click(); } });
+    legCalBtn.addEventListener('click', () => { if (!legPicker.value) legPicker.value = getDefaultEventTime(); try { legPicker.showPicker(); } catch(e) { legPicker.click(); } });
     legPicker.addEventListener('change', () => {
       legTimeInput.value = formatDateTimePretty(legPicker.value);
       legPicker.value = '';
@@ -5113,6 +5123,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (eventCalBtn) {
     eventCalBtn.addEventListener('click', function() {
       const el = document.getElementById('event-time-picker');
+      if (!el.value) el.value = getDefaultEventTime();
       try { el.showPicker(); } catch(e) { el.click(); }
     });
   }
