@@ -699,11 +699,20 @@ async function analyzePlayerForGame(playerId, opponentTeamId, propLines = {}) {
 /**
  * Auto-analyze: for a player, find "interesting" lines based on season avg
  * and generate analysis for each stat without requiring manual prop lines.
+ * Now fetches REAL sportsbook lines from The Odds API when available.
  */
-async function autoAnalyzePlayer(playerId, opponentTeamId) {
+async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null) {
   const playerStats = await getPlayerStats(playerId);
   if (!playerStats.gameLog.length) {
     return { error: 'No game log data found for this player' };
+  }
+
+  // Fetch real sportsbook lines
+  const realProps = await fetchAllTodaysProps();
+  let playerProps = null;
+  if (realProps && playerName) {
+    const nameNorm = normalizeName(playerName);
+    playerProps = realProps[nameNorm] || null;
   }
 
   const results = {};
@@ -714,13 +723,29 @@ async function autoAnalyzePlayer(playerId, opponentTeamId) {
     const values = validGames.map(g => getStatValue(g.stats, cat.key));
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
 
-    // Generate a typical betting line (round to nearest 0.5)
-    const propLine = Math.round(avg * 2) / 2;
+    // Use REAL line from sportsbook, or fall back to generated
+    let propLine;
+    let lineSource = 'generated';
+    let bookOdds = null;
+
+    if (playerProps && playerProps[cat.key]) {
+      propLine = playerProps[cat.key].line;
+      lineSource = playerProps[cat.key].book || 'sportsbook';
+      bookOdds = {
+        over: playerProps[cat.key].overOdds,
+        under: playerProps[cat.key].underOdds,
+        book: playerProps[cat.key].book,
+      };
+    } else {
+      // No sportsbook line available — generate from average
+      propLine = Math.round(avg * 2) / 2;
+    }
+
     if (propLine <= 0) continue;
 
     const analysis = analyzePlayerProp(playerStats, cat.key, propLine, opponentTeamId);
     if (analysis) {
-      results[cat.key] = { ...analysis, label: cat.label, shortLabel: cat.shortLabel };
+      results[cat.key] = { ...analysis, label: cat.label, shortLabel: cat.shortLabel, lineSource, bookOdds };
     }
   }
 
@@ -729,6 +754,7 @@ async function autoAnalyzePlayer(playerId, opponentTeamId) {
     gameLog: playerStats.gameLog.slice(0, 10),
     seasonAvg: playerStats.seasonAvg,
     analyses: results,
+    usingRealLines: !!realProps,
   };
 }
 

@@ -3984,7 +3984,7 @@ async function propsSelectPlayer(playerId, opponentId, name, headshot, position)
   document.getElementById('props-game-log').classList.add('hidden');
 
   try {
-    const res = await fetch(`/api/props/analyze/${playerId}?opponentId=${opponentId}`);
+    const res = await fetch(`/api/props/analyze/${playerId}?opponentId=${opponentId}&playerName=${encodeURIComponent(name)}`);
     const data = await res.json();
 
     if (data.error) {
@@ -4020,6 +4020,11 @@ function propsRenderAnalysisCard(a) {
     ? `<div class="props-stat-row"><span class="label">vs Opponent (${a.vsOpponent.games}g)</span><span class="value">${a.vsOpponent.avg} avg · ${a.vsOpponent.hitRate}% over</span></div>`
     : '';
 
+  // Line source badge (same style as top picks)
+  const lineSource = a.lineSource && a.lineSource !== 'generated' ? a.lineSource : '';
+  const bookBadge = lineSource ? `<span class="props-book-badge">${lineSource}</span>` : '<span class="props-book-badge est">estimated</span>';
+  const oddsRow = a.bookOdds ? `<div class="props-stat-row"><span class="label">Book Odds</span><span class="value">O ${a.bookOdds.over > 0 ? '+' : ''}${a.bookOdds.over} / U ${a.bookOdds.under > 0 ? '+' : ''}${a.bookOdds.under}</span></div>` : '';
+
   return `
     <div class="props-result-card ${a.confidence}">
       <div class="props-stat-header">
@@ -4028,9 +4033,10 @@ function propsRenderAnalysisCard(a) {
       </div>
       <div class="props-line-display">
         <div class="props-line-number">${a.propLine}</div>
-        <div class="props-line-caption">Prop Line</div>
+        <div class="props-line-caption">Prop Line ${bookBadge}</div>
       </div>
       <div class="props-stats-rows">
+        ${oddsRow}
         <div class="props-stat-row"><span class="label">Season Avg</span><span class="value">${a.seasonAvg}</span></div>
         <div class="props-stat-row"><span class="label">Last 5 Avg</span><span class="value ${a.avg5 > a.propLine ? 'green' : a.avg5 < a.propLine ? 'red' : ''}">${a.avg5} ${trendIcon}</span></div>
         <div class="props-stat-row"><span class="label">Last 10 Avg</span><span class="value">${a.avg10}</span></div>

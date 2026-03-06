@@ -2499,13 +2499,13 @@ Rules:
     }
   });
 
-  // Analyze a player: auto-generate lines based on season averages
+  // Analyze a player: auto-generate lines based on season averages (uses real sportsbook lines when available)
   app.get('/api/props/analyze/:playerId', authMiddleware, ownerMiddleware, async (req, res) => {
     try {
       const { playerId } = req.params;
-      const { opponentId } = req.query;
+      const { opponentId, playerName } = req.query;
       if (!opponentId) return res.status(400).json({ error: 'opponentId query param required' });
-      const result = await nbaProps.autoAnalyzePlayer(playerId, opponentId);
+      const result = await nbaProps.autoAnalyzePlayer(playerId, opponentId, playerName || null);
       if (result.error) return res.status(404).json(result);
       res.json(result);
     } catch (err) {
