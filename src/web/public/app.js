@@ -4636,6 +4636,26 @@ function propsGenerateSummary(p) {
     }
   }
 
+  // Matchup context
+  if (p.projectedValue != null) {
+    const projDir = p.projectedValue > p.propLine ? 'above' : p.projectedValue < p.propLine ? 'below' : 'right at';
+    lines.push(`📊 Matchup-adjusted projection: ${p.projectedValue} ${stat} — ${projDir} the ${line} line.`);
+  }
+  if (p.gamePace != null && p.paceLabel) {
+    const paceEmoji = p.paceLabel === 'fast' ? '🏃' : p.paceLabel === 'slow' ? '🐢' : '⚖️';
+    lines.push(`${paceEmoji} Game pace: ${p.gamePace} (${p.paceLabel}) — ${p.paceLabel === 'fast' ? 'uptempo game should boost counting stats.' : p.paceLabel === 'slow' ? 'slower pace could limit opportunities.' : 'average pace expected.'}`);
+  }
+  if (p.oppPtsAllowed != null && p.defLabel) {
+    const defEmoji = p.defLabel === 'weak defense' ? '🎯' : p.defLabel === 'strong defense' ? '🛡️' : '⚖️';
+    lines.push(`${defEmoji} Opponent allows ${p.oppPtsAllowed} PPG (${p.defLabel}) — ${p.defLabel === 'weak defense' ? 'favorable matchup for stat production.' : p.defLabel === 'strong defense' ? 'tough defensive matchup could suppress numbers.' : 'average defensive matchup.'}`);
+  }
+  if (p.impliedTotal != null) {
+    lines.push(`📈 Implied team total: ${p.impliedTotal} — ${p.impliedTotal > 112 ? 'Vegas expects a higher-scoring game.' : p.impliedTotal < 108 ? 'Vegas expects a lower-scoring game.' : 'average scoring environment expected.'}`);
+  }
+  if (p.isB2B) {
+    lines.push(`⚠️ Back-to-back game — fatigue factor applied. Players on B2Bs see roughly a 6% reduction in production.`);
+  }
+
   // Result
   if (p.actualValue !== null) {
     if (p.hit) {
