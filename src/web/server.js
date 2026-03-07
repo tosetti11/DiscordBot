@@ -586,7 +586,7 @@ function createWebServer() {
     return { total, open, wins, losses, pushes, winPct, netUnits: Math.round(netUnits * 100) / 100, unitsWagered: Math.round(unitsWagered * 100) / 100, roi };
   }
 
-  function addTeamStat(map, team, bet) {
+  function addTeamStat(map, team, bet, legCount = 1) {
     if (!team || team.length < 2) return;
     const key = team.toUpperCase().trim();
     if (!map[key]) map[key] = { count: 0, wins: 0, losses: 0, netUnits: 0 };
@@ -594,10 +594,10 @@ function createWebServer() {
     if (bet.status === 'win') {
       map[key].wins++;
       const p = bet.odds_american >= 0 ? bet.units * (bet.odds_american / 100) : bet.units * (100 / Math.abs(bet.odds_american));
-      map[key].netUnits += p;
+      map[key].netUnits += p / legCount;
     } else if (bet.status === 'loss') {
       map[key].losses++;
-      map[key].netUnits -= Number(bet.units);
+      map[key].netUnits -= Number(bet.units) / legCount;
     }
     map[key].netUnits = Math.round(map[key].netUnits * 100) / 100;
   }
@@ -874,13 +874,14 @@ function createWebServer() {
         }
       }
 
-      // Top 5 teams
+      // Top 5 teams (parlay legs included, units split proportionally)
       const teamMap = {};
       for (const bet of bets) {
-        if (bet.bet_type === 'parlay' && bet.parlay_legs) {
-          for (const leg of bet.parlay_legs) { if (leg.team_a) addTeamStat(teamMap, leg.team_a, bet); }
+        if (bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0) {
+          const legCount = bet.parlay_legs.length;
+          for (const leg of bet.parlay_legs) { if (leg.team_a) addTeamStat(teamMap, leg.team_a, bet, legCount); }
         } else {
-          if (bet.team_a) addTeamStat(teamMap, bet.team_a, bet);
+          if (bet.team_a) addTeamStat(teamMap, bet.team_a, bet, 1);
         }
       }
       const topTeams = Object.entries(teamMap)

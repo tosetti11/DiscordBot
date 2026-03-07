@@ -160,13 +160,13 @@ async function execute(interaction) {
   // Top 5 teams
   const teamCount = {};
   for (const bet of bets) {
-    if (bet.bet_type === 'parlay' && bet.parlay_legs) {
+    if (bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0) {
+      const legCount = bet.parlay_legs.length;
       for (const leg of bet.parlay_legs) {
-        if (leg.team_a) addTeam(teamCount, leg.team_a, bet);
-        if (leg.team_b) addTeam(teamCount, leg.team_b, bet);
+        if (leg.team_a) addTeam(teamCount, leg.team_a, bet, legCount);
       }
     } else {
-      if (bet.team_a) addTeam(teamCount, bet.team_a, bet);
+      if (bet.team_a) addTeam(teamCount, bet.team_a, bet, 1);
     }
   }
   const topTeams = Object.entries(teamCount)
@@ -207,8 +207,8 @@ async function execute(interaction) {
   await interaction.editReply({ files: [attachment] });
 }
 
-// Helper: accumulate team stats
-function addTeam(map, team, bet) {
+// Helper: accumulate team stats (legCount splits parlay units proportionally)
+function addTeam(map, team, bet, legCount = 1) {
   if (!team || team.length < 2) return;
   const key = team.toUpperCase().trim();
   if (!map[key]) map[key] = { count: 0, wins: 0, losses: 0, netUnits: 0 };
@@ -218,10 +218,10 @@ function addTeam(map, team, bet) {
     const payout = bet.odds_american >= 0
       ? bet.units * (bet.odds_american / 100)
       : bet.units * (100 / Math.abs(bet.odds_american));
-    map[key].netUnits += payout;
+    map[key].netUnits += payout / legCount;
   } else if (bet.status === 'loss') {
     map[key].losses++;
-    map[key].netUnits -= Number(bet.units);
+    map[key].netUnits -= Number(bet.units) / legCount;
   }
   map[key].netUnits = Math.round(map[key].netUnits * 100) / 100;
 }
