@@ -1455,6 +1455,15 @@ function createWebServer() {
       }
 
       res.json({ success: true });
+
+      // Trigger role update for the bettor (non-blocking)
+      try {
+        const roleManager = require('../services/roleManager');
+        if (discordClient && bet.guild_id && bet.discord_id) {
+          const guild = discordClient.guilds.cache.get(bet.guild_id);
+          if (guild) roleManager.updateUserRoles(guild, bet.discord_id).catch(() => {});
+        }
+      } catch (e) { /* role manager not critical */ }
     } catch (err) {
       console.error('[API] Close bet error:', err);
       res.status(500).json({ error: 'Failed to close bet' });

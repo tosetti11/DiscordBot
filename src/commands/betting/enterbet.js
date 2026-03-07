@@ -65,6 +65,12 @@ async function handleTailPoll(interaction) {
     }
 
     await updateTailMessage(interaction, betId);
+
+    // Trigger role update for fader
+    try {
+      const roleManager = require('../../services/roleManager');
+      if (interaction.guild) roleManager.updateUserRoles(interaction.guild, userId).catch(() => {});
+    } catch (e) { /* not critical */ }
   } catch (err) {
     console.error('[TailPoll] Error:', err);
     try {
@@ -113,6 +119,12 @@ async function handleTailUnitsModal(interaction) {
     }
 
     await updateTailMessage(interaction, betId);
+
+    // Trigger role update for tailer
+    try {
+      const roleManager = require('../../services/roleManager');
+      if (interaction.guild) roleManager.updateUserRoles(interaction.guild, userId).catch(() => {});
+    } catch (e) { /* not critical */ }
   } catch (err) {
     console.error('[TailUnitsModal] Error:', err);
     try {

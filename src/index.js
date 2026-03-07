@@ -24,6 +24,7 @@ const espn = require('./services/espn');
 const { generateScoreboardImage } = require('./utils/scoreboardImage');
 const { createWebServer, setDiscordClient } = require('./web/server');
 const { startBracketUpdater } = require('./services/bracketUpdater');
+const roleManager = require('./services/roleManager');
 
 // ── Scoreboard helpers ──
 function findPlayer(players, playerName) {
@@ -127,6 +128,32 @@ client.once(Events.ClientReady, (c) => {
     }
   }, 5 * 60_000); // 5 minutes
   console.log('   🏀 Prop picks auto-resolver started (5min interval)');
+
+  // ─── Role Manager ───
+  // Setup roles and assign manual roles on startup, then recalculate every 30 min
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (guildId) {
+    setTimeout(async () => {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        await roleManager.setupRoles(guild);
+        await roleManager.assignManualRoles(guild);
+        await roleManager.recalculateRoles(guild);
+        console.log('   🏅 Role manager initialized');
+      } catch (err) {
+        console.error('[RoleManager] Init error:', err.message);
+      }
+    }, 5000); // 5s delay to let bot fully connect
+
+    setInterval(async () => {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        await roleManager.recalculateRoles(guild);
+      } catch (err) {
+        console.error('[RoleManager] Recalculation error:', err.message);
+      }
+    }, 30 * 60_000); // 30 minutes
+  }
 
   // ─── Live Scoreboard Poller [DISABLED] ───
   // Feature dormant. To re-enable: uncomment this setInterval block and the console.log below it.

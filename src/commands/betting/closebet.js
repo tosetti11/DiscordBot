@@ -419,6 +419,14 @@ async function handleResultButton(interaction) {
       content: `${emoji} Bet closed as **${result.toUpperCase()}**!`,
       components: [],
     });
+
+    // Trigger role update for the bettor
+    try {
+      const roleManager = require('../../services/roleManager');
+      if (interaction.guild && fullBet.discord_id) {
+        roleManager.updateUserRoles(interaction.guild, fullBet.discord_id).catch(() => {});
+      }
+    } catch (e) { /* role manager not critical */ }
   } catch (err) {
     console.error('Error closing bet:', err);
     await interaction.update({ content: '❌ Error closing bet.', components: [] });
