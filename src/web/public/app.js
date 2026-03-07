@@ -1506,6 +1506,7 @@ function switchPage(page) {
     announce: document.getElementById('announce-page'),
     props: document.getElementById('props-page'),
     scoreboard: document.getElementById('scoreboard-page'),
+    profile: document.getElementById('profile-page'),
   };
 
   // Hide all, show selected
@@ -1526,6 +1527,7 @@ function switchPage(page) {
   if (page === 'closebets') initCloseBetsPage();
   if (page === 'scoreboard') initScoreboardPage();
   if (page === 'props') initPropsIfNeeded();
+  if (page === 'profile') loadProfilePage();
 }
 
 // ═══════════════════════════════════════════════
@@ -5943,4 +5945,216 @@ async function toggleScoreboard(betId) {
   } finally {
     btn.disabled = false;
   }
+}
+
+// ══════════════════════════════════════════════
+// ────────── PROFILE PAGE ──────────
+// ══════════════════════════════════════════════
+
+let profileLoaded = false;
+
+async function loadProfilePage(targetDiscordId) {
+  const loading = document.getElementById('profile-loading');
+  const content = document.getElementById('profile-content');
+  loading.classList.remove('hidden');
+  content.classList.add('hidden');
+  content.innerHTML = '';
+
+  const guildId = currentUser?.guilds?.[0]?.id;
+  if (!guildId) {
+    content.innerHTML = '<p class="profile-empty">No server found.</p>';
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+    return;
+  }
+
+  const discordId = targetDiscordId || currentUser.discordId;
+
+  try {
+    const res = await fetch(`/api/guilds/${guildId}/profile/${discordId}`);
+    if (!res.ok) throw new Error('Failed to fetch profile');
+    const p = await res.json();
+
+    if (p.empty) {
+      content.innerHTML = '<p class="profile-empty">No betting history found for this user.</p>';
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
+      return;
+    }
+
+    const avatarUrl = p.avatarProxy || p.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png';
+    const unitColor = p.netUnits > 0 ? 'var(--color-win)' : p.netUnits < 0 ? 'var(--color-loss)' : 'var(--text-secondary)';
+    const roiColor = p.roi > 0 ? 'var(--color-win)' : p.roi < 0 ? 'var(--color-loss)' : 'var(--text-secondary)';
+    const wpColor = p.winPct >= 55 ? 'var(--color-win)' : p.winPct < 45 ? 'var(--color-loss)' : 'var(--text-primary)';
+
+    // Badge pills
+    const badgeHtml = (p.badges || []).map(b =>
+      `<span class="pf-badge" style="background:${b.color || '#5865f2'}22; color:${b.color || '#5865f2'}; border:1px solid ${b.color || '#5865f2'}44">${b.emoji} ${b.name.replace(/^[^\w\s]+\s*/, '')}</span>`
+    ).join('');
+
+    // Streak display
+    const streak = p.streak || {};
+    const streakIcon = streak.type === 'win' ? '🔥' : streak.type === 'loss' ? '❄️' : '—';
+    const streakText = streak.count > 0 ? `${streak.count}${streak.type === 'win' ? 'W' : 'L'}` : 'None';
+    const streakColor = streak.type === 'win' ? 'var(--color-win)' : streak.type === 'loss' ? 'var(--color-loss)' : 'var(--text-muted)';
+
+    // Avg odds
+    const avgOddsStr = p.avgOdds ? (p.avgOdds > 0 ? `+${p.avgOdds}` : `${p.avgOdds}`) : '—';
+
+    // Best/worst sport
+    const best = p.bestSport || { name: '—', winPct: 0, record: '' };
+    const worst = p.worstSport || { name: '—', winPct: 0, record: '' };
+    const fav = p.favBetType || { name: '—', count: 0 };
+
+    // Top teams
+    const topTeams = p.topTeams || [];
+    const teamsHtml = topTeams.length > 0
+      ? topTeams.map((t, i) => {
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+          const tColor = t.netUnits >= 0 ? 'var(--color-win)' : 'var(--color-loss)';
+          return `<div class="pf-row">
+            <span class="pf-row-label">${medal} ${t.team}</span>
+            <span class="pf-row-value" style="color:${tColor}">${t.record} | ${t.netUnits > 0 ? '+' : ''}${t.netUnits.toFixed(2)}u</span>
+          </div>`;
+        }).join('')
+      : '<div class="pf-row"><span class="pf-row-label pf-muted">Not enough data yet</span></div>';
+
+    // Biggest win
+    const bigWin = p.biggestWin;
+    const bigWinText = bigWin ? `+${bigWin.payout.toFixed(2)}u` : '—';
+    const bigWinPick = bigWin ? (bigWin.pick.length > 28 ? bigWin.pick.substring(0, 26) + '…' : bigWin.pick) : '';
+
+    // Best/worst streaks
+    const bestStr = p.bestStreak?.count > 0 ? `${p.bestStreak.count}W` : '—';
+    const worstStr = p.worstStreak?.count > 0 ? `${p.worstStreak.count}L` : '—';
+
+    content.innerHTML = `
+      <div class="pf-card">
+        <!-- Banner -->
+        <div class="pf-banner">
+          <div class="pf-banner-overlay"></div>
+        </div>
+
+        <!-- Avatar + Name -->
+        <div class="pf-header">
+          <div class="pf-avatar-wrap">
+            <img class="pf-avatar" src="${avatarUrl}?_t=${Date.now()}" alt=""
+              onerror="this.onerror=null;this.src='https://cdn.discordapp.com/embed/avatars/0.png'">
+            <div class="pf-online-dot"></div>
+          </div>
+          <div class="pf-name-area">
+            <h2 class="pf-name">${p.displayName || 'Unknown'}</h2>
+            ${p.memberSince ? `<span class="pf-member-since">Member since ${p.memberSince}</span>` : ''}
+          </div>
+        </div>
+
+        ${badgeHtml ? `<div class="pf-badges">${badgeHtml}</div>` : ''}
+
+        <div class="pf-divider"></div>
+
+        <!-- Stats Grid -->
+        <div class="pf-section-title">OVERVIEW</div>
+        <div class="pf-stats-grid">
+          <div class="pf-stat-box">
+            <div class="pf-stat-value">${p.wins}-${p.losses}</div>
+            <div class="pf-stat-label">RECORD</div>
+          </div>
+          <div class="pf-stat-box">
+            <div class="pf-stat-value" style="color:${wpColor}">${p.winPct}%</div>
+            <div class="pf-stat-label">WIN %</div>
+          </div>
+          <div class="pf-stat-box">
+            <div class="pf-stat-value" style="color:${roiColor}">${p.roi > 0 ? '+' : ''}${p.roi}%</div>
+            <div class="pf-stat-label">ROI</div>
+          </div>
+          <div class="pf-stat-box">
+            <div class="pf-stat-value" style="color:${unitColor}">${p.netUnits > 0 ? '+' : ''}${p.netUnits.toFixed(2)}u</div>
+            <div class="pf-stat-label">UNITS</div>
+          </div>
+          <div class="pf-stat-box">
+            <div class="pf-stat-value">${p.total}</div>
+            <div class="pf-stat-label">TOTAL BETS</div>
+          </div>
+          <div class="pf-stat-box">
+            <div class="pf-stat-value">${avgOddsStr}</div>
+            <div class="pf-stat-label">AVG ODDS</div>
+          </div>
+          <div class="pf-stat-box">
+            <div class="pf-stat-value">${p.pushes}</div>
+            <div class="pf-stat-label">PUSHES</div>
+          </div>
+          <div class="pf-stat-box">
+            <div class="pf-stat-value" style="color:var(--color-accent)">${p.open}</div>
+            <div class="pf-stat-label">OPEN</div>
+          </div>
+        </div>
+
+        <div class="pf-divider"></div>
+
+        <!-- Performance -->
+        <div class="pf-section-title">PERFORMANCE</div>
+        <div class="pf-rows">
+          <div class="pf-row">
+            <span class="pf-row-label">🏆 Best Sport</span>
+            <span class="pf-row-value" style="color:var(--color-win)">${best.name} ${best.record} (${best.winPct}%)</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-row-label">💀 Worst Sport</span>
+            <span class="pf-row-value" style="color:var(--color-loss)">${worst.name} ${worst.record} (${worst.winPct}%)</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-row-label">🎯 Favorite Bet</span>
+            <span class="pf-row-value" style="color:var(--color-accent)">${fav.name} (${fav.count} bets)</span>
+          </div>
+        </div>
+
+        <div class="pf-divider"></div>
+
+        <!-- Top Teams -->
+        <div class="pf-section-title">TOP TEAMS</div>
+        <div class="pf-rows">${teamsHtml}</div>
+
+        <div class="pf-divider"></div>
+
+        <!-- Highlights -->
+        <div class="pf-section-title">HIGHLIGHTS</div>
+        <div class="pf-rows">
+          <div class="pf-row">
+            <span class="pf-row-label">📊 Current Streak</span>
+            <span class="pf-row-value" style="color:${streakColor}">${streakIcon} ${streakText}</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-row-label">🔥 Best Win Streak</span>
+            <span class="pf-row-value" style="color:var(--color-win)">${bestStr}</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-row-label">❄️ Worst Loss Streak</span>
+            <span class="pf-row-value" style="color:var(--color-loss)">${worstStr}</span>
+          </div>
+          <div class="pf-row">
+            <span class="pf-row-label">💰 Biggest Win</span>
+            <span class="pf-row-value" style="color:var(--color-gold)">${bigWinText}${bigWinPick ? ` <span class="pf-muted">${bigWinPick}</span>` : ''}</span>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="pf-footer">thegamblingkingapp.com</div>
+      </div>
+    `;
+
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+    profileLoaded = true;
+  } catch (err) {
+    console.error('Profile load error:', err);
+    content.innerHTML = '<p class="profile-empty">Failed to load profile.</p>';
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+  }
+}
+
+// View another user's profile (called from leaderboard etc.)
+function viewProfile(discordId) {
+  switchPage('profile');
+  loadProfilePage(discordId);
 }

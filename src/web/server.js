@@ -586,6 +586,22 @@ function createWebServer() {
     return { total, open, wins, losses, pushes, winPct, netUnits: Math.round(netUnits * 100) / 100, unitsWagered: Math.round(unitsWagered * 100) / 100, roi };
   }
 
+  function addTeamStat(map, team, bet) {
+    if (!team || team.length < 2) return;
+    const key = team.toUpperCase().trim();
+    if (!map[key]) map[key] = { count: 0, wins: 0, losses: 0, netUnits: 0 };
+    map[key].count++;
+    if (bet.status === 'win') {
+      map[key].wins++;
+      const p = bet.odds_american >= 0 ? bet.units * (bet.odds_american / 100) : bet.units * (100 / Math.abs(bet.odds_american));
+      map[key].netUnits += p;
+    } else if (bet.status === 'loss') {
+      map[key].losses++;
+      map[key].netUnits -= Number(bet.units);
+    }
+    map[key].netUnits = Math.round(map[key].netUnits * 100) / 100;
+  }
+
   function getDateRange(period) {
     const now = new Date();
     let start;
@@ -765,6 +781,162 @@ function createWebServer() {
     } catch (err) {
       console.error('[API] Stats error:', err);
       res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
+  // ─── Profile API ───
+  // Returns full profile data for any user (badges, streaks, top teams, etc.)
+  app.get('/api/guilds/:guildId/profile/:discordId', authMiddleware, async (req, res) => {
+    try {
+      const { guildId, discordId } = req.params;
+
+      // Fetch all bets
+      const { data: bets, error: betsErr } = await supabase
+        .from('bets')
+        .select('*, parlay_legs(*)')
+        .eq('discord_id', discordId)
+        .eq('guild_id', guildId)
+        .neq('status', 'void')
+        .order('created_at', { ascending: false });
+
+      if (betsErr) throw betsErr;
+
+      if (!bets || bets.length === 0) {
+        return res.json({ empty: true });
+      }
+
+      const overall = calcStats(bets);
+
+      // Avg odds
+      const allOdds = bets.filter(b => b.odds_american).map(b => b.odds_american);
+      let avgOdds = 0;
+      if (allOdds.length > 0) {
+        const decArr = allOdds.map(o => o >= 0 ? (o / 100) + 1 : (100 / Math.abs(o)) + 1);
+        const avgDec = decArr.reduce((a, b) => a + b, 0) / decArr.length;
+        avgOdds = avgDec >= 2 ? Math.round((avgDec - 1) * 100) : Math.round(-100 / (avgDec - 1));
+      }
+
+      // By sport breakdown
+      const sportBreakdown = {};
+      for (const bet of bets) {
+        const sport = (bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0)
+          ? (bet.parlay_legs[0].sport || 'other') : (bet.sport || 'other');
+        if (!sportBreakdown[sport]) sportBreakdown[sport] = [];
+        sportBreakdown[sport].push(bet);
+      }
+      const bySport = Object.entries(sportBreakdown)
+        .map(([sport, sBets]) => ({ sport, name: SPORT_NAMES[sport] || sport, ...calcStats(sBets) }))
+        .filter(s => (s.wins + s.losses) >= 2)
+        .sort((a, b) => b.winPct - a.winPct);
+
+      const bestSport = bySport.length > 0 ? { name: bySport[0].name, winPct: bySport[0].winPct, record: `${bySport[0].wins}-${bySport[0].losses}` } : { name: '—', winPct: 0, record: '' };
+      const worstSport = bySport.length > 1 ? { name: bySport[bySport.length - 1].name, winPct: bySport[bySport.length - 1].winPct, record: `${bySport[bySport.length - 1].wins}-${bySport[bySport.length - 1].losses}` } : { name: '—', winPct: 0, record: '' };
+
+      // Favorite bet type
+      const wagerBreakdown = {};
+      for (const bet of bets) {
+        const wt = bet.bet_type === 'parlay' ? 'parlay' : (bet.wager_type || 'other');
+        if (!wagerBreakdown[wt]) wagerBreakdown[wt] = 0;
+        wagerBreakdown[wt]++;
+      }
+      const sortedWagers = Object.entries(wagerBreakdown).sort((a, b) => b[1] - a[1]);
+      const favBetType = sortedWagers.length > 0
+        ? { name: WAGER_TYPES[sortedWagers[0][0]] || (sortedWagers[0][0] === 'parlay' ? 'Parlay' : sortedWagers[0][0]), count: sortedWagers[0][1] }
+        : { name: '—', count: 0 };
+
+      // Streaks
+      const closedBets = bets.filter(b => ['win', 'loss'].includes(b.status)).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      let streakCount = 0, streakType = '';
+      if (closedBets.length > 0) {
+        streakType = closedBets[0].status;
+        for (const b of closedBets) {
+          if (b.status === streakType) streakCount++;
+          else break;
+        }
+      }
+
+      let bestWinStreak = 0, worstLossStreak = 0;
+      let cw = 0, cl = 0;
+      const chrono = [...closedBets].reverse();
+      for (const b of chrono) {
+        if (b.status === 'win') { cw++; cl = 0; if (cw > bestWinStreak) bestWinStreak = cw; }
+        else if (b.status === 'loss') { cl++; cw = 0; if (cl > worstLossStreak) worstLossStreak = cl; }
+      }
+
+      // Biggest win
+      let biggestWin = null;
+      for (const b of bets.filter(b => b.status === 'win')) {
+        const payout = b.odds_american >= 0
+          ? b.units * (b.odds_american / 100)
+          : b.units * (100 / Math.abs(b.odds_american));
+        if (!biggestWin || payout > biggestWin.payout) {
+          biggestWin = { payout: Math.round(payout * 100) / 100, pick: b.pick || (b.bet_type === 'parlay' && b.parlay_legs ? `${b.parlay_legs.length}-Leg Parlay` : b.slip_number || 'Bet') };
+        }
+      }
+
+      // Top 5 teams
+      const teamMap = {};
+      for (const bet of bets) {
+        if (bet.bet_type === 'parlay' && bet.parlay_legs) {
+          for (const leg of bet.parlay_legs) { if (leg.team_a) addTeamStat(teamMap, leg.team_a, bet); }
+        } else {
+          if (bet.team_a) addTeamStat(teamMap, bet.team_a, bet);
+        }
+      }
+      const topTeams = Object.entries(teamMap)
+        .filter(([, t]) => t.count >= 3)
+        .map(([team, t]) => ({ team, count: t.count, wins: t.wins, losses: t.losses, record: `${t.wins}-${t.losses}`, netUnits: t.netUnits }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      // Badges (from Discord roles)
+      let badges = [];
+      if (discordClient) {
+        try {
+          const roleManagerMod = require('../services/roleManager');
+          const guild = discordClient.guilds.cache.get(guildId);
+          if (guild) {
+            const member = await fetchMember(guild, discordId);
+            badges = roleManagerMod.getUserRoleBadges(member);
+          }
+        } catch (e) {}
+      }
+
+      // Resolve display name and avatar
+      let displayName = 'Unknown', avatar = null, memberSince = null;
+      if (discordClient) {
+        try {
+          const guild = discordClient.guilds.cache.get(guildId);
+          if (guild) {
+            const member = await fetchMember(guild, discordId);
+            displayName = member.displayName;
+            avatar = member.user.displayAvatarURL({ size: 256, extension: 'png' });
+            memberSince = member.joinedAt ? member.joinedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+          }
+        } catch (e) {}
+      }
+
+      res.json({
+        displayName,
+        avatar,
+        avatarProxy: `/api/avatar/${discordId}`,
+        memberSince,
+        badges,
+        ...overall,
+        avgOdds,
+        bestSport,
+        worstSport,
+        favBetType,
+        bySport,
+        streak: { count: streakCount, type: streakType },
+        bestStreak: { count: bestWinStreak },
+        worstStreak: { count: worstLossStreak },
+        biggestWin,
+        topTeams,
+      });
+    } catch (err) {
+      console.error('[API] Profile error:', err);
+      res.status(500).json({ error: 'Failed to fetch profile' });
     }
   });
 

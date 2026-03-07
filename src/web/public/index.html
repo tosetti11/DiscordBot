@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=41">
+  <link rel="stylesheet" href="/style.css?v=43">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -41,7 +41,7 @@
         <span class="header-title">TheGamblingKing</span>
       </div>
       <div class="header-right">
-        <div class="user-info">
+        <div class="user-info" onclick="switchPage('profile')" style="cursor:pointer;" title="View your profile">
           <img id="user-avatar" class="user-avatar" src="" alt="">
           <span id="user-name" class="user-name"></span>
         </div>
@@ -1106,6 +1106,17 @@
       </div>
     </main>
 
+    <!-- Profile Page -->
+    <main id="profile-page" class="main-content hidden">
+      <div class="profile-container">
+        <div id="profile-loading" class="profile-loading">
+          <div class="spinner"></div>
+          <p>Loading profile...</p>
+        </div>
+        <div id="profile-content" class="profile-content hidden"></div>
+      </div>
+    </main>
+
     <!-- Install App Page -->
     <main id="install-page" class="main-content hidden">
       <div class="install-container">
@@ -1693,6 +1704,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="/app.js?v=56"></script>
+  <script src="/app.js?v=58"></script>
 </body>
 </html>

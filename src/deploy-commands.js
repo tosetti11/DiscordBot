@@ -19,6 +19,7 @@ const convertodds = require('./commands/general/convertodds');
 const reminder = require('./commands/general/reminder');
 const announce = require('./commands/general/announce');
 const follow = require('./commands/general/follow');
+const profile = require('./commands/general/profile');
 
 
 const commandObjs = [
@@ -38,6 +39,7 @@ const commandObjs = [
   reminder.command,
   announce.command,
   follow.command,
+  profile.command,
 ];
 console.log('Registering the following commands:');
 for (const c of commandObjs) {

@@ -18,6 +18,7 @@ const convertodds = require('./commands/general/convertodds');
 const reminder = require('./commands/general/reminder');
 const announce = require('./commands/general/announce');
 const follow = require('./commands/general/follow');
+const profile = require('./commands/general/profile');
 const remindersDb = require('./database/reminders');
 const scoreboardDb = require('./database/scoreboards');
 const espn = require('./services/espn');
@@ -67,7 +68,7 @@ const client = new Client({
 
 // Register commands in a collection
 client.commands = new Collection();
-const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, retrobet, help, convertodds, reminder, announce, follow];
+const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, retrobet, help, convertodds, reminder, announce, follow, profile];
 for (const mod of commandModules) {
   client.commands.set(mod.command.name, mod);
 }
