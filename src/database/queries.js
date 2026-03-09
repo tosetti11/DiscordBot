@@ -19,16 +19,17 @@ const { supabase } = require('../config/supabase');
  */
 async function generateSlipNumber(discordId, username) {
   const prefix = username.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'BET';
-  // Find the highest slip number for this user and increment
+  // Find the highest slip number GLOBALLY for this prefix (not just per-user)
+  // This prevents collisions when two users share the same 3-letter prefix
   const { data, error } = await supabase
     .from('bets')
     .select('slip_number')
-    .eq('discord_id', discordId);
+    .like('slip_number', `${prefix}-%`);
   if (error) throw error;
   let maxNum = 0;
   if (data && data.length) {
     for (const bet of data) {
-      const match = bet.slip_number && bet.slip_number.startsWith(prefix + '-') && bet.slip_number.match(/-(\d{3})$/);
+      const match = bet.slip_number && bet.slip_number.match(/-(\d{3,})$/);
       if (match) {
         const num = parseInt(match[1], 10);
         if (num > maxNum) maxNum = num;

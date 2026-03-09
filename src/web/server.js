@@ -2038,6 +2038,7 @@ Rules:
 - If the slip has multiple bets/legs, return as parlay
 - Map the sport to the closest value from the valid sports list
 - For eventStartTime, ALWAYS format as "Day Mon DD H:MM AM/PM ET" (e.g. "Thu Mar 5 7:00 PM ET"). If only a time is visible (e.g. "7:00 PM"), assume today's date and use the full format. If no time is visible, use null.
+- IMPORTANT: Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}. Games on betting slips are almost always within the next 1-7 days from today. Use the CURRENT month and year when constructing dates. Do NOT guess old or future months — the event is happening very soon.
 - Return ONLY valid JSON, no markdown or explanation`;
 
       // Process each image through OpenAI Vision
@@ -2088,6 +2089,46 @@ Rules:
         }
 
         results.push(parsed);
+      }
+
+      // Post-process: fix obviously wrong dates from OCR hallucinations
+      const fixEventDate = (timeStr) => {
+        if (!timeStr) return timeStr;
+        // Parse "Day Mon DD H:MM AM/PM TZ" format
+        const dateRx = /^(\w{3})\s+(\w{3})\s+(\d{1,2})\s+(.+)$/;
+        const m = timeStr.match(dateRx);
+        if (!m) return timeStr;
+
+        const [, dayName, monthStr, dayNum, rest] = m;
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const parsedMonth = months.indexOf(monthStr);
+        if (parsedMonth === -1) return timeStr;
+
+        const now = new Date();
+        const currentMonth = now.getMonth(); // 0-based
+
+        // If the OCR date is more than 2 months away from now, it's likely wrong
+        // Replace with current month and recalculate the day-of-week
+        const monthDiff = Math.abs(parsedMonth - currentMonth);
+        if (monthDiff > 2 && monthDiff < 10) {
+          // Use current month/year, keep the day number and time
+          const correctedDate = new Date(now.getFullYear(), currentMonth, parseInt(dayNum));
+          const correctedDayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][correctedDate.getDay()];
+          const correctedMonth = months[currentMonth];
+          const fixed = `${correctedDayName} ${correctedMonth} ${dayNum} ${rest}`;
+          console.log(`[OCR] Fixed hallucinated date: "${timeStr}" → "${fixed}"`);
+          return fixed;
+        }
+        return timeStr;
+      };
+
+      for (const result of results) {
+        if (result.eventStartTime) result.eventStartTime = fixEventDate(result.eventStartTime);
+        if (result.legs) {
+          for (const leg of result.legs) {
+            if (leg.eventStartTime) leg.eventStartTime = fixEventDate(leg.eventStartTime);
+          }
+        }
       }
 
       // Return single result or array for multi-image

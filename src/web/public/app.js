@@ -100,10 +100,29 @@ function getDefaultEventTime() {
 // ── Normalize a raw time string (from OCR) into full "Day Mon DD H:MM AM/PM TZ" format ──
 function normalizeEventTime(raw) {
   if (!raw) return raw;
-  // Already in full format like "Thu Mar 5 7:00 PM EST" — leave it
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  if (days.some(d => raw.startsWith(d + ' '))) return raw;
+
+  // Already in full format like "Thu Mar 5 7:00 PM EST" — validate the month
+  if (days.some(d => raw.startsWith(d + ' '))) {
+    // Quick sanity check: is the month reasonable (within ~2 months of now)?
+    const parts = raw.match(/^\w{3}\s+(\w{3})\s+(\d{1,2})\s+(.+)$/);
+    if (parts) {
+      const monthIdx = months.indexOf(parts[1]);
+      const now = new Date();
+      const curMonth = now.getMonth();
+      const diff = Math.abs(monthIdx - curMonth);
+      if (diff > 2 && diff < 10) {
+        // Month is way off — fix it to current month
+        const dayNum = parseInt(parts[2]);
+        const corrected = new Date(now.getFullYear(), curMonth, dayNum);
+        const correctedDay = days[corrected.getDay()];
+        const fixed = `${correctedDay} ${months[curMonth]} ${dayNum} ${parts[3]}`;
+        return fixed;
+      }
+    }
+    return raw;
+  }
 
   // Try to parse a time-only string like "7pm", "7:00 PM", "19:00", etc.
   const timeRx = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm|AM|PM)?$/i;
