@@ -1278,8 +1278,8 @@ async function resolvePicksFromESPN(unresolvedPicks) {
       for (const pick of picks) {
         const pStats = playerStatsMap[pick.player_id];
 
-        // Player not in boxscore or played 0 minutes = DNP
-        if (!pStats || (pStats.min !== undefined && pStats.min === 0)) {
+        // Player not in boxscore, empty stats (DNP), or played 0 minutes = DNP
+        if (!pStats || Object.keys(pStats).length === 0 || (pStats.min !== undefined && pStats.min === 0)) {
           resolutions.push({ pickId: pick.id, actualValue: null, dnp: true });
           continue;
         }
