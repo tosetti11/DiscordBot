@@ -121,8 +121,10 @@ client.once(Events.ClientReady, (c) => {
 
       const resolutions = await nbaProps.resolvePicksFromESPN(unresolved);
       if (resolutions.length > 0) {
-        const count = await propPicksDb.resolvePickBatch(resolutions);
-        console.log(`[Props Resolver] Resolved ${count}/${unresolved.length} picks for ${dateStr}`);
+        const result = await propPicksDb.resolvePickBatch(resolutions);
+        const count = typeof result === 'object' ? result.resolved : result;
+        const dnps = typeof result === 'object' ? result.dnpCount : 0;
+        console.log(`[Props Resolver] Resolved ${count}/${unresolved.length} picks for ${dateStr}${dnps ? ` (${dnps} DNP)` : ''}`);
       }
     } catch (err) {
       console.error('[Props Resolver] Error:', err.message);

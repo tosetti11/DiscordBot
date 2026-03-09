@@ -63,7 +63,7 @@ async function savePicks(picks, direction) {
 }
 
 /**
- * Get unresolved picks (no actual_value yet) for a given date.
+ * Get unresolved picks (no actual_value yet, not DNP) for a given date.
  */
 async function getUnresolvedPicks(date) {
   const { data, error } = await supabase
@@ -71,6 +71,7 @@ async function getUnresolvedPicks(date) {
     .select('*')
     .eq('generated_date', date)
     .is('hit', null)
+    .or('dnp.is.null,dnp.eq.false')
     .order('direction')
     .order('rank');
 
@@ -82,9 +83,26 @@ async function getUnresolvedPicks(date) {
 }
 
 /**
- * Resolve a pick with actual results.
+ * Resolve a pick with actual results, or mark as DNP.
  */
-async function resolvePick(pickId, actualValue) {
+async function resolvePick(pickId, actualValue, dnp = false) {
+  if (dnp) {
+    // DNP — void this pick, don't count in stats
+    const { error } = await supabase
+      .from('prop_picks')
+      .update({
+        dnp: true,
+        actual_value: null,
+        hit: null,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('id', pickId);
+
+    if (error) console.error('[PropPicks] DNP mark error:', error.message);
+    return undefined; // not a hit or miss
+  }
+
+  // Normal resolution
   // We need to fetch the pick first to calculate hit
   const { data: pick, error: fetchErr } = await supabase
     .from('prop_picks')
@@ -103,6 +121,7 @@ async function resolvePick(pickId, actualValue) {
     .update({
       actual_value: actualValue,
       hit,
+      dnp: false,
       resolved_at: new Date().toISOString(),
     })
     .eq('id', pickId);
@@ -117,13 +136,20 @@ async function resolvePick(pickId, actualValue) {
  * Batch resolve multiple picks.
  */
 async function resolvePickBatch(resolutions) {
-  // resolutions = [{ pickId, actualValue }, ...]
+  // resolutions = [{ pickId, actualValue, dnp }, ...]
   let resolved = 0;
-  for (const { pickId, actualValue } of resolutions) {
-    const hit = await resolvePick(pickId, actualValue);
-    if (hit !== undefined) resolved++;
+  let dnpCount = 0;
+  for (const { pickId, actualValue, dnp } of resolutions) {
+    if (dnp) {
+      await resolvePick(pickId, null, true);
+      dnpCount++;
+      resolved++;
+    } else {
+      const hit = await resolvePick(pickId, actualValue, false);
+      if (hit !== undefined) resolved++;
+    }
   }
-  return resolved;
+  return { resolved, dnpCount };
 }
 
 /**
@@ -134,6 +160,7 @@ async function getAccuracyStats() {
     .from('prop_picks')
     .select('*')
     .not('hit', 'is', null)
+    .or('dnp.is.null,dnp.eq.false')
     .order('generated_date', { ascending: false });
 
   if (error) {
@@ -380,25 +407,29 @@ async function getDailyHistory() {
       isB2B: p.is_b2b || false,
       actualValue: p.actual_value !== null ? parseFloat(p.actual_value) : null,
       hit: p.hit,
+      dnp: p.dnp === true,
       gameId: p.game_id,
     });
   }
 
-  // Build array with daily stats
+  // Build array with daily stats (exclude DNPs from counts)
   const days = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
   return days.map(date => {
     const picks = byDate[date];
-    const resolved = picks.filter(p => p.hit !== null);
+    const activePicks = picks.filter(p => !p.dnp);
+    const dnpPicks = picks.filter(p => p.dnp);
+    const resolved = activePicks.filter(p => p.hit !== null);
     const hits = resolved.filter(p => p.hit === true);
     return {
       date,
       picks,
-      total: picks.length,
+      total: activePicks.length,
       resolved: resolved.length,
       hits: hits.length,
       misses: resolved.length - hits.length,
       hitRate: resolved.length ? Math.round((hits.length / resolved.length) * 100) : null,
-      pending: picks.length - resolved.length,
+      pending: activePicks.length - resolved.length,
+      dnps: dnpPicks.length,
     };
   });
 }

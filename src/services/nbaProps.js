@@ -1277,7 +1277,12 @@ async function resolvePicksFromESPN(unresolvedPicks) {
       // Resolve each pick for this game
       for (const pick of picks) {
         const pStats = playerStatsMap[pick.player_id];
-        if (!pStats) continue;
+
+        // Player not in boxscore or played 0 minutes = DNP
+        if (!pStats || (pStats.min !== undefined && pStats.min === 0)) {
+          resolutions.push({ pickId: pick.id, actualValue: null, dnp: true });
+          continue;
+        }
 
         // Map our stat_key to the box score key
         const BOX_MAP = { pts: 'pts', reb: 'reb', ast: 'ast', fg3: '3pt', stl: 'stl', blk: 'blk', to: 'to' };
@@ -1286,7 +1291,7 @@ async function resolvePicksFromESPN(unresolvedPicks) {
         if (actualValue === undefined) actualValue = pStats[pick.stat_key];
         if (actualValue === undefined) continue;
 
-        resolutions.push({ pickId: pick.id, actualValue });
+        resolutions.push({ pickId: pick.id, actualValue, dnp: false });
       }
     } catch (err) {
       console.error(`[Props] Failed to resolve game ${gameId}:`, err.message);

@@ -4691,6 +4691,7 @@ function propsRenderDailyHistory(days) {
     const pctClass = day.hitRate !== null ? (day.hitRate >= 60 ? 'good' : day.hitRate >= 40 ? 'ok' : 'bad') : 'pending';
     const recordText = day.resolved ? `${day.hits}-${day.misses}` : '';
     const pendingBadge = day.pending > 0 ? `<span class="dh-pending-badge">${day.pending} pending</span>` : '';
+    const dnpBadge = day.dnps > 0 ? `<span class="dh-pending-badge" style="background:rgba(255,135,50,0.15);color:#ff8732">${day.dnps} DNP</span>` : '';
 
     const overs = day.picks.filter(p => p.direction === 'over');
     const unders = day.picks.filter(p => p.direction === 'under');
@@ -4701,6 +4702,7 @@ function propsRenderDailyHistory(days) {
           <span class="dh-day-date">${dateLabel}</span>
           <span class="dh-day-record">${recordText}</span>
           ${pendingBadge}
+          ${dnpBadge}
           <span class="dh-day-pct ${pctClass}">${pctText}</span>
           <span class="dh-chevron">▸</span>
         </div>
@@ -4715,6 +4717,27 @@ function propsRenderDailyHistory(days) {
 }
 
 function propsRenderHistoryPick(p) {
+  if (p.dnp) {
+    const dir = p.direction.toUpperCase();
+    return `
+      <div class="dh-pick dnp">
+        <div class="dh-pick-main">
+          <span class="dh-pick-icon">🚫</span>
+          ${p.headshot ? `<img class="dh-pick-avatar" src="${p.headshot}" alt="" loading="lazy" style="opacity:0.4">` : ''}
+          <div class="dh-pick-info">
+            <span class="dh-pick-name" style="opacity:0.5">${p.playerName}</span>
+            <span class="dh-pick-detail">${p.teamAbbr} · ${p.matchup}</span>
+          </div>
+          <div class="dh-pick-prop">
+            <span class="dh-pick-dir ${p.direction}" style="opacity:0.4">${dir} ${p.statLabel} ${p.propLine}</span>
+          </div>
+          <div class="dh-pick-result">
+            <span class="dh-pick-verdict dnp">DNP</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
   const icon = p.hit === true ? '✅' : p.hit === false ? '❌' : '⏳';
   const resultClass = p.hit === true ? 'hit' : p.hit === false ? 'miss' : 'pending';
   const dir = p.direction.toUpperCase();

@@ -3472,6 +3472,8 @@ textarea {
 }
 .dh-pick-verdict.hit { color: #22c55e; background: rgba(34,197,94,0.1); }
 .dh-pick-verdict.miss { color: #ef4444; background: rgba(239,68,68,0.1); }
+.dh-pick-verdict.dnp { color: #ff8732; background: rgba(255,135,50,0.12); }
+.dh-pick.dnp { opacity: 0.6; }
 
 .dh-pick-expand {
   color: var(--text-muted);
