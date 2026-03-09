@@ -585,9 +585,18 @@ async function showPlayerPropModal(interaction, session) {
     .setRequired(true)
     .setMaxLength(10);
 
+  const gameInput = new TextInputBuilder()
+    .setCustomId('game_matchup')
+    .setLabel('Game (e.g. Lakers vs Celtics)')
+    .setPlaceholder('e.g. Lakers vs Celtics, LAL @ BOS')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setMaxLength(100);
+
   const propFields = [
     new ActionRowBuilder().addComponents(playerInput),
     new ActionRowBuilder().addComponents(propInput),
+    new ActionRowBuilder().addComponents(gameInput),
   ];
 
   if (session.betType === 'parlay') {
@@ -917,7 +926,8 @@ async function showDetailsPrompt(interaction, session, legData, units) {
   } else if (legData.bet_category === 'team_game') {
     summary = `**${sportName}**: ${legData.team_a} vs ${legData.team_b}\n**Pick**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
   } else {
-    summary = `**${sportName}**: ${legData.player_name}\n**Prop**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
+    const gameStr = legData.team_a && legData.team_b ? `\n**Game**: ${legData.team_a} vs ${legData.team_b}` : '';
+    summary = `**${sportName}**: ${legData.player_name}${gameStr}\n**Prop**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
   }
 
   const row = new ActionRowBuilder().addComponents(
@@ -1035,7 +1045,8 @@ async function showBetConfirmation(interaction, session, legData, units, betNote
   } else if (legData.bet_category === 'team_game') {
     summary = `**${sportName}**: ${legData.team_a} vs ${legData.team_b}\n**Pick**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
   } else {
-    summary = `**${sportName}**: ${legData.player_name}\n**Prop**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
+    const gameStr = legData.team_a && legData.team_b ? `\n**Game**: ${legData.team_a} vs ${legData.team_b}` : '';
+    summary = `**${sportName}**: ${legData.player_name}${gameStr}\n**Prop**: ${legData.pick}\n**Odds**: ${formatOdds(legData.odds_american)}\n**Units**: ${units}u`;
   }
   if (session.pendingEventStartTime || legData.event_start_time) summary += `\n**⏰ Game Time**: ${session.pendingEventStartTime || legData.event_start_time}`;
   if (betNote) summary += `\n**Note**: ${betNote}`;
@@ -1128,6 +1139,24 @@ async function handlePropModalSubmit(interaction) {
     try { eventStartTime = interaction.fields.getTextInputValue('event_start_time')?.trim() || null; } catch (e) { /* no field */ }
   }
 
+  // Parse game matchup into team_a / team_b
+  let teamA = null;
+  let teamB = null;
+  try {
+    const gameRaw = interaction.fields.getTextInputValue('game_matchup')?.trim();
+    if (gameRaw) {
+      // Split on common separators: "vs", "vs.", "v", "@", "-"
+      const parts = gameRaw.split(/\s+(?:vs\.?|v|@|[-–—])\s+/i);
+      if (parts.length >= 2) {
+        teamA = parts[0].trim();
+        teamB = parts[1].trim();
+      } else {
+        // If no separator found, use the whole string as context
+        teamA = gameRaw;
+      }
+    }
+  } catch (e) { /* no field */ }
+
   const legData = {
     sport: session.currentSport,
     bet_category: 'player_prop',
@@ -1135,6 +1164,8 @@ async function handlePropModalSubmit(interaction) {
     prop_description: propDesc,
     pick: propDesc,
     wager_type: 'prop',
+    team_a: teamA,
+    team_b: teamB,
     odds_american: oddsAmerican,
     odds_decimal: oddsDecimal,
     event_start_time: eventStartTime,

@@ -554,6 +554,16 @@ function buildParlayLegs() {
             <input type="text" class="leg-prop-desc" data-leg="${i}" placeholder="e.g. Over 25.5 Points" maxlength="200">
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Team A</label>
+            <input type="text" class="leg-prop-team-a" data-leg="${i}" placeholder="e.g. Lakers" maxlength="100">
+          </div>
+          <div class="form-group">
+            <label>Team B</label>
+            <input type="text" class="leg-prop-team-b" data-leg="${i}" placeholder="e.g. Celtics" maxlength="100">
+          </div>
+        </div>
       </div>
 
       <!-- Futures fields -->
@@ -711,9 +721,9 @@ async function handleSubmit(e) {
           leg.playerName = document.querySelector(`.leg-player-name[data-leg="${i}"]`)?.value;
           leg.propDescription = document.querySelector(`.leg-prop-desc[data-leg="${i}"]`)?.value;
           if (!leg.playerName || !leg.propDescription) throw new Error(`Leg ${i}: Enter player name and prop`);
-          // Include teams if available (populated by OCR scanner)
-          const propTeamA = document.querySelector(`.leg-team-a[data-leg="${i}"]`)?.value;
-          const propTeamB = document.querySelector(`.leg-team-b[data-leg="${i}"]`)?.value;
+          // Include teams from prop team fields or fallback to team-game fields (populated by OCR)
+          const propTeamA = document.querySelector(`.leg-prop-team-a[data-leg="${i}"]`)?.value || document.querySelector(`.leg-team-a[data-leg="${i}"]`)?.value;
+          const propTeamB = document.querySelector(`.leg-prop-team-b[data-leg="${i}"]`)?.value || document.querySelector(`.leg-team-b[data-leg="${i}"]`)?.value;
           if (propTeamA) leg.teamA = propTeamA;
           if (propTeamB) leg.teamB = propTeamB;
         } else if (category === 'futures') {
@@ -787,9 +797,9 @@ async function handleSubmit(e) {
         body.playerName = document.getElementById('player-name').value;
         body.propDescription = document.getElementById('prop-desc').value;
         if (!body.playerName || !body.propDescription) throw new Error('Enter player name and prop');
-        // Include teams if available (populated by OCR scanner)
-        const propTeamA = document.getElementById('team-a')?.value;
-        const propTeamB = document.getElementById('team-b')?.value;
+        // Include teams from prop team fields or fallback to team-game fields (populated by OCR)
+        const propTeamA = document.getElementById('prop-team-a')?.value || document.getElementById('team-a')?.value;
+        const propTeamB = document.getElementById('prop-team-b')?.value || document.getElementById('team-b')?.value;
         if (propTeamA) body.teamA = propTeamA;
         if (propTeamB) body.teamB = propTeamB;
       } else if (category === 'futures') {
@@ -1250,6 +1260,15 @@ function applySingleData(data) {
   // Player prop fields
   if (data.playerName) document.getElementById('player-name').value = data.playerName;
   if (data.propDescription) document.getElementById('prop-desc').value = data.propDescription;
+  // Also populate prop team fields for player props (game matchup from OCR)
+  if (data.betCategory === 'player_prop' && data.teamA) {
+    const pTA = document.getElementById('prop-team-a');
+    if (pTA) pTA.value = data.teamA;
+  }
+  if (data.betCategory === 'player_prop' && data.teamB) {
+    const pTB = document.getElementById('prop-team-b');
+    if (pTB) pTB.value = data.teamB;
+  }
 
   // Futures fields
   if (data.futuresMarket) document.getElementById('futures-market').value = data.futuresMarket;
@@ -1354,6 +1373,15 @@ function applyParlayData(data) {
     if (leg.propDescription) {
       const el = document.querySelector(`.leg-prop-desc[data-leg="${i}"]`);
       if (el) el.value = leg.propDescription;
+    }
+    // Also populate prop team fields for player props (game matchup from OCR)
+    if (leg.betCategory === 'player_prop' && leg.teamA) {
+      const el = document.querySelector(`.leg-prop-team-a[data-leg="${i}"]`);
+      if (el) el.value = leg.teamA;
+    }
+    if (leg.betCategory === 'player_prop' && leg.teamB) {
+      const el = document.querySelector(`.leg-prop-team-b[data-leg="${i}"]`);
+      if (el) el.value = leg.teamB;
     }
 
     // Futures fields
