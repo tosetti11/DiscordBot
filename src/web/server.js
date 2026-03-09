@@ -2798,13 +2798,13 @@ Rules:
 
       const unresolved = await propPicksDb.getUnresolvedPicks(date);
       if (!unresolved.length) {
-        return res.json({ message: 'No unresolved picks for ' + date, resolved: 0 });
+        return res.json({ message: 'No unresolved picks for ' + date, resolved: 0, unresolved: 0 });
       }
 
       const resolutions = await nbaProps.resolvePicksFromESPN(unresolved);
-      const resolved = await propPicksDb.resolvePickBatch(resolutions);
+      const result = await propPicksDb.resolvePickBatch(resolutions);
 
-      res.json({ date, unresolvedCount: unresolved.length, resolved, resolutions: resolutions.length });
+      res.json({ date, unresolved: unresolved.length, resolved: result.resolved, dnpCount: result.dnpCount });
     } catch (err) {
       console.error('[Props API] resolve error:', err);
       res.status(500).json({ error: 'Failed to resolve picks' });

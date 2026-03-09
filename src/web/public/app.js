@@ -4908,7 +4908,8 @@ async function propsCheckResults() {
     const data = await res.json();
 
     if (data.resolved > 0) {
-      showToast(`Resolved ${data.resolved} picks!`);
+      const dnpNote = data.dnpCount ? ` (${data.dnpCount} DNP)` : '';
+      showToast(`Resolved ${data.resolved} picks!${dnpNote}`);
     } else if (data.unresolved === 0) {
       showToast('No pending picks to resolve');
     } else {
