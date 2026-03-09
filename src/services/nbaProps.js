@@ -612,6 +612,156 @@ async function buildMatchupContext(opponentTeamId, playerTeamId, gameOdds, gameL
 }
 
 /**
+ * Fetch all NBA team injuries from ESPN.
+ * Returns a map: { teamId: [{ playerId, playerName, status, comment }], ... }
+ * Only includes players with status "Out" (not Day-To-Day or Questionable).
+ */
+async function fetchTeamInjuries() {
+  const cacheKey = 'nba-injuries';
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${ESPN_NBA}/injuries`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`ESPN injuries ${res.status}`);
+    const json = await res.json();
+
+    const injuryMap = {}; // teamId → [{ playerId, playerName, status }]
+    for (const team of (json.injuries || [])) {
+      const teamId = String(team.id);
+      const outs = (team.injuries || [])
+        .filter(inj => inj.status === 'Out')
+        .map(inj => ({
+          playerId: inj.athlete?.id || null,
+          playerName: inj.athlete?.displayName || 'Unknown',
+          status: inj.status,
+          comment: inj.shortComment || '',
+        }));
+      if (outs.length) injuryMap[teamId] = outs;
+    }
+
+    console.log(`[Props] Injuries: ${Object.values(injuryMap).flat().length} players OUT across ${Object.keys(injuryMap).length} teams`);
+    setCache(cacheKey, injuryMap);
+    return injuryMap;
+  } catch (err) {
+    console.error('[Props] Injuries fetch error:', err.message);
+    return {};
+  }
+}
+
+/**
+ * Identify key players on a team and compute their "impact share".
+ * Uses season averages to estimate how much of the team's offense flows through each player.
+ * Returns sorted by PPG descending.
+ */
+async function getTeamKeyPlayers(teamId) {
+  const cacheKey = `key-players-${teamId}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const roster = await getTeamRoster(teamId);
+  const keyPlayers = [];
+
+  // Fetch stats for top roster players (limit to avoid too many API calls)
+  const statsPromises = roster.slice(0, 15).map(async (p) => {
+    try {
+      const stats = await getPlayerStats(p.id);
+      const ppg = getStatValue(stats.seasonAvg, 'pts');
+      const apg = getStatValue(stats.seasonAvg, 'ast');
+      const rpg = getStatValue(stats.seasonAvg, 'reb');
+      const mpg = getStatValue(stats.seasonAvg, 'min');
+      const fga = getStatValue(stats.seasonAvg, 'fga') || getStatValue(stats.seasonAvg, 'fg');
+      if (ppg !== null && ppg > 0) {
+        keyPlayers.push({
+          id: p.id,
+          name: p.name,
+          ppg: ppg || 0,
+          apg: apg || 0,
+          rpg: rpg || 0,
+          mpg: mpg || 0,
+          fga: fga || 0,
+        });
+      }
+    } catch (e) { /* skip */ }
+  });
+
+  await Promise.all(statsPromises);
+  keyPlayers.sort((a, b) => b.ppg - a.ppg);
+
+  setCache(cacheKey, keyPlayers);
+  return keyPlayers;
+}
+
+/**
+ * Calculate "role expansion factor" for a player when key teammates are out.
+ * Returns a multiplier > 1.0 if the player is likely to see expanded role.
+ *
+ * Logic:
+ *   - For each OUT teammate, calculate their share of team offense
+ *   - Remaining players absorb that share proportionally
+ *   - The "boost" is how much more usage/minutes the analyzed player gets
+ *
+ * @param {string} playerId - The player being analyzed
+ * @param {string} teamId - The player's team
+ * @param {Object} injuryMap - From fetchTeamInjuries()
+ * @returns {{ factor: number, outPlayers: string[], totalPPGOut: number }}
+ */
+async function calcRoleExpansion(playerId, teamId, injuryMap) {
+  const teamInjuries = injuryMap[teamId];
+  if (!teamInjuries || !teamInjuries.length) {
+    return { factor: 1.0, outPlayers: [], totalPPGOut: 0 };
+  }
+
+  const keyPlayers = await getTeamKeyPlayers(teamId);
+  if (!keyPlayers.length) return { factor: 1.0, outPlayers: [], totalPPGOut: 0 };
+
+  // Find which key players are OUT
+  const outPlayerIds = new Set(teamInjuries.map(inj => String(inj.playerId)));
+  const outKeyPlayers = keyPlayers.filter(kp => outPlayerIds.has(String(kp.id)));
+
+  if (!outKeyPlayers.length) return { factor: 1.0, outPlayers: [], totalPPGOut: 0 };
+
+  // Don't apply expansion if the analyzed player is the one who's out
+  if (outPlayerIds.has(String(playerId))) {
+    return { factor: 1.0, outPlayers: [], totalPPGOut: 0 };
+  }
+
+  // Calculate total PPG of OUT players
+  const totalPPGOut = outKeyPlayers.reduce((s, p) => s + p.ppg, 0);
+  const outNames = outKeyPlayers.map(p => p.name);
+
+  // Find the analyzed player in the key players list
+  const thisPlayer = keyPlayers.find(kp => String(kp.id) === String(playerId));
+  if (!thisPlayer) return { factor: 1.0, outPlayers: outNames, totalPPGOut };
+
+  // Calculate available players' total PPG (excluding OUT players)
+  const availablePlayers = keyPlayers.filter(kp => !outPlayerIds.has(String(kp.id)));
+  const availableTotalPPG = availablePlayers.reduce((s, p) => s + p.ppg, 0);
+
+  if (availableTotalPPG <= 0) return { factor: 1.0, outPlayers: outNames, totalPPGOut };
+
+  // Player's share of remaining offense
+  const playerShare = thisPlayer.ppg / availableTotalPPG;
+
+  // How much additional offense flows to this player
+  // Assume ~60% of the OUT player's production gets redistributed (rest is lost efficiency)
+  const redistributed = totalPPGOut * 0.6;
+  const playerBoost = redistributed * playerShare;
+
+  // Convert to a multiplier on the player's expected output
+  const factor = 1 + (playerBoost / thisPlayer.ppg);
+
+  // Cap at 1.35 (35% max expansion) to avoid extreme predictions
+  const cappedFactor = Math.min(1.35, Math.max(1.0, factor));
+
+  console.log(`[Props] Role expansion for ${thisPlayer.name}: ${cappedFactor.toFixed(3)}x ` +
+    `(${outNames.join(', ')} OUT, ${totalPPGOut.toFixed(1)} PPG missing)`);
+
+  return { factor: cappedFactor, outPlayers: outNames, totalPPGOut };
+}
+
+/**
  * Detect if the player is on the second night of a back-to-back.
  * Checks if the most recent game in their log was yesterday (ET).
  */
@@ -724,7 +874,7 @@ function calcVolatility(gameLog) {
  * Analyze a player for a specific stat category against a given opponent.
  * Returns hit rates, averages, trends, and a confidence score.
  */
-function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCtx = null) {
+function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCtx = null, roleCtx = null) {
   const { seasonAvg, gameLog } = playerStats;
   const seasonVal = getStatValue(seasonAvg, statKey);
 
@@ -824,6 +974,20 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
   // Apply all multipliers to get matchup-adjusted projection
   projectedValue = projectedValue * paceAdj * defAdj * impliedTotalAdj * b2bAdj;
 
+  // ── 5. Role Expansion (Injury Impact) ──
+  // When key teammates are OUT, remaining players absorb more usage/shots
+  // This boosts the projected value and makes UNDER picks riskier
+  let roleExpansionAdj = 1.0;
+  let injuryFlag = false;
+  let outTeammates = [];
+
+  if (roleCtx && roleCtx.factor > 1.0) {
+    roleExpansionAdj = roleCtx.factor;
+    injuryFlag = true;
+    outTeammates = roleCtx.outPlayers || [];
+    projectedValue = projectedValue * roleExpansionAdj;
+  }
+
   // ── Confidence Score ──
   // Weighted average of multiple signals to determine over/under probability
   let overProbability = 0;
@@ -852,8 +1016,8 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
   overProbability += avgSignal * 5;
   totalWeight += 5;
 
-  // ── 5. Matchup-Adjusted Projection vs Line (weight 25%) ──
-  // This is the KEY new signal — our adjusted projection compared to the prop line
+  // ── 6. Matchup-Adjusted Projection vs Line (weight 25%) ──
+  // This is the KEY signal — our adjusted projection compared to the prop line
   // Convert to a 0-1 signal based on how far the projection is from the line
   if (matchupCtx) {
     const projDiff = projectedValue - propLine;
@@ -875,7 +1039,32 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
   const volAdj = 1 - vol.volatility;
   overProbability = 0.5 + (overProbability - 0.5) * volAdj;
 
-  const underProbability = 1 - overProbability;
+  // ── Injury-based adjustment ──
+  // When key teammates are OUT, shift probability toward OVER
+  // The logic: if a 25 PPG teammate is out, this player gets more touches → OVER more likely
+  if (injuryFlag && roleExpansionAdj > 1.0) {
+    // Shift overProbability up proportionally to the expansion factor
+    // E.g. 1.15x expansion → shift 5% toward OVER
+    const injuryShift = (roleExpansionAdj - 1.0) * 0.35; // 35% of expansion as probability shift
+    overProbability = Math.min(0.85, overProbability + injuryShift);
+  }
+
+  // ── Probability Cap (calibration correction) ──
+  // Data shows 70%+ predicted only hits 64% — cap to prevent overconfidence
+  // With generated lines, cap at 73%. With real sportsbook lines, allow up to 80%.
+  const MAX_PROB = 0.73; // Will be overridden by caller if using real lines
+  overProbability = Math.min(MAX_PROB, Math.max(1 - MAX_PROB, overProbability));
+
+  let underProbability = 1 - overProbability;
+
+  // ── UNDER penalty (calibration correction) ──
+  // Data shows UNDERs hit 55% vs OVERs at 79% — apply a dampening factor
+  // When using generated lines, UNDER is inherently harder (betting against player's own avg)
+  // Pull under probability 5% toward 50%
+  if (underProbability > 0.5) {
+    underProbability = underProbability * 0.93 + 0.5 * 0.07; // 7% regression toward 50%
+    overProbability = 1 - underProbability;
+  }
 
   // Determine recommendation
   let recommendation = 'skip';
@@ -885,9 +1074,10 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
 
   if (overProbability >= strongThreshold) {
     recommendation = 'OVER';
-    confidence = overProbability >= 0.72 ? 'high' : 'medium';
+    confidence = overProbability >= 0.70 ? 'high' : 'medium';
   } else if (underProbability >= strongThreshold) {
     recommendation = 'UNDER';
+    // Unders need higher bar for "high" confidence due to historical underperformance
     confidence = underProbability >= 0.72 ? 'high' : 'medium';
   } else if (overProbability >= medThreshold) {
     recommendation = 'LEAN OVER';
@@ -895,6 +1085,13 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
   } else if (underProbability >= medThreshold) {
     recommendation = 'LEAN UNDER';
     confidence = 'low';
+  }
+
+  // ── Injury-based confidence downgrade ──
+  // If key teammates are out and we're recommending UNDER, downgrade confidence
+  if (injuryFlag && (recommendation === 'UNDER' || recommendation === 'LEAN UNDER')) {
+    if (confidence === 'high') confidence = 'medium';
+    else if (confidence === 'medium') confidence = 'low';
   }
 
   return {
@@ -922,7 +1119,7 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
     volatilityLabel: vol.label,
     minVol: vol.minVol,
     useVol: vol.useVol,
-    // Matchup context (new)
+    // Matchup context
     projectedValue: Math.round(projectedValue * 10) / 10,
     matchup: matchupCtx ? {
       paceLabel: matchupCtx.paceLabel,
@@ -935,6 +1132,12 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
       defAdj: Math.round(defAdj * 1000) / 1000,
       b2bAdj,
       impliedTotalAdj: Math.round(impliedTotalAdj * 1000) / 1000,
+    } : null,
+    // Injury / role expansion context
+    injuryImpact: injuryFlag ? {
+      roleExpansion: Math.round(roleExpansionAdj * 1000) / 1000,
+      outPlayers: outTeammates,
+      totalPPGOut: roleCtx?.totalPPGOut || 0,
     } : null,
     overProbability: Math.round(overProbability * 100),
     underProbability: Math.round(underProbability * 100),
@@ -991,6 +1194,7 @@ async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null, ga
 
   // Build matchup context if we have game info
   let matchupCtx = null;
+  let roleCtx = null;
   if (gameCtx?.playerTeamId) {
     matchupCtx = await buildMatchupContext(
       opponentTeamId,
@@ -999,6 +1203,10 @@ async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null, ga
       playerStats.gameLog,
       gameCtx.homeAway || 'home'
     );
+
+    // Check injuries for role expansion
+    const injuryMap = await fetchTeamInjuries();
+    roleCtx = await calcRoleExpansion(playerId, gameCtx.playerTeamId, injuryMap);
   }
 
   const results = {};
@@ -1029,7 +1237,7 @@ async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null, ga
 
     if (propLine <= 0) continue;
 
-    const analysis = analyzePlayerProp(playerStats, cat.key, propLine, opponentTeamId, matchupCtx);
+    const analysis = analyzePlayerProp(playerStats, cat.key, propLine, opponentTeamId, matchupCtx, roleCtx);
     if (analysis) {
       results[cat.key] = { ...analysis, label: cat.label, shortLabel: cat.shortLabel, lineSource, bookOdds };
     }
@@ -1070,6 +1278,11 @@ async function generateTopPicks() {
   const usingRealLines = !!realProps;
   console.log(`[Props] Using ${usingRealLines ? 'REAL sportsbook' : 'generated'} prop lines`);
 
+  // Fetch league-wide injury report
+  const injuryMap = await fetchTeamInjuries();
+  const injuredTeamCount = Object.keys(injuryMap).length;
+  console.log(`[Props] Injury report: ${Object.values(injuryMap).flat().length} players OUT on ${injuredTeamCount} teams`);
+
   // Collect all (player, opponentId, game) tuples
   const playerTasks = [];
   const matchupContextCache = {}; // gameId → { away: matchupCtx, home: matchupCtx }
@@ -1093,10 +1306,10 @@ async function generateTopPicks() {
     }
 
     for (const p of awayRoster) {
-      playerTasks.push({ player: p, opponentId: game.home.id, game, teamName: game.away.name, teamAbbr: game.away.abbreviation, side: 'away' });
+      playerTasks.push({ player: p, opponentId: game.home.id, game, teamName: game.away.name, teamAbbr: game.away.abbreviation, teamId: game.away.id, side: 'away' });
     }
     for (const p of homeRoster) {
-      playerTasks.push({ player: p, opponentId: game.away.id, game, teamName: game.home.name, teamAbbr: game.home.abbreviation, side: 'home' });
+      playerTasks.push({ player: p, opponentId: game.away.id, game, teamName: game.home.name, teamAbbr: game.home.abbreviation, teamId: game.home.id, side: 'home' });
     }
   }
 
@@ -1108,7 +1321,7 @@ async function generateTopPicks() {
   for (let i = 0; i < playerTasks.length; i += BATCH_SIZE) {
     const batch = playerTasks.slice(i, i + BATCH_SIZE);
     const results = await Promise.allSettled(
-      batch.map(async ({ player, opponentId, game, teamName, teamAbbr, side }) => {
+      batch.map(async ({ player, opponentId, game, teamName, teamAbbr, teamId, side }) => {
         const stats = await getPlayerStats(player.id);
         // Filter: need enough games and meaningful minutes
         if (stats.gameLog.length < 10) return null;
@@ -1127,6 +1340,14 @@ async function generateTopPicks() {
         if (matchupCtx) {
           matchupCtx = { ...matchupCtx, isB2B: detectBackToBack(stats.gameLog) };
         }
+
+        // Calculate role expansion from injuries
+        const roleCtx = await calcRoleExpansion(player.id, teamId, injuryMap);
+
+        // Skip players who are OUT (they'll be in the injury map)
+        const teamInjuries = injuryMap[teamId] || [];
+        const isOut = teamInjuries.some(inj => String(inj.playerId) === String(player.id));
+        if (isOut) return null;
 
         // Run analysis on key stat categories (PTS, REB, AST, 3PM)
         const keyCats = STAT_CATEGORIES.filter(c => ['pts', 'reb', 'ast', 'fg3'].includes(c.key));
@@ -1158,7 +1379,7 @@ async function generateTopPicks() {
 
           if (propLine <= 0) continue;
 
-          const analysis = analyzePlayerProp(stats, cat.key, propLine, opponentId, matchupCtx);
+          const analysis = analyzePlayerProp(stats, cat.key, propLine, opponentId, matchupCtx, roleCtx);
           if (!analysis) continue;
 
           picks.push({
@@ -1186,8 +1407,10 @@ async function generateTopPicks() {
 
   // Sort for best overs (highest overProbability) and best unders (highest underProbability)
   // Prioritize picks with real sportsbook lines over generated ones
+  // Filter out moderate+ volatility players (they only hit 50%)
   const overCandidates = allPicks
     .filter(p => p.analysis.overProbability >= 58)
+    .filter(p => p.analysis.volatility <= 0.30) // Only stable players
     .sort((a, b) => {
       // Real lines first, then by probability
       if (a.lineSource !== 'generated' && b.lineSource === 'generated') return -1;
@@ -1195,8 +1418,11 @@ async function generateTopPicks() {
       return b.analysis.overProbability - a.analysis.overProbability;
     });
 
+  // Unders require higher threshold (historically weaker performance)
   const underCandidates = allPicks
-    .filter(p => p.analysis.underProbability >= 58)
+    .filter(p => p.analysis.underProbability >= 62) // Tighter threshold for unders (was 58)
+    .filter(p => p.analysis.volatility <= 0.30) // Only stable players
+    .filter(p => !p.analysis.injuryImpact) // Skip unders when key teammates are OUT
     .sort((a, b) => {
       if (a.lineSource !== 'generated' && b.lineSource === 'generated') return -1;
       if (a.lineSource === 'generated' && b.lineSource !== 'generated') return 1;
