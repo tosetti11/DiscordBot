@@ -193,6 +193,10 @@ async function fetchAllTodaysProps() {
 
   const playerCount = Object.keys(propMap).length;
   console.log(`[Props] Got real prop lines for ${playerCount} players`);
+  if (playerCount === 0) {
+    console.log('[Props] No real lines returned — API quota may be exhausted');
+    return null; // Return null so callers know real lines aren't available
+  }
   setCache(cacheKey, propMap);
   return propMap;
 }
@@ -1051,8 +1055,7 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
 
   // ── Probability Cap (calibration correction) ──
   // Data shows 70%+ predicted only hits 64% — cap to prevent overconfidence
-  // With generated lines, cap at 73%. With real sportsbook lines, allow up to 80%.
-  const MAX_PROB = 0.73; // Will be overridden by caller if using real lines
+  const MAX_PROB = 0.78;
   overProbability = Math.min(MAX_PROB, Math.max(1 - MAX_PROB, overProbability));
 
   let underProbability = 1 - overProbability;
@@ -1069,16 +1072,16 @@ function analyzePlayerProp(playerStats, statKey, propLine, opponentId, matchupCt
   // Determine recommendation
   let recommendation = 'skip';
   let confidence = 'low';
-  const strongThreshold = 0.65;
-  const medThreshold = 0.58;
+  const strongThreshold = 0.63;
+  const medThreshold = 0.56;
 
   if (overProbability >= strongThreshold) {
     recommendation = 'OVER';
-    confidence = overProbability >= 0.70 ? 'high' : 'medium';
+    confidence = overProbability >= 0.68 ? 'high' : 'medium';
   } else if (underProbability >= strongThreshold) {
     recommendation = 'UNDER';
     // Unders need higher bar for "high" confidence due to historical underperformance
-    confidence = underProbability >= 0.72 ? 'high' : 'medium';
+    confidence = underProbability >= 0.70 ? 'high' : 'medium';
   } else if (overProbability >= medThreshold) {
     recommendation = 'LEAN OVER';
     confidence = 'low';
@@ -1232,7 +1235,8 @@ async function autoAnalyzePlayer(playerId, opponentTeamId, playerName = null, ga
       };
     } else {
       // No sportsbook line available — generate from average
-      propLine = Math.round(avg * 2) / 2;
+      // Always use .5 increments to match sportsbook style (e.g. 25.5, 2.5)
+      propLine = Math.floor(avg) + 0.5;
     }
 
     if (propLine <= 0) continue;
@@ -1374,7 +1378,8 @@ async function generateTopPicks() {
             };
           } else {
             // No sportsbook line available — generate from average
-            propLine = Math.round(avg * 2) / 2;
+            // Always use .5 increments to match sportsbook style (e.g. 25.5, 2.5)
+            propLine = Math.floor(avg) + 0.5;
           }
 
           if (propLine <= 0) continue;
@@ -1409,7 +1414,7 @@ async function generateTopPicks() {
   // Prioritize picks with real sportsbook lines over generated ones
   // Filter out moderate+ volatility players (they only hit 50%)
   const overCandidates = allPicks
-    .filter(p => p.analysis.overProbability >= 58)
+    .filter(p => p.analysis.overProbability >= 56)
     .filter(p => p.analysis.volatility <= 0.30) // Only stable players
     .sort((a, b) => {
       // Real lines first, then by probability
@@ -1420,7 +1425,7 @@ async function generateTopPicks() {
 
   // Unders require higher threshold (historically weaker performance)
   const underCandidates = allPicks
-    .filter(p => p.analysis.underProbability >= 62) // Tighter threshold for unders (was 58)
+    .filter(p => p.analysis.underProbability >= 58) // Tighter threshold for unders
     .filter(p => p.analysis.volatility <= 0.30) // Only stable players
     .filter(p => !p.analysis.injuryImpact) // Skip unders when key teammates are OUT
     .sort((a, b) => {

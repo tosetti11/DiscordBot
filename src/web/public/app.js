@@ -4289,6 +4289,18 @@ function propsRenderPickCard(pick, rank, type) {
   const bookBadge = lineSource ? `<span class="props-book-badge">${lineSource}</span>` : '<span class="props-book-badge est">estimated</span>';
   const oddsStr = pick.bookOdds ? ` (${type === 'over' ? formatOdds(pick.bookOdds.over) : formatOdds(pick.bookOdds.under)})` : '';
 
+  // Format pick label: whole numbers use "1+ 3PM" style, .5 lines use "OVER 1.5 3PM"
+  const line = a.propLine;
+  const isWholeNumber = line % 1 === 0;
+  let pickLabel;
+  if (type === 'over' && isWholeNumber) {
+    pickLabel = `${pick.stat.shortLabel} ${Math.round(line)}+`;
+  } else if (type === 'under' && isWholeNumber) {
+    pickLabel = `${pick.stat.shortLabel} ${direction} ${line}`;
+  } else {
+    pickLabel = `${pick.stat.shortLabel} ${direction} ${line}`;
+  }
+
   // Volatility badge
   const vol = a.volatility;
   let volClass = 'vol-stable';
@@ -4329,7 +4341,7 @@ function propsRenderPickCard(pick, rank, type) {
       ${headshot ? `<img class="props-pick-avatar" src="${headshot}" alt="" loading="lazy">` : ''}
       <div class="props-pick-info">
         <div class="props-pick-name">${pick.player.name}</div>
-        <div class="props-pick-detail">${pick.teamAbbr} · ${pick.matchup} · ${pick.stat.shortLabel} ${direction} ${a.propLine}${oddsStr} ${bookBadge}</div>
+        <div class="props-pick-detail">${pick.teamAbbr} · ${pick.matchup} · ${pickLabel}${oddsStr} ${bookBadge}</div>
         <div class="props-pick-detail">Avg: ${a.seasonAvg} · L5: ${a.avg5} ${trendIcon} · Hit: ${hitRate}%${vsOppStr} ${volBadge}</div>
         ${matchupLine}
       </div>
