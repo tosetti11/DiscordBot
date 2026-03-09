@@ -60,7 +60,17 @@ async function savePicks(picks, direction) {
     .upsert(rows, { onConflict: 'generated_date,player_id,stat_key,direction' });
 
   if (error) {
-    console.error('[PropPicks] Save error:', error.message);
+    // If injury_impact column doesn't exist yet, retry without it
+    if (error.message && error.message.includes('injury_impact')) {
+      console.warn('[PropPicks] injury_impact column not found, saving without it');
+      const fallbackRows = rows.map(({ injury_impact, ...rest }) => rest);
+      const { error: e2 } = await supabase
+        .from('prop_picks')
+        .upsert(fallbackRows, { onConflict: 'generated_date,player_id,stat_key,direction' });
+      if (e2) console.error('[PropPicks] Fallback save error:', e2.message);
+    } else {
+      console.error('[PropPicks] Save error:', error.message);
+    }
   }
 }
 
