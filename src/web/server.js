@@ -22,7 +22,9 @@ const { generateBetCardImage } = require('../utils/betCardImage');
 const { generateScoreboardImage } = require('../utils/scoreboardImage');
 const espn = require('../services/espn');
 const nbaProps = require('../services/nbaProps');
+const nbaGamePicks = require('../services/nbaGamePicks');
 const propPicksDb = require('../database/propPicks');
+const gamePicksDb = require('../database/gamePicksDb');
 const remindersDb = require('../database/reminders');
 const { notifyFollowers } = require('../utils/notifications');
 
@@ -2829,6 +2831,99 @@ Rules:
       res.json(days);
     } catch (err) {
       console.error('[Props API] daily-history error:', err);
+      res.status(500).json({ error: 'Failed to fetch daily history' });
+    }
+  });
+
+  // ─── NBA Game Picks (ML, Spread, O/U) ───
+
+  // Generate top game picks for today's NBA slate
+  app.get('/api/game-picks/top', authMiddleware, ownerMiddleware, async (req, res) => {
+    try {
+      const result = await nbaGamePicks.generateTopGamePicks();
+      res.json(result);
+
+      // Fire-and-forget: save picks to DB for tracking
+      try {
+        await gamePicksDb.savePicks(result.moneyline || [], 'ml');
+        await gamePicksDb.savePicks(result.spread || [], 'spread');
+        await gamePicksDb.savePicks(result.overUnder || [], 'ou');
+      } catch (e) {
+        console.error('[GamePicks] Failed to save picks to DB:', e.message);
+      }
+    } catch (err) {
+      console.error('[GamePicks API] top picks error:', err);
+      res.status(500).json({ error: 'Failed to generate game picks' });
+    }
+  });
+
+  // Analyze a single game
+  app.get('/api/game-picks/analyze/:gameId', authMiddleware, ownerMiddleware, async (req, res) => {
+    try {
+      const games = await nbaGamePicks.getTodaysGames();
+      const game = games.find(g => g.id === req.params.gameId);
+      if (!game) return res.status(404).json({ error: 'Game not found' });
+      const analysis = await nbaGamePicks.analyzeGame(game);
+      res.json(analysis);
+    } catch (err) {
+      console.error('[GamePicks API] analyze error:', err);
+      res.status(500).json({ error: 'Failed to analyze game' });
+    }
+  });
+
+  // Game picks accuracy stats
+  app.get('/api/game-picks/accuracy', authMiddleware, ownerMiddleware, async (req, res) => {
+    try {
+      const stats = await gamePicksDb.getAccuracyStats();
+      res.json(stats || { totalPicks: 0 });
+    } catch (err) {
+      console.error('[GamePicks API] accuracy error:', err);
+      res.status(500).json({ error: 'Failed to fetch accuracy stats' });
+    }
+  });
+
+  // Resolve yesterday's game picks by checking ESPN final scores
+  app.post('/api/game-picks/resolve', authMiddleware, ownerMiddleware, async (req, res) => {
+    try {
+      const date = req.body?.date || (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      })();
+
+      const unresolved = await gamePicksDb.getUnresolvedPicks(date);
+      if (!unresolved.length) {
+        return res.json({ message: 'No unresolved game picks for ' + date, resolved: 0, unresolved: 0 });
+      }
+
+      const resolutions = await nbaGamePicks.resolveGamePicksFromESPN(unresolved);
+      const result = await gamePicksDb.resolvePickBatch(resolutions);
+
+      res.json({ date, unresolved: unresolved.length, resolved: result.resolved });
+    } catch (err) {
+      console.error('[GamePicks API] resolve error:', err);
+      res.status(500).json({ error: 'Failed to resolve game picks' });
+    }
+  });
+
+  // Get game picks for a specific date
+  app.get('/api/game-picks/history/:date', authMiddleware, ownerMiddleware, async (req, res) => {
+    try {
+      const picks = await gamePicksDb.getPicksByDate(req.params.date);
+      res.json(picks);
+    } catch (err) {
+      console.error('[GamePicks API] history error:', err);
+      res.status(500).json({ error: 'Failed to fetch game pick history' });
+    }
+  });
+
+  // Get all game picks grouped by day with daily stats
+  app.get('/api/game-picks/daily-history', authMiddleware, ownerMiddleware, async (req, res) => {
+    try {
+      const days = await gamePicksDb.getDailyHistory();
+      res.json(days);
+    } catch (err) {
+      console.error('[GamePicks API] daily-history error:', err);
       res.status(500).json({ error: 'Failed to fetch daily history' });
     }
   });

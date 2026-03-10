@@ -132,6 +132,32 @@ client.once(Events.ClientReady, (c) => {
   }, 5 * 60_000); // 5 minutes
   console.log('   🏀 Prop picks auto-resolver started (5min interval)');
 
+  // ─── Game Picks Auto-Resolver ───
+  // Resolves yesterday's game picks every 5 minutes (checks ESPN final scores)
+  const gamePicksDb = require('./database/gamePicksDb');
+  const nbaGamePicks = require('./services/nbaGamePicks');
+
+  setInterval(async () => {
+    try {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dateStr = yesterday.toISOString().slice(0, 10);
+
+      const unresolved = await gamePicksDb.getUnresolvedPicks(dateStr);
+      if (unresolved.length === 0) return;
+
+      const resolutions = await nbaGamePicks.resolveGamePicksFromESPN(unresolved);
+      if (resolutions.length > 0) {
+        const result = await gamePicksDb.resolvePickBatch(resolutions);
+        const count = typeof result === 'object' ? result.resolved : result;
+        console.log(`[GamePicks Resolver] Resolved ${count}/${unresolved.length} game picks for ${dateStr}`);
+      }
+    } catch (err) {
+      console.error('[GamePicks Resolver] Error:', err.message);
+    }
+  }, 5 * 60_000); // 5 minutes
+  console.log('   🏀 Game picks auto-resolver started (5min interval)');
+
   // ─── Role Manager ───
   // Setup roles and assign manual roles on startup, then recalculate every 30 min
   const guildId = process.env.DISCORD_GUILD_ID;

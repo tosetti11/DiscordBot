@@ -4158,6 +4158,371 @@ textarea {
 }
 
 /* ═══════════════════════════════════════
+   NBA Game Picks (ML, Spread, O/U)
+   ═══════════════════════════════════════ */
+
+.game-picks-section {
+  padding: 16px;
+}
+
+.game-picks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.game-picks-header h4 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.game-picks-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.game-picks-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.game-picks-top-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.game-picks-col-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  text-align: center;
+}
+.game-picks-col-title.ml { color: #f59e0b; }
+.game-picks-col-title.spread { color: #8b5cf6; }
+.game-picks-col-title.ou { color: #06b6d4; }
+
+.game-picks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-picks-meta {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Pick cards */
+.gp-pick-card {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  gap: 8px;
+  transition: background 0.15s;
+}
+.gp-pick-card:hover {
+  background: rgba(255,255,255,0.07);
+}
+.gp-pick-card.ml { border-left: 3px solid #f59e0b; }
+.gp-pick-card.spread { border-left: 3px solid #8b5cf6; }
+.gp-pick-card.over { border-left: 3px solid #22c55e; }
+.gp-pick-card.under { border-left: 3px solid #ef4444; }
+.gp-pick-card.ou { border-left: 3px solid #06b6d4; }
+
+.gp-pick-logos {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.gp-team-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.gp-at {
+  font-size: 10px;
+  color: #666;
+  font-weight: 600;
+}
+
+.gp-pick-info {
+  flex: 1;
+  min-width: 0;
+}
+.gp-pick-matchup {
+  font-size: 11px;
+  color: #aaa;
+}
+.gp-pick-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 2px;
+  word-break: break-word;
+}
+.gp-pick-factors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.gp-pick-right {
+  text-align: right;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.gp-pick-prob {
+  font-size: 18px;
+  font-weight: 800;
+}
+.gp-pick-prob.ml { color: #f59e0b; }
+.gp-pick-prob.spread { color: #8b5cf6; }
+.gp-pick-prob.over { color: #22c55e; }
+.gp-pick-prob.under { color: #ef4444; }
+.gp-pick-prob.ou { color: #06b6d4; }
+.gp-pick-conf {
+  font-size: 9px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.gp-value-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(34,197,94,0.15);
+  color: #22c55e;
+  margin-left: 4px;
+}
+.gp-proj {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.06);
+  color: #aaa;
+}
+
+/* Game breakdown cards */
+.game-picks-games-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gp-breakdown-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.gp-breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gp-breakdown-teams {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.gp-breakdown-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.gp-breakdown-team {
+  font-weight: 800;
+  color: #fff;
+}
+.gp-breakdown-record {
+  font-size: 11px;
+  color: #888;
+  font-weight: 400;
+}
+.gp-breakdown-at {
+  color: #666;
+  font-weight: 400;
+  margin: 0 4px;
+}
+.gp-breakdown-odds {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.gp-breakdown-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gp-breakdown-pick {
+  font-size: 13px;
+  color: #ddd;
+}
+.gp-breakdown-pick strong {
+  color: #fff;
+}
+
+.gp-prob-inline {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+.gp-prob-inline.high {
+  background: rgba(34,197,94,0.15);
+  color: #22c55e;
+}
+.gp-prob-inline.medium {
+  background: rgba(245,158,11,0.15);
+  color: #f59e0b;
+}
+.gp-prob-inline.low {
+  background: rgba(255,255,255,0.06);
+  color: #888;
+}
+
+.gp-prob-bar {
+  display: flex;
+  height: 22px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.gp-prob-fill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.gp-prob-fill.home {
+  background: rgba(34,197,94,0.25);
+  color: #22c55e;
+}
+.gp-prob-fill.away {
+  background: rgba(239,68,68,0.2);
+  color: #ef4444;
+}
+
+.gp-breakdown-h2h,
+.gp-breakdown-rest {
+  font-size: 11px;
+  color: #999;
+}
+
+.gp-injuries {
+  font-size: 11px;
+  color: #ef4444;
+  opacity: 0.8;
+}
+
+.gp-breakdown-factors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.gp-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.gp-form-col {
+  text-align: center;
+}
+.gp-form-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #aaa;
+  margin-bottom: 2px;
+}
+.gp-form-value {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+}
+.gp-form-sub {
+  font-size: 10px;
+  color: #777;
+  margin-top: 2px;
+}
+
+/* ── Game Picks Tracker — small logos in history ── */
+.gp-pick-logos-sm {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+.gp-team-logo-sm {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+.gp-at-sm {
+  font-size: 8px;
+  color: #666;
+  font-weight: 600;
+}
+
+/* Pick type colors in tracker */
+.dh-pick-dir.ml { color: #ffd700; }
+.dh-pick-dir.spread { color: #4fc3f7; }
+.dh-pick-dir.ou { color: #ab47bc; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .game-picks-top-grid {
+    grid-template-columns: 1fr;
+  }
+  .game-picks-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .gp-breakdown-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ═══════════════════════════════════════
    Analytics Page (Admin)
    ═══════════════════════════════════════ */
 

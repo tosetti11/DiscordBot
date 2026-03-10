@@ -100,7 +100,10 @@
               <span class="sidebar-icon">⏰</span> Reminders
             </a>
             <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="props" id="nav-props" onclick="switchPage('props')">
-              <span class="sidebar-icon">🏀</span> Props
+              <span class="sidebar-icon">�</span> Props
+            </a>
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="game-picks" id="nav-game-picks" onclick="switchPage('game-picks')">
+              <span class="sidebar-icon">🏀</span> Games
             </a>
             <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="analytics" id="nav-analytics" onclick="switchPage('analytics')">
               <span class="sidebar-icon">📈</span> Analytics
@@ -1358,8 +1361,8 @@
   <main id="props-page" class="main-content hidden">
     <div class="tools-container">
       <div class="tools-header">
-        <h2>🏀 NBA Player Props Analyzer</h2>
-        <p class="slip-subtitle">Data-driven prop recommendations based on season stats, recent trends, matchup history, and more.</p>
+        <h2>🏀 NBA Picks & Props Analyzer</h2>
+        <p class="slip-subtitle">Data-driven game picks and prop recommendations based on team stats, recent form, matchups, and more. All data from ESPN — free &amp; unlimited.</p>
       </div>
 
       <div class="tool-card props-analyzer-card" id="props-tool">
@@ -1511,6 +1514,109 @@
           </div>
         </div>
       </div>
+
+    </div>
+  </main>
+
+  <!-- Game Picks Page (owner only) -->
+  <main id="game-picks-page" class="main-content hidden">
+    <div class="tools-container">
+      <div class="tools-header">
+        <h2>🏀 NBA Game Picks</h2>
+        <p class="slip-subtitle">ML · Spread · Over/Under analysis for every NBA game. Uses team records, recent form, pace matchups, home/away splits, injuries, rest, and H2H data. All from ESPN — no API key needed.</p>
+      </div>
+
+      <div class="tool-card game-picks-card" id="game-picks-tool">
+        <div class="game-picks-section">
+          <div class="game-picks-header">
+            <h4>🔥 Today's Game Picks</h4>
+            <div class="game-picks-actions">
+              <button class="btn btn-sm btn-share hidden" onclick="gamePicksShare()" id="game-picks-share-btn" title="Share as image">📤 Share</button>
+              <button class="btn btn-sm btn-accent" onclick="gamePicksGenerate()" id="game-picks-generate-btn">Generate Game Picks</button>
+            </div>
+          </div>
+          <p class="game-picks-desc">Analyzes every NBA game on today's slate and surfaces the strongest Moneyline, Spread, and Over/Under picks based on power ratings, recent form, pace, injuries, rest, and more.</p>
+
+          <div id="game-picks-content" class="hidden">
+            <div class="game-picks-top-grid">
+              <div class="game-picks-col">
+                <h5 class="game-picks-col-title ml">💰 Moneyline</h5>
+                <div id="game-picks-ml-list" class="game-picks-list"></div>
+              </div>
+              <div class="game-picks-col">
+                <h5 class="game-picks-col-title spread">📏 Spread</h5>
+                <div id="game-picks-spread-list" class="game-picks-list"></div>
+              </div>
+              <div class="game-picks-col">
+                <h5 class="game-picks-col-title ou">📊 Over/Under</h5>
+                <div id="game-picks-ou-list" class="game-picks-list"></div>
+              </div>
+            </div>
+            <div id="game-picks-meta" class="game-picks-meta"></div>
+          </div>
+
+          <div id="game-picks-loading" class="hidden">
+            <div class="props-loading">Analyzing today's NBA games... this may take 15-30 seconds</div>
+          </div>
+        </div>
+
+        <hr class="props-divider">
+
+        <!-- All Games Breakdown -->
+        <div id="game-picks-all-games" class="hidden">
+          <h4 style="margin-bottom:12px;">📋 Full Game-by-Game Breakdown</h4>
+          <div id="game-picks-games-grid" class="game-picks-games-grid"></div>
+        </div>
+      </div>
+
+      <!-- Game Pick Tracker -->
+      <div class="tool-card" style="margin-top:16px;">
+        <div id="gp-tracker" class="props-accuracy-section">
+          <div class="props-accuracy-header">
+            <h4>📊 Pick Tracker</h4>
+            <div class="props-accuracy-actions">
+              <button class="btn btn-sm btn-outline" onclick="gpCheckResults()" id="gp-resolve-btn">Check Results</button>
+              <button class="btn btn-sm btn-outline" onclick="gpLoadDailyHistory()" id="gp-refresh-btn" title="Refresh">↻</button>
+            </div>
+          </div>
+
+          <!-- Hero Stats -->
+          <div id="gp-hero-stats" class="props-hero-stats hidden">
+            <div class="props-hero-main">
+              <div class="props-hero-pct" id="gp-hero-hit-pct">—</div>
+              <div class="props-hero-label">Overall Hit Rate</div>
+              <div class="props-hero-record" id="gp-hero-record"></div>
+            </div>
+            <div class="props-hero-side">
+              <div class="props-hero-card over-card">
+                <span class="props-hero-card-val" id="gp-hero-ml-pct">—</span>
+                <span class="props-hero-card-lbl">ML</span>
+              </div>
+              <div class="props-hero-card under-card">
+                <span class="props-hero-card-val" id="gp-hero-spread-pct">—</span>
+                <span class="props-hero-card-lbl">Spread</span>
+              </div>
+              <div class="props-hero-card streak-card">
+                <span class="props-hero-card-val" id="gp-hero-ou-pct">—</span>
+                <span class="props-hero-card-lbl">O/U</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily History -->
+          <div id="gp-daily-history" class="props-daily-history"></div>
+
+          <!-- Empty state -->
+          <div id="gp-tracker-empty" class="props-accuracy-empty">
+            <p>No tracked game picks yet. Generate Game Picks to start tracking!</p>
+          </div>
+
+          <div id="gp-resolve-loading" class="hidden">
+            <div class="props-loading">Checking ESPN final scores for results...</div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </main>
 

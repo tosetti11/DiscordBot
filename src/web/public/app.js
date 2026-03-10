@@ -1552,6 +1552,7 @@ function switchPage(page) {
     analytics: document.getElementById('analytics-page'),
     announce: document.getElementById('announce-page'),
     props: document.getElementById('props-page'),
+    'game-picks': document.getElementById('game-picks-page'),
     scoreboard: document.getElementById('scoreboard-page'),
     profile: document.getElementById('profile-page'),
   };
@@ -1574,6 +1575,7 @@ function switchPage(page) {
   if (page === 'closebets') initCloseBetsPage();
   if (page === 'scoreboard') initScoreboardPage();
   if (page === 'props') initPropsIfNeeded();
+  if (page === 'game-picks') initGamePicksPage();
   if (page === 'profile') loadProfilePage();
 }
 
@@ -3922,6 +3924,13 @@ function initPropsIfNeeded() {
   propsLoadAccuracy();
 }
 
+let gamePicksPageInitialized = false;
+function initGamePicksPage() {
+  if (gamePicksPageInitialized) return;
+  gamePicksPageInitialized = true;
+  gpLoadDailyHistory();
+}
+
 async function propsLoadGames() {
   const list = document.getElementById('props-games-list');
   const noGames = document.getElementById('props-no-games');
@@ -4967,6 +4976,567 @@ async function propsCheckResults() {
 }
 
 // ═══════════════════════════════════════════════
+//  NBA Game Picks (ML, Spread, O/U)
+// ═══════════════════════════════════════════════
+
+async function gamePicksGenerate() {
+  const btn = document.getElementById('game-picks-generate-btn');
+  const content = document.getElementById('game-picks-content');
+  const loading = document.getElementById('game-picks-loading');
+  const allGamesSection = document.getElementById('game-picks-all-games');
+
+  btn.disabled = true;
+  btn.textContent = 'Analyzing...';
+  content.classList.add('hidden');
+  allGamesSection.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/game-picks/top');
+    const data = await res.json();
+
+    if (data.error) {
+      loading.innerHTML = `<div class="props-empty">${data.error}</div>`;
+      return;
+    }
+
+    loading.classList.add('hidden');
+    content.classList.remove('hidden');
+
+    // Render ML picks
+    const mlList = document.getElementById('game-picks-ml-list');
+    mlList.innerHTML = data.moneyline.length
+      ? data.moneyline.map((p, i) => renderGamePickCard(p, i + 1, 'ml')).join('')
+      : '<div class="props-empty">No strong ML picks today</div>';
+
+    // Render Spread picks
+    const spreadList = document.getElementById('game-picks-spread-list');
+    spreadList.innerHTML = data.spread.length
+      ? data.spread.map((p, i) => renderGamePickCard(p, i + 1, 'spread')).join('')
+      : '<div class="props-empty">No strong spread picks today</div>';
+
+    // Render O/U picks
+    const ouList = document.getElementById('game-picks-ou-list');
+    ouList.innerHTML = data.overUnder.length
+      ? data.overUnder.map((p, i) => renderGamePickCard(p, i + 1, 'ou')).join('')
+      : '<div class="props-empty">No strong O/U picks today</div>';
+
+    // Meta info
+    const meta = document.getElementById('game-picks-meta');
+    const time = data.generatedAt ? new Date(data.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    meta.innerHTML = `Analyzed ${data.gamesScanned} games · Generated ${time} · All data from ESPN (free)`;
+
+    // Render all-games breakdown
+    if (data.allGames && data.allGames.length) {
+      allGamesSection.classList.remove('hidden');
+      const gamesGrid = document.getElementById('game-picks-games-grid');
+      gamesGrid.innerHTML = data.allGames.map(g => renderGameBreakdown(g)).join('');
+    }
+
+    btn.textContent = 'Refresh Picks';
+    const shareBtn = document.getElementById('game-picks-share-btn');
+    if (shareBtn) shareBtn.classList.remove('hidden');
+  } catch (err) {
+    console.error('[GamePicks] Generate error:', err);
+    loading.innerHTML = '<div class="props-empty">Failed to generate picks. Try again.</div>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderGamePickCard(pick, rank, type) {
+  const prob = pick.probability;
+  const conf = pick.confidence;
+
+  // Determine display info based on type
+  let pickLabel, typeClass, typeIcon;
+  if (type === 'ml') {
+    pickLabel = pick.pick;
+    typeClass = 'ml';
+    typeIcon = '💰';
+  } else if (type === 'spread') {
+    pickLabel = pick.pick;
+    typeClass = 'spread';
+    typeIcon = '📏';
+  } else {
+    pickLabel = pick.pick;
+    typeClass = pick.pickDirection === 'over' ? 'over' : 'under';
+    typeIcon = pick.pickDirection === 'over' ? '📈' : '📉';
+  }
+
+  // Game info
+  const game = pick.game;
+  const matchup = `${game.away.abbreviation} @ ${game.home.abbreviation}`;
+
+  // Value badge for ML
+  const valueBadge = pick.value
+    ? `<span class="gp-value-badge">+${pick.value.edge}% edge (${pick.value.ml > 0 ? '+' : ''}${pick.value.ml})</span>`
+    : '';
+
+  // Key factors
+  const topFactors = (pick.factors || []).slice(0, 3).map(f => {
+    const impactClass = f.impact === 'home' || f.impact === 'over' ? 'green' : f.impact === 'away' || f.impact === 'under' ? 'red' : '';
+    return `<span class="props-matchup-chip ${impactClass}" title="${f.detail}">${f.label}</span>`;
+  }).join('');
+
+  // Spread-specific: projected margin
+  const projLine = type === 'spread' && pick.projectedMargin != null
+    ? `<span class="gp-proj">Proj: ${pick.projectedMargin > 0 ? '+' : ''}${pick.projectedMargin}</span>`
+    : '';
+
+  // O/U-specific: projected total
+  const projTotal = type === 'ou' && pick.projectedTotal != null
+    ? `<span class="gp-proj">Proj: ${pick.projectedTotal}</span>`
+    : '';
+
+  // Home/Away logos
+  const homeLogo = game.home.logo ? `<img class="gp-team-logo" src="${game.home.logo}" alt="" loading="lazy">` : '';
+  const awayLogo = game.away.logo ? `<img class="gp-team-logo" src="${game.away.logo}" alt="" loading="lazy">` : '';
+
+  return `
+    <div class="gp-pick-card ${typeClass}">
+      <span class="props-pick-rank">${rank}</span>
+      <div class="gp-pick-logos">
+        ${awayLogo}
+        <span class="gp-at">@</span>
+        ${homeLogo}
+      </div>
+      <div class="gp-pick-info">
+        <div class="gp-pick-matchup">${matchup}</div>
+        <div class="gp-pick-label">${typeIcon} ${pickLabel} ${valueBadge}</div>
+        <div class="gp-pick-factors">${topFactors} ${projLine} ${projTotal}</div>
+      </div>
+      <div class="gp-pick-right">
+        <div class="gp-pick-prob ${typeClass}">${prob}%</div>
+        <div class="gp-pick-conf">${conf}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderGameBreakdown(gameData) {
+  const g = gameData.game;
+  const ml = gameData.moneyline;
+  const sp = gameData.spread;
+  const ou = gameData.overUnder;
+  const ha = gameData.homeAnalysis;
+  const aa = gameData.awayAnalysis;
+
+  const homeLogo = g.home.logo ? `<img class="gp-breakdown-logo" src="${g.home.logo}" alt="" loading="lazy">` : '';
+  const awayLogo = g.away.logo ? `<img class="gp-breakdown-logo" src="${g.away.logo}" alt="" loading="lazy">` : '';
+
+  // Injury lists
+  const homeInj = ha.injuries.length
+    ? `<div class="gp-injuries">🚑 OUT: ${ha.injuries.map(i => i.playerName).join(', ')}</div>`
+    : '';
+  const awayInj = aa.injuries.length
+    ? `<div class="gp-injuries">🚑 OUT: ${aa.injuries.map(i => i.playerName).join(', ')}</div>`
+    : '';
+
+  // ML probabilities
+  const mlBar = `
+    <div class="gp-prob-bar">
+      <div class="gp-prob-fill home" style="width:${ml.homeProb}%">${g.home.abbreviation} ${ml.homeProb}%</div>
+      <div class="gp-prob-fill away" style="width:${ml.awayProb}%">${g.away.abbreviation} ${ml.awayProb}%</div>
+    </div>
+  `;
+
+  // Spread
+  const spreadLine = sp.pick
+    ? `<div class="gp-breakdown-pick"><strong>Spread:</strong> ${sp.pick} <span class="gp-prob-inline ${sp.confidence}">${sp.probability}% (${sp.confidence})</span></div>`
+    : '<div class="gp-breakdown-pick"><strong>Spread:</strong> N/A</div>';
+
+  // O/U
+  const ouLine = ou.pick
+    ? `<div class="gp-breakdown-pick"><strong>O/U:</strong> ${ou.pick} (projected ${ou.projectedTotal}) <span class="gp-prob-inline ${ou.confidence}">${ou.probability}% (${ou.confidence})</span></div>`
+    : '<div class="gp-breakdown-pick"><strong>O/U:</strong> N/A</div>';
+
+  // H2H
+  const h2h = gameData.h2h
+    ? `<div class="gp-breakdown-h2h">H2H: ${gameData.h2h.wins}-${gameData.h2h.losses} · Avg margin: ${gameData.h2h.avgMargin > 0 ? '+' : ''}${gameData.h2h.avgMargin}</div>`
+    : '';
+
+  // Rest
+  const restInfo = [];
+  if (ha.isB2B) restInfo.push(`${g.home.abbreviation}: B2B ⚠️`);
+  else if (ha.rest != null) restInfo.push(`${g.home.abbreviation}: ${ha.rest}d rest`);
+  if (aa.isB2B) restInfo.push(`${g.away.abbreviation}: B2B ⚠️`);
+  else if (aa.rest != null) restInfo.push(`${g.away.abbreviation}: ${aa.rest}d rest`);
+  const restStr = restInfo.length ? `<div class="gp-breakdown-rest">${restInfo.join(' · ')}</div>` : '';
+
+  // Key factors for all 3 analyses
+  const allFactors = [...(ml.factors || []), ...(sp.factors || []), ...(ou.factors || [])];
+  const uniqueFactors = [];
+  const seen = new Set();
+  for (const f of allFactors) {
+    if (!seen.has(f.label)) {
+      seen.add(f.label);
+      uniqueFactors.push(f);
+    }
+  }
+
+  return `
+    <div class="gp-breakdown-card">
+      <div class="gp-breakdown-header">
+        <div class="gp-breakdown-teams">
+          ${awayLogo}
+          <span class="gp-breakdown-team">${g.away.abbreviation}</span>
+          <span class="gp-breakdown-record">(${aa.record || ''}${aa.isB2B ? ' · B2B' : ''})</span>
+          <span class="gp-breakdown-at">@</span>
+          ${homeLogo}
+          <span class="gp-breakdown-team">${g.home.abbreviation}</span>
+          <span class="gp-breakdown-record">(${ha.record || ''}${ha.isB2B ? ' · B2B' : ''})</span>
+        </div>
+        <div class="gp-breakdown-odds">${g.odds ? `${g.odds.spread} · O/U ${g.odds.overUnder}` : 'No odds'}</div>
+      </div>
+
+      <div class="gp-breakdown-body">
+        <div class="gp-breakdown-section">
+          <div class="gp-breakdown-pick"><strong>Moneyline:</strong> ${ml.pick} <span class="gp-prob-inline ${ml.confidence}">${ml.probability}% (${ml.confidence})</span></div>
+          ${mlBar}
+        </div>
+        ${spreadLine}
+        ${ouLine}
+        ${h2h}
+        ${restStr}
+        ${homeInj}
+        ${awayInj}
+
+        <div class="gp-breakdown-factors">
+          ${uniqueFactors.slice(0, 5).map(f => {
+            const cls = f.impact === 'home' || f.impact === 'over' ? 'green' : f.impact === 'away' || f.impact === 'under' ? 'red' : '';
+            return `<span class="props-matchup-chip ${cls}" title="${f.detail}">${f.label}</span>`;
+          }).join('')}
+        </div>
+
+        <div class="gp-form-row">
+          <div class="gp-form-col">
+            <div class="gp-form-label">${g.home.abbreviation} L10</div>
+            <div class="gp-form-value">${ha.recentForm ? `${ha.recentForm.wins}-${ha.recentForm.losses} (${ha.recentForm.streak})` : '—'}</div>
+            <div class="gp-form-sub">${ha.recentForm ? `${ha.recentForm.avgPtsFor} PPG · ${ha.recentForm.avgMargin > 0 ? '+' : ''}${ha.recentForm.avgMargin} margin` : ''}</div>
+          </div>
+          <div class="gp-form-col">
+            <div class="gp-form-label">${g.away.abbreviation} L10</div>
+            <div class="gp-form-value">${aa.recentForm ? `${aa.recentForm.wins}-${aa.recentForm.losses} (${aa.recentForm.streak})` : '—'}</div>
+            <div class="gp-form-sub">${aa.recentForm ? `${aa.recentForm.avgPtsFor} PPG · ${aa.recentForm.avgMargin > 0 ? '+' : ''}${aa.recentForm.avgMargin} margin` : ''}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function gamePicksShare() {
+  const shareBtn = document.getElementById('game-picks-share-btn');
+  const content = document.getElementById('game-picks-content');
+  if (!content || content.classList.contains('hidden')) return;
+
+  shareBtn.disabled = true;
+  shareBtn.textContent = '⏳ Capturing...';
+
+  try {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:900px;padding:28px;background:#1a1a2e;border-radius:12px;font-family:Inter,system-ui,sans-serif;color:#e0e0e0;z-index:-1;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'text-align:center;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.1);';
+    header.innerHTML = `
+      <div style="font-size:24px;font-weight:800;color:#fff;margin-bottom:4px;">🏀 Today's NBA Game Picks</div>
+      <div style="font-size:12px;color:#888;">TheGamblingKingApp.com · ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+    `;
+    wrapper.appendChild(header);
+
+    const gridClone = content.querySelector('.game-picks-top-grid').cloneNode(true);
+    gridClone.style.cssText = 'display:grid;grid-template-columns:1fr;gap:20px;';
+    wrapper.appendChild(gridClone);
+
+    const meta = document.getElementById('game-picks-meta');
+    if (meta && meta.textContent) {
+      const metaClone = meta.cloneNode(true);
+      metaClone.style.cssText = 'font-size:10px;color:#666;text-align:center;margin-top:12px;';
+      wrapper.appendChild(metaClone);
+    }
+
+    document.body.appendChild(wrapper);
+
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: '#1a1a2e',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+
+    document.body.removeChild(wrapper);
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.write) {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          shareBtn.textContent = '✅ Copied!';
+          setTimeout(() => { shareBtn.textContent = '📤 Share'; }, 2000);
+          return;
+        }
+      } catch (e) { /* fallthrough */ }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `game-picks-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      shareBtn.textContent = '✅ Saved!';
+      setTimeout(() => { shareBtn.textContent = '📤 Share'; }, 2000);
+    }, 'image/png');
+  } catch (err) {
+    console.error('[GamePicks] Share error:', err);
+    shareBtn.textContent = '❌ Error';
+    setTimeout(() => { shareBtn.textContent = '📤 Share'; }, 2000);
+  } finally {
+    shareBtn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  Game Picks — Pick Tracker (Daily History)
+// ═══════════════════════════════════════════════
+
+async function gpLoadDailyHistory() {
+  try {
+    const res = await fetch('/api/game-picks/daily-history', {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) return;
+    const days = await res.json();
+    gpRenderDailyHistory(days);
+  } catch (err) {
+    console.error('[GamePicks] Daily history load error:', err);
+  }
+}
+
+function gpRenderDailyHistory(days) {
+  const emptyEl = document.getElementById('gp-tracker-empty');
+  const heroStats = document.getElementById('gp-hero-stats');
+  const historyEl = document.getElementById('gp-daily-history');
+
+  if (!days || !days.length) {
+    if (emptyEl) emptyEl.classList.remove('hidden');
+    if (heroStats) heroStats.classList.add('hidden');
+    if (historyEl) historyEl.innerHTML = '';
+    return;
+  }
+
+  if (emptyEl) emptyEl.classList.add('hidden');
+  if (heroStats) heroStats.classList.remove('hidden');
+
+  // Calculate overall stats per type
+  let totalResolved = 0, totalHits = 0;
+  let mlResolved = 0, mlHits = 0;
+  let spreadResolved = 0, spreadHits = 0;
+  let ouResolved = 0, ouHits = 0;
+  for (const day of days) {
+    for (const p of day.picks) {
+      if (p.hit !== null) {
+        totalResolved++;
+        if (p.hit) totalHits++;
+        if (p.pickType === 'ml') { mlResolved++; if (p.hit) mlHits++; }
+        else if (p.pickType === 'spread') { spreadResolved++; if (p.hit) spreadHits++; }
+        else if (p.pickType === 'ou') { ouResolved++; if (p.hit) ouHits++; }
+      }
+    }
+  }
+
+  // Hero stats
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl('gp-hero-hit-pct', totalResolved ? Math.round((totalHits / totalResolved) * 100) + '%' : '—');
+  setEl('gp-hero-record', totalResolved ? `${totalHits}-${totalResolved - totalHits} (${totalResolved} picks)` : '');
+  setEl('gp-hero-ml-pct', mlResolved ? Math.round((mlHits / mlResolved) * 100) + '%' : '—');
+  setEl('gp-hero-spread-pct', spreadResolved ? Math.round((spreadHits / spreadResolved) * 100) + '%' : '—');
+  setEl('gp-hero-ou-pct', ouResolved ? Math.round((ouHits / ouResolved) * 100) + '%' : '—');
+
+  // Render daily sections
+  historyEl.innerHTML = days.map(day => {
+    const dateObj = new Date(day.date + 'T12:00:00');
+    const dateLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const pctText = day.hitRate !== null ? `${day.hitRate}%` : 'Pending';
+    const pctClass = day.hitRate !== null ? (day.hitRate >= 60 ? 'good' : day.hitRate >= 40 ? 'ok' : 'bad') : 'pending';
+    const recordText = day.resolved ? `${day.hits}-${day.misses}` : '';
+    const pendingBadge = day.pending > 0 ? `<span class="dh-pending-badge">${day.pending} pending</span>` : '';
+
+    const mlPicks = day.picks.filter(p => p.pickType === 'ml');
+    const spreadPicks = day.picks.filter(p => p.pickType === 'spread');
+    const ouPicks = day.picks.filter(p => p.pickType === 'ou');
+
+    return `
+      <div class="dh-day" data-date="${day.date}">
+        <div class="dh-day-header" onclick="this.parentElement.classList.toggle('open')">
+          <span class="dh-day-date">${dateLabel}</span>
+          <span class="dh-day-record">${recordText}</span>
+          ${pendingBadge}
+          <span class="dh-day-pct ${pctClass}">${pctText}</span>
+          <span class="dh-chevron">▸</span>
+        </div>
+        <div class="dh-day-body">
+          ${mlPicks.length ? `<h5 class="dh-section-title" style="color:#ffd700">💰 Moneyline</h5>` : ''}
+          ${mlPicks.map(p => gpRenderHistoryPick(p)).join('')}
+          ${spreadPicks.length ? `<h5 class="dh-section-title" style="color:#4fc3f7">📏 Spread</h5>` : ''}
+          ${spreadPicks.map(p => gpRenderHistoryPick(p)).join('')}
+          ${ouPicks.length ? `<h5 class="dh-section-title" style="color:#ab47bc">📊 Over/Under</h5>` : ''}
+          ${ouPicks.map(p => gpRenderHistoryPick(p)).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function gpRenderHistoryPick(p) {
+  const icon = p.hit === true ? '✅' : p.hit === false ? '❌' : '⏳';
+  const resultClass = p.hit === true ? 'hit' : p.hit === false ? 'miss' : 'pending';
+  const hitMissLabel = p.hit === true ? 'HIT' : p.hit === false ? 'MISS' : '';
+
+  // Score display
+  let scoreText = '';
+  if (p.homeFinal != null && p.awayFinal != null) {
+    scoreText = `${p.awayTeam} ${p.awayFinal} - ${p.homeTeam} ${p.homeFinal}`;
+  }
+
+  // Type labels
+  const typeLabels = { ml: 'ML', spread: 'Spread', ou: 'O/U' };
+  const typeLabel = typeLabels[p.pickType] || p.pickType;
+
+  return `
+    <div class="dh-pick ${resultClass}">
+      <div class="dh-pick-main" onclick="gpToggleBreakdown(this.parentElement)">
+        <span class="dh-pick-icon">${icon}</span>
+        <div class="gp-pick-logos-sm">
+          ${p.awayLogo ? `<img class="gp-team-logo-sm" src="${p.awayLogo}" alt="" loading="lazy">` : ''}
+          <span class="gp-at-sm">@</span>
+          ${p.homeLogo ? `<img class="gp-team-logo-sm" src="${p.homeLogo}" alt="" loading="lazy">` : ''}
+        </div>
+        <div class="dh-pick-info">
+          <span class="dh-pick-name">${p.gameName}</span>
+          <span class="dh-pick-detail">${typeLabel}</span>
+        </div>
+        <div class="dh-pick-prop">
+          <span class="dh-pick-dir ${p.pickType}">${p.pick}</span>
+          <span class="dh-pick-conf">${p.confidence}</span>
+        </div>
+        <div class="dh-pick-result">
+          ${scoreText ? `<span class="dh-pick-actual">${scoreText}</span>` : ''}
+          ${hitMissLabel ? `<span class="dh-pick-verdict ${resultClass}">${hitMissLabel}</span>` : ''}
+        </div>
+        <span class="dh-pick-expand">▸</span>
+      </div>
+      <div class="dh-pick-breakdown">
+        ${gpGenerateSummary(p)}
+      </div>
+    </div>`;
+}
+
+function gpToggleBreakdown(el) {
+  el.classList.toggle('expanded');
+}
+
+function gpGenerateSummary(p) {
+  const lines = [];
+
+  // Context
+  if (p.homeRecord && p.awayRecord) {
+    lines.push(`${p.homeTeam} (${p.homeRecord}) vs ${p.awayTeam} (${p.awayRecord})`);
+  }
+  if (p.homeForm && p.awayForm) {
+    lines.push(`L10 Form — ${p.homeTeam}: ${p.homeForm} · ${p.awayTeam}: ${p.awayForm}`);
+  }
+  if (p.homePower && p.awayPower) {
+    lines.push(`Power Ratings — ${p.homeTeam}: ${p.homePower} · ${p.awayTeam}: ${p.awayPower}`);
+  }
+  if (p.projectedMargin != null && (p.pickType === 'ml' || p.pickType === 'spread')) {
+    const favTeam = p.projectedMargin > 0 ? p.homeTeam : p.awayTeam;
+    lines.push(`📊 Projected margin: ${favTeam} ${p.projectedMargin > 0 ? '+' : ''}${p.projectedMargin}`);
+  }
+  if (p.projectedTotal != null && p.pickType === 'ou') {
+    lines.push(`📊 Projected total: ${p.projectedTotal} points`);
+  }
+  if (p.restAdvantage) {
+    lines.push(`Rest: ${p.restAdvantage}`);
+  }
+  if (p.homeInjuries > 0 || p.awayInjuries > 0) {
+    lines.push(`🚑 Injuries — ${p.homeTeam}: ${p.homeInjuries} OUT · ${p.awayTeam}: ${p.awayInjuries} OUT`);
+  }
+
+  // Confidence
+  if (p.confidence === 'high') {
+    lines.push(`🔥 High-confidence pick at ${p.probability}% probability.`);
+  } else if (p.confidence === 'medium') {
+    lines.push(`Medium confidence at ${p.probability}% probability.`);
+  }
+
+  // Key analysis factors
+  if (p.factors && p.factors.length) {
+    const factorLines = p.factors.slice(0, 4).map(f => `• ${f.label}: ${f.detail}`);
+    lines.push(...factorLines);
+  }
+
+  // Result
+  if (p.homeFinal != null && p.awayFinal != null) {
+    const total = p.homeFinal + p.awayFinal;
+    const margin = p.homeFinal - p.awayFinal;
+    const winner = margin > 0 ? p.homeTeam : p.awayTeam;
+    lines.push(`Final Score: ${p.awayTeam} ${p.awayFinal} - ${p.homeTeam} ${p.homeFinal} (${winner} by ${Math.abs(margin)}, Total: ${total})`);
+
+    if (p.hit === true) {
+      lines.push('✅ Pick hit!');
+    } else if (p.hit === false) {
+      lines.push('❌ Pick missed.');
+    }
+  }
+
+  return `<div class="dh-summary">${lines.map(l => `<p>${l}</p>`).join('')}</div>`;
+}
+
+async function gpCheckResults() {
+  const btn = document.getElementById('gp-resolve-btn');
+  const loading = document.getElementById('gp-resolve-loading');
+  if (btn) btn.disabled = true;
+  if (loading) loading.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/game-picks/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+
+    if (data.resolved > 0) {
+      showToast(`Resolved ${data.resolved} game picks!`);
+    } else if (data.unresolved === 0) {
+      showToast('No pending game picks to resolve');
+    } else {
+      showToast(`Games not finished yet (${data.unresolved} pending)`);
+    }
+
+    await gpLoadDailyHistory();
+  } catch (err) {
+    console.error('[GamePicks] Resolve error:', err);
+    showToast('Error checking results');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (loading) loading.classList.add('hidden');
+  }
+}
+
+// Auto-load game picks tracker on page load
+(function() {
+  const origSwitchPage = window.switchPage;
+  if (origSwitchPage) {
+    window.switchPage = function(page) {
+      origSwitchPage(page);
+      if (page === 'props') {
+        gpLoadDailyHistory();
+      }
+    };
+  }
+})();
+
+// ═══════════════════════════════════════════════
 //  Admin Analytics
 // ═══════════════════════════════════════════════
 
@@ -4979,6 +5549,8 @@ async function checkOwnerFeatures() {
       if (navLink) navLink.classList.remove('hidden');
       const propsLink = document.getElementById('nav-props');
       if (propsLink) propsLink.classList.remove('hidden');
+      const gamePicksLink = document.getElementById('nav-game-picks');
+      if (gamePicksLink) gamePicksLink.classList.remove('hidden');
     }
   } catch (e) {}
 
