@@ -618,12 +618,18 @@ async function buildMatchupContext(opponentTeamId, playerTeamId, gameOdds, gameL
 /**
  * Fetch all NBA team injuries from ESPN.
  * Returns a map: { teamId: [{ playerId, playerName, status, comment }], ... }
- * Only includes players with status "Out" (not Day-To-Day or Questionable).
+ * Includes players with status "Out", "Doubtful", and "Day-To-Day" (likely DNP).
  */
 async function fetchTeamInjuries() {
   const cacheKey = 'nba-injuries';
   const cached = getCached(cacheKey);
   if (cached) return cached;
+
+  // Statuses that mean the player is definitely or very likely not playing
+  const EXCLUDE_STATUSES = new Set(['Out', 'Doubtful']);
+  // Day-To-Day players with these keywords are very likely out
+  const DTD_OUT_KEYWORDS = ['out for', 'not play', 'will miss', 'ruled out', 'surgery',
+    'not expected', 'sidelined', 'shut down', 'season-ending', 'torn', 'fracture'];
 
   try {
     const url = `https://site.api.espn.com/apis/site/v2/sports/${ESPN_NBA}/injuries`;
@@ -635,7 +641,15 @@ async function fetchTeamInjuries() {
     for (const team of (json.injuries || [])) {
       const teamId = String(team.id);
       const outs = (team.injuries || [])
-        .filter(inj => inj.status === 'Out')
+        .filter(inj => {
+          if (EXCLUDE_STATUSES.has(inj.status)) return true;
+          // Day-To-Day with severe keywords → treat as out
+          if (inj.status === 'Day-To-Day') {
+            const comment = (inj.shortComment || '').toLowerCase();
+            return DTD_OUT_KEYWORDS.some(kw => comment.includes(kw));
+          }
+          return false;
+        })
         .map(inj => ({
           playerId: inj.athlete?.id || null,
           playerName: inj.athlete?.displayName || 'Unknown',
@@ -645,7 +659,7 @@ async function fetchTeamInjuries() {
       if (outs.length) injuryMap[teamId] = outs;
     }
 
-    console.log(`[Props] Injuries: ${Object.values(injuryMap).flat().length} players OUT across ${Object.keys(injuryMap).length} teams`);
+    console.log(`[Props] Injuries: ${Object.values(injuryMap).flat().length} players OUT/Doubtful across ${Object.keys(injuryMap).length} teams`);
     setCache(cacheKey, injuryMap);
     return injuryMap;
   } catch (err) {
@@ -1338,6 +1352,20 @@ async function generateTopPicks() {
         const playerNameNorm = normalizeName(player.name);
         const playerProps = realProps ? realProps[playerNameNorm] : null;
 
+        // ── KEY FILTER: If sportsbooks have lines posted and this player
+        //    doesn't have any, they're almost certainly not playing. Skip them. ──
+        if (usingRealLines && !playerProps) return null;
+
+        // ── Recent-activity filter: skip players who haven't played in their
+        //    last 3 game-log entries (likely injured but not on ESPN injury list yet) ──
+        const recentGames = stats.gameLog.slice(0, 3);
+        if (recentGames.length >= 2) {
+          const recentMins = recentGames.map(g => getStatValue(g.stats, 'min'));
+          const gamesWithZeroOrNull = recentMins.filter(m => m === null || m === 0).length;
+          // If 2+ of last 3 games are 0 min or missing, player is inactive
+          if (gamesWithZeroOrNull >= 2) return null;
+        }
+
         // Get pre-built matchup context for this side of the game
         let matchupCtx = matchupContextCache[game.id]?.[side] || null;
         // Update B2B detection with this specific player's game log
@@ -1376,8 +1404,12 @@ async function generateTopPicks() {
               under: playerProps[cat.key].underOdds,
               book: playerProps[cat.key].book,
             };
+          } else if (usingRealLines) {
+            // Real lines exist but this player/stat has none — skip this stat
+            // (sportsbook only posts lines for stats the player realistically hits)
+            continue;
           } else {
-            // No sportsbook line available — generate from average
+            // No sportsbook data at all — generate from average
             // Always use .5 increments to match sportsbook style (e.g. 25.5, 2.5)
             propLine = Math.floor(avg) + 0.5;
           }
