@@ -918,10 +918,12 @@ function analyzeOverUnder(
   // 4. Pace matchup (weight 15)
   if (homeStats && awayStats) {
     const gamePace = (homeStats.pace + awayStats.pace) / 2;
-    // Faster pace → more possessions → more points
-    const paceAdj = (gamePace / NBA_AVG_PACE);
-    // Apply pace adjustment to the running projection
-    const paceAdjTotal = (homeStats.avgPtsFor + awayStats.avgPtsFor) * paceAdj;
+    // Convert PPG to efficiency (points per possession), then project with game pace
+    // PPG already reflects each team's own pace, so we must NOT multiply PPG × pace
+    // Instead: efficiency × expected game possessions gives a pace-aware total
+    const homeEfficiency = homeStats.pace > 0 ? homeStats.avgPtsFor / homeStats.pace : 1.0;
+    const awayEfficiency = awayStats.pace > 0 ? awayStats.avgPtsFor / awayStats.pace : 1.0;
+    const paceAdjTotal = (homeEfficiency + awayEfficiency) * gamePace;
     projectedTotal += paceAdjTotal * 15;
     totalWeight += 15;
     const paceLabel = gamePace >= 102 ? 'fast' : gamePace <= 96 ? 'slow' : 'average';
