@@ -3498,10 +3498,13 @@ function updateReminderPreview() {
   if (timeInput.value) {
     metaHtml += `<span>📅 ${esc(timeInput.value)}</span>`;
   }
-  const chSel = document.getElementById('reminder-channel');
-  const selectedChannels = Array.from(chSel.selectedOptions).map(o => o.textContent);
-  if (selectedChannels.length) {
-    metaHtml += `<span>${selectedChannels.map(n => esc(n)).join(', ')}</span>`;
+  const selectedChIds = getSelectedChannelIds('reminder-channel-picker');
+  if (selectedChIds.length) {
+    const names = selectedChIds.map(id => {
+      const ch = reminderChannelsList.find(c => c.id === id);
+      return ch ? '#' + ch.name : '#' + id;
+    });
+    metaHtml += `<span>${names.map(n => esc(n)).join(', ')}</span>`;
   }
   if (repeat && repeat !== 'none') {
     metaHtml += `<span>🔁 ${repeat}</span>`;
@@ -3516,32 +3519,79 @@ function openReminderCalendar() {
   try { el.showPicker(); } catch(e) { el.click(); }
 }
 
+// ─── Channel Picker Helpers ─────────
+let reminderChannelsList = [];
+
+function populateChannelPicker(dropdownId, channels, selectedIds) {
+  const dropdown = document.getElementById(dropdownId);
+  dropdown.innerHTML = '';
+  channels.forEach(ch => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = ch.id;
+    cb.checked = selectedIds.includes(ch.id);
+    cb.addEventListener('change', () => {
+      const pickerId = dropdown.closest('.channel-picker').id;
+      updateChannelPickerLabel(pickerId);
+    });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' #' + ch.name));
+    dropdown.appendChild(label);
+  });
+}
+
+function getSelectedChannelIds(pickerId) {
+  const picker = document.getElementById(pickerId);
+  const boxes = picker.querySelectorAll('input[type="checkbox"]:checked');
+  return Array.from(boxes).map(cb => cb.value);
+}
+
+function updateChannelPickerLabel(pickerId) {
+  const picker = document.getElementById(pickerId);
+  const label = picker.querySelector('.channel-picker-label');
+  const ids = getSelectedChannelIds(pickerId);
+  if (ids.length === 0) {
+    label.textContent = 'Select channels...';
+  } else {
+    const names = ids.map(id => {
+      const ch = reminderChannelsList.find(c => c.id === id);
+      return ch ? '#' + ch.name : '#' + id;
+    });
+    label.textContent = names.join(', ');
+  }
+}
+
+function toggleChannelPicker(pickerId) {
+  const picker = document.getElementById(pickerId);
+  const dropdown = picker.querySelector('.channel-picker-dropdown');
+  dropdown.classList.toggle('hidden');
+}
+
+// Close picker when clicking outside
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.channel-picker').forEach(picker => {
+    if (!picker.contains(e.target)) {
+      const dd = picker.querySelector('.channel-picker-dropdown');
+      if (dd) dd.classList.add('hidden');
+    }
+  });
+});
+
 async function loadReminderChannels() {
   const guildId = document.getElementById('reminder-guild').value;
   if (!guildId) return;
 
-  const sel = document.getElementById('reminder-channel');
-  sel.innerHTML = '<option value="" disabled>Loading...</option>';
-
   try {
     const res = await fetch(`/api/guilds/${guildId}/channels`);
     const channels = await res.json();
-    sel.innerHTML = '';
-    channels.forEach(ch => {
-      const opt = document.createElement('option');
-      opt.value = ch.id;
-      opt.textContent = '#' + ch.name;
-      sel.appendChild(opt);
-    });
+    reminderChannelsList = channels;
+    populateChannelPicker('reminder-channel-dropdown', channels, []);
+    updateChannelPickerLabel('reminder-channel-picker');
   } catch (e) {
-    sel.innerHTML = '<option value="" disabled>Failed to load</option>';
+    reminderChannelsList = [];
   }
 
-  // Also populate edit modal channel selector
-  const editSel = document.getElementById('edit-reminder-channel');
-  if (editSel) editSel.innerHTML = sel.innerHTML;
-
-  // Also refresh reminders list
   loadReminders();
 }
 
@@ -3648,8 +3698,7 @@ async function submitReminder(e) {
   if (e && e.preventDefault) e.preventDefault();
 
   const guildId = document.getElementById('reminder-guild').value;
-  const channelSel = document.getElementById('reminder-channel');
-  const channelIds = Array.from(channelSel.selectedOptions).map(o => o.value).filter(Boolean);
+  const channelIds = getSelectedChannelIds('reminder-channel-picker');
   const type = document.getElementById('reminder-type').value;
   const message = document.getElementById('reminder-message').value.trim();
   const repeat = document.getElementById('reminder-repeat').value;
@@ -3806,12 +3855,10 @@ function openEditReminder(reminderId) {
   document.getElementById('edit-reminder-message').value = rem.message || '';
   document.getElementById('edit-reminder-repeat').value = rem.repeat || 'none';
 
-  // Populate channel dropdown and select saved channels
-  const chSel = document.getElementById('edit-reminder-channel');
-  const mainChSel = document.getElementById('reminder-channel');
-  chSel.innerHTML = mainChSel.innerHTML;
+  // Populate channel picker checkboxes
   const savedChIds = rem.channelIds || (rem.channelId ? [rem.channelId] : []);
-  Array.from(chSel.options).forEach(o => { o.selected = savedChIds.includes(o.value); });
+  populateChannelPicker('edit-reminder-channel-dropdown', reminderChannelsList, savedChIds);
+  updateChannelPickerLabel('edit-reminder-channel-picker');
 
   // Populate links
   const linksContainer = document.getElementById('edit-reminder-links-container');
@@ -3864,8 +3911,7 @@ async function submitEditReminder(e) {
   const guildId = document.getElementById('reminder-guild').value;
   const type = document.getElementById('edit-reminder-type').value;
   const message = document.getElementById('edit-reminder-message').value.trim();
-  const editChSel = document.getElementById('edit-reminder-channel');
-  const channelIds = Array.from(editChSel.selectedOptions).map(o => o.value).filter(Boolean);
+  const channelIds = getSelectedChannelIds('edit-reminder-channel-picker');
   const repeat = document.getElementById('edit-reminder-repeat').value;
   const links = getEditReminderLinks();
 
