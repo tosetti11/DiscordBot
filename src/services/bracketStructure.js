@@ -14,11 +14,11 @@
   const REGIONS = ['East', 'West', 'South', 'Midwest'];
 
   const ROUND_NAMES = {
-    1: 'Round of 64', 2: 'Round of 32', 3: 'Sweet 16',
+    0: 'First Four', 1: 'Round of 64', 2: 'Round of 32', 3: 'Sweet 16',
     4: 'Elite 8', 5: 'Final Four', 6: 'Championship',
   };
 
-  const ROUND_SHORT = { 1: 'R64', 2: 'R32', 3: 'S16', 4: 'E8', 5: 'F4', 6: 'CHAMP' };
+  const ROUND_SHORT = { 0: 'F4R', 1: 'R64', 2: 'R32', 3: 'S16', 4: 'E8', 5: 'F4', 6: 'CHAMP' };
 
   const STANDARD_SCORING = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32 };
   const MAX_SCORE = 192; // 32+32+32+32+32+32
@@ -107,10 +107,34 @@
       advancesTo: null, position: null,
     };
 
+    // ─── First Four (play-in) games: round 0, games 64–67 ───
+    // Winners advance to the bottom slot (play-in seed) of the corresponding R1 game.
+    // Each First Four game defines region + seed being contested.
+    const firstFourDefs = [
+      { gameNumber: 64, region: 'Midwest', seed: 16, advancesTo: 46 },
+      { gameNumber: 65, region: 'West',    seed: 11, advancesTo: 20 },
+      { gameNumber: 66, region: 'South',   seed: 16, advancesTo: 31 },
+      { gameNumber: 67, region: 'Midwest', seed: 11, advancesTo: 50 },
+    ];
+    for (const ff of firstFourDefs) {
+      games[ff.gameNumber] = {
+        gameNumber: ff.gameNumber, round: 0, region: ff.region,
+        topSeed: ff.seed, bottomSeed: ff.seed,  // both teams share same seed
+        feederTop: null, feederBottom: null,
+        advancesTo: ff.advancesTo,
+        position: 'bottom',  // play-in winner fills the bottom slot in R1
+        isFirstFour: true,
+      };
+    }
+
     return games;
   }
 
   const BRACKET = buildBracketStructure();
+
+  /** First Four game numbers for easy reference */
+  const FIRST_FOUR_GAMES = [64, 65, 66, 67];
+  const TOTAL_GAMES = 67; // 63 bracket + 4 First Four
 
   function getRegionGames(region) {
     return Object.values(BRACKET).filter(g => g.region === region).map(g => g.gameNumber).sort((a, b) => a - b);
@@ -198,7 +222,7 @@
 
   return {
     REGIONS, ROUND_NAMES, ROUND_SHORT, STANDARD_SCORING, MAX_SCORE,
-    R1_SEED_MATCHUPS, BRACKET,
+    R1_SEED_MATCHUPS, BRACKET, FIRST_FOUR_GAMES, TOTAL_GAMES,
     getRegionGames, getRoundGames, getDownstreamGames, getTeamsForGame,
     calculateScore, calculateMaxPossible,
   };

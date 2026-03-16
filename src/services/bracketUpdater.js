@@ -6,7 +6,7 @@
  * Runs on a configurable interval (default: every 2 minutes during tournament).
  */
 const bracketDb = require('../database/bracket');
-const { BRACKET, calculateScore, calculateMaxPossible, STANDARD_SCORING } = require('./bracketStructure');
+const { BRACKET, FIRST_FOUR_GAMES, TOTAL_GAMES, calculateScore, calculateMaxPossible, STANDARD_SCORING } = require('./bracketStructure');
 
 const ESPN_CBB_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard';
 const POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
@@ -143,7 +143,7 @@ async function pollAndUpdate() {
 
     const pendingOrLive = bracketGames.filter(g => g.status !== 'final');
     if (pendingOrLive.length === 0) {
-      console.log('[BracketUpdater] All 63 games are final — tournament complete!');
+      console.log(`[BracketUpdater] All ${TOTAL_GAMES} games are final — tournament complete!`);
       await bracketDb.updateTournament(tournament.id, { status: 'completed' });
       isRunning = false;
       return;
@@ -198,17 +198,21 @@ async function pollAndUpdate() {
 
       // Auto-advance winner to next game
       const structure = BRACKET[bracketGame.game_number];
-      if (structure.advancesTo) {
+      if (structure && structure.advancesTo) {
         const update = {};
         if (structure.position === 'top') update.top_team_id = winnerTeam.id;
         else update.bottom_team_id = winnerTeam.id;
         await bracketDb.updateGameResult(tournament.id, structure.advancesTo, update);
+        if (structure.isFirstFour) {
+          console.log(`[BracketUpdater] First Four winner ${winnerTeam.team_name} placed into R1 game ${structure.advancesTo}`);
+        }
       }
 
       // Mark loser as eliminated
       await bracketDb.updateTeamElimination(loserTeam.id, true);
 
-      console.log(`[BracketUpdater] Game ${bracketGame.game_number} (R${bracketGame.round}): ${winnerTeam.team_name} def. ${loserTeam.team_name} ${topScore}-${bottomScore}`);
+      const roundLabel = bracketGame.round === 0 ? 'First Four' : `R${bracketGame.round}`;
+      console.log(`[BracketUpdater] Game ${bracketGame.game_number} (${roundLabel}): ${winnerTeam.team_name} def. ${loserTeam.team_name} ${topScore}-${bottomScore}`);
       updatedCount++;
     }
 
@@ -219,9 +223,10 @@ async function pollAndUpdate() {
       const entries = await bracketDb.getEntries(tournament.id);
       const scoring = tournament.scoring || STANDARD_SCORING;
 
+      // Only score main bracket games (1-63), not First Four
       const results = {};
       for (const g of bracketGames) {
-        if (g.winner_id) results[g.game_number] = g.winner_id;
+        if (g.winner_id && g.game_number <= 63) results[g.game_number] = g.winner_id;
       }
       const elimIds = teams.filter(t => t.is_eliminated).map(t => t.id);
 
@@ -233,10 +238,10 @@ async function pollAndUpdate() {
       }
 
       const finalCount = bracketGames.filter(g => g.status === 'final').length;
-      console.log(`[BracketUpdater] Updated ${updatedCount} game(s). ${finalCount}/63 complete. Scores recalculated for ${entries.length} entries.`);
+      console.log(`[BracketUpdater] Updated ${updatedCount} game(s). ${finalCount}/${TOTAL_GAMES} complete. Scores recalculated for ${entries.length} entries.`);
 
-      // Check if tournament is now complete
-      if (finalCount === 63) {
+      // Check if tournament is now complete (all 67 games final)
+      if (finalCount >= TOTAL_GAMES) {
         await bracketDb.updateTournament(tournament.id, { status: 'completed' });
         console.log('[BracketUpdater] 🏆 Tournament complete!');
       }

@@ -5,12 +5,13 @@
  */
 const { supabase } = require('../src/config/supabase');
 const bracketDb = require('../src/database/bracket');
-const { BRACKET } = require('../src/services/bracketStructure');
+const { BRACKET, FIRST_FOUR_GAMES } = require('../src/services/bracketStructure');
 
 const KING_DISCORD_ID = '1246525685749649441';
 
 // 2026 NCAA Tournament teams by region (from ESPN API)
-// First Four play-in slots show one team; bracket updater fills winner.
+// Play-in seed slots (Midwest 16, West 11, South 16, Midwest 11) are omitted here;
+// both play-in teams are in FIRST_FOUR_TEAMS and the winner fills the R1 slot.
 const TEAMS_2026 = {
   East: [
     { seed: 1,  team_name: 'Duke',              short_name: 'Duke',        espn_id: '150' },
@@ -41,7 +42,7 @@ const TEAMS_2026 = {
     { seed: 8,  team_name: 'Villanova',         short_name: 'Villanova',   espn_id: '222' },
     { seed: 9,  team_name: 'Utah State',        short_name: 'Utah State',  espn_id: '328' },
     { seed: 10, team_name: 'Missouri',          short_name: 'Missouri',    espn_id: '142' },
-    { seed: 11, team_name: 'NC State',          short_name: 'NC State',    espn_id: '152' },
+    // seed 11 is a First Four play-in (NC State vs Texas)
     { seed: 12, team_name: 'High Point',        short_name: 'High Point',  espn_id: '2272' },
     { seed: 13, team_name: "Hawai'i",           short_name: "Hawai'i",     espn_id: '62' },
     { seed: 14, team_name: 'Kennesaw State',    short_name: 'Kennesaw St', espn_id: '338' },
@@ -64,7 +65,7 @@ const TEAMS_2026 = {
     { seed: 13, team_name: 'Troy',              short_name: 'Troy',        espn_id: '2653' },
     { seed: 14, team_name: 'Pennsylvania',      short_name: 'Penn',        espn_id: '219' },
     { seed: 15, team_name: 'Idaho',             short_name: 'Idaho',       espn_id: '70' },
-    { seed: 16, team_name: 'Lehigh',            short_name: 'Lehigh',      espn_id: '2329' },
+    // seed 16 is a First Four play-in (Lehigh vs Prairie View A&M)
   ],
   Midwest: [
     { seed: 1,  team_name: 'Michigan',          short_name: 'Michigan',    espn_id: '130' },
@@ -77,14 +78,40 @@ const TEAMS_2026 = {
     { seed: 8,  team_name: 'Georgia',           short_name: 'Georgia',     espn_id: '61' },
     { seed: 9,  team_name: 'Saint Louis',       short_name: 'Saint Louis', espn_id: '139' },
     { seed: 10, team_name: 'Santa Clara',       short_name: 'Santa Clara', espn_id: '2541' },
-    { seed: 11, team_name: 'SMU',               short_name: 'SMU',         espn_id: '2567' },
+    // seed 11 is a First Four play-in (SMU vs Miami OH)
     { seed: 12, team_name: 'Akron',             short_name: 'Akron',       espn_id: '2006' },
     { seed: 13, team_name: 'Hofstra',           short_name: 'Hofstra',     espn_id: '2275' },
     { seed: 14, team_name: 'Wright State',      short_name: 'Wright St',   espn_id: '2750' },
     { seed: 15, team_name: 'Tennessee State',   short_name: 'Tenn State',  espn_id: '2634' },
-    { seed: 16, team_name: 'Howard',            short_name: 'Howard',      espn_id: '47' },
+    // seed 16 is a First Four play-in (Howard vs UMBC)
   ],
 };
+
+// First Four play-in teams (8 teams, 4 games)
+// Each pair plays for the given seed slot in the given region.
+// game_number matches BRACKET games 64-67.
+const FIRST_FOUR_TEAMS = [
+  // Game 64: Midwest 16
+  { game_number: 64, region: 'Midwest', seed: 16, teams: [
+    { team_name: 'Howard',   short_name: 'Howard', espn_id: '47' },
+    { team_name: 'UMBC',     short_name: 'UMBC',   espn_id: '2378' },
+  ]},
+  // Game 65: West 11
+  { game_number: 65, region: 'West', seed: 11, teams: [
+    { team_name: 'NC State', short_name: 'NC State', espn_id: '152' },
+    { team_name: 'Texas',    short_name: 'Texas',    espn_id: '251' },
+  ]},
+  // Game 66: South 16
+  { game_number: 66, region: 'South', seed: 16, teams: [
+    { team_name: 'Lehigh',          short_name: 'Lehigh',   espn_id: '2329' },
+    { team_name: 'Prairie View A&M', short_name: 'PVAMU',   espn_id: '2504' },
+  ]},
+  // Game 67: Midwest 11
+  { game_number: 67, region: 'Midwest', seed: 11, teams: [
+    { team_name: 'SMU',       short_name: 'SMU',      espn_id: '2567' },
+    { team_name: 'Miami (OH)', short_name: 'Miami OH', espn_id: '193' },
+  ]},
+];
 
 async function seed() {
   try {
@@ -100,7 +127,7 @@ async function seed() {
     });
     console.log('Tournament created:', t.id);
 
-    // Build 64 team objects with ESPN IDs and logos
+    // Build team objects: main bracket teams + First Four play-in teams
     const teamsList = [];
     for (const region of ['East', 'West', 'South', 'Midwest']) {
       for (const tm of TEAMS_2026[region]) {
@@ -115,25 +142,63 @@ async function seed() {
         });
       }
     }
+    // Add First Four play-in teams (they share the same seed as their opponent)
+    for (const ff of FIRST_FOUR_TEAMS) {
+      for (const tm of ff.teams) {
+        // Skip if already in the main list (some may overlap)
+        const exists = teamsList.find(t => t.espn_team_id === tm.espn_id);
+        if (!exists) {
+          teamsList.push({
+            seed: ff.seed,
+            region: ff.region,
+            team_name: tm.team_name,
+            short_name: tm.short_name,
+            abbreviation: tm.short_name.substring(0, 4).toUpperCase(),
+            espn_team_id: tm.espn_id,
+            logo_url: `https://a.espncdn.com/i/teamlogos/ncaa/500/${tm.espn_id}.png`,
+            is_playin: true,
+          });
+        }
+      }
+    }
 
-    console.log('Seeding 64 teams...');
+    console.log(`Seeding ${teamsList.length} teams (including play-in)...`);
     const saved = await bracketDb.seedTeams(t.id, teamsList);
     console.log('Teams seeded:', saved.length);
 
-    // Initialize 63 games
+    // Build play-in seed set for quick lookup: "Midwest-16", "West-11", etc.
+    const playinSeeds = new Set(FIRST_FOUR_TEAMS.map(ff => `${ff.region}-${ff.seed}`));
+
+    // Initialize 63 main bracket games
     const gamesData = [];
     for (let gn = 1; gn <= 63; gn++) {
       const g = BRACKET[gn];
       const gameRow = { game_number: gn, round: g.round, region: g.region };
       if (g.round === 1) {
-        const topTeam = saved.find(tm => tm.region === g.region && tm.seed === g.topSeed);
-        const bottomTeam = saved.find(tm => tm.region === g.region && tm.seed === g.bottomSeed);
+        const topTeam = saved.find(tm => tm.region === g.region && tm.seed === g.topSeed && !tm.is_playin);
+        // For play-in seeds, leave bottom_team_id null (TBD — filled when First Four resolves)
+        const isPlayin = playinSeeds.has(`${g.region}-${g.bottomSeed}`);
+        const bottomTeam = isPlayin ? null : saved.find(tm => tm.region === g.region && tm.seed === g.bottomSeed && !tm.is_playin);
         gameRow.top_team_id = topTeam?.id || null;
         gameRow.bottom_team_id = bottomTeam?.id || null;
       }
       gamesData.push(gameRow);
     }
-    console.log('Initializing 63 games...');
+
+    // Add 4 First Four games (games 64-67)
+    for (const ff of FIRST_FOUR_TEAMS) {
+      const topTeam = saved.find(tm => tm.espn_team_id === ff.teams[0].espn_id);
+      const bottomTeam = saved.find(tm => tm.espn_team_id === ff.teams[1].espn_id);
+      gamesData.push({
+        game_number: ff.game_number,
+        round: 0,
+        region: ff.region,
+        top_team_id: topTeam?.id || null,
+        bottom_team_id: bottomTeam?.id || null,
+      });
+    }
+
+    console.log(`Initializing ${gamesData.length} games (63 bracket + 4 First Four)...`);
     await bracketDb.initializeGames(t.id, gamesData);
 
     // Set status to open

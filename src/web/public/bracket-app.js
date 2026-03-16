@@ -421,6 +421,7 @@
 
   function renderCurrentRegion() {
     if (currentRegion === 'finalfour') renderFinalFour();
+    else if (currentRegion === 'firstfour') renderFirstFour();
     else renderRegionBracket(currentRegion);
   }
 
@@ -470,6 +471,68 @@
     });
 
     container.appendChild(bracket);
+  }
+
+  /* ═══════════ First Four ═══════════ */
+  function renderFirstFour() {
+    const container = $('bracket-container');
+    container.innerHTML = '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'final-four-bracket';
+
+    const heading = document.createElement('h2');
+    heading.style.cssText = 'text-align:center;margin-bottom:16px;color:var(--gold)';
+    heading.textContent = '🏀 First Four Play-In Games';
+    wrap.appendChild(heading);
+
+    const desc = document.createElement('p');
+    desc.style.cssText = 'text-align:center;margin-bottom:24px;color:var(--text-secondary);font-size:14px';
+    desc.textContent = 'Winners advance to their seed slot in the main bracket.';
+    wrap.appendChild(desc);
+
+    const row = document.createElement('div');
+    row.className = 'ff-row';
+    row.style.flexWrap = 'wrap';
+
+    const ffGames = (BS.FIRST_FOUR_GAMES || []);
+    for (const gn of ffGames) {
+      const g = BS.BRACKET[gn];
+      if (!g) continue;
+
+      const gr = gamesMap[gn];
+      const regionLabel = g.region || '';
+      const seedLabel = g.topSeed || '';
+      let statusText = '';
+      if (gr && gr.status === 'final') {
+        const winner = gr.winner_id ? teamsMap[`id-${gr.winner_id}`] : null;
+        statusText = winner ? `✅ ${winner.short_name || winner.team_name} wins` : '✅ Final';
+      } else if (gr && gr.status === 'live') {
+        statusText = '🟢 LIVE';
+      } else {
+        statusText = '⏳ Pending';
+      }
+
+      const mWrap = document.createElement('div');
+      mWrap.className = 'ff-matchup';
+      const lbl = document.createElement('div');
+      lbl.className = 'ff-label';
+      lbl.innerHTML = `${esc(regionLabel)} • ${seedLabel} seed <span style="font-size:12px;color:var(--text-secondary);margin-left:8px">${statusText}</span>`;
+      mWrap.appendChild(lbl);
+      mWrap.appendChild(buildMatchup(gn));
+
+      const advGame = g.advancesTo;
+      if (advGame) {
+        const advNote = document.createElement('div');
+        advNote.style.cssText = 'text-align:center;font-size:11px;color:var(--text-secondary);margin-top:4px';
+        advNote.textContent = `Winner → Game ${advGame} (${regionLabel} R64)`;
+        mWrap.appendChild(advNote);
+      }
+      row.appendChild(mWrap);
+    }
+
+    wrap.appendChild(row);
+    container.appendChild(wrap);
   }
 
   /* ═══════════ Final Four ═══════════ */
@@ -553,6 +616,14 @@
 
   function getTeamsForDisplay(gameNumber) {
     const g = BS.BRACKET[gameNumber];
+    if (g.round === 0) {
+      // First Four: both seeds are the same, use game record team IDs
+      const gr = gamesMap[gameNumber];
+      return {
+        top:    gr?.top_team_id  ? (teamsMap[`id-${gr.top_team_id}`]  || null) : null,
+        bottom: gr?.bottom_team_id ? (teamsMap[`id-${gr.bottom_team_id}`] || null) : null,
+      };
+    }
     if (g.round === 1) {
       return {
         top:    teamsMap[`${g.region}-${g.topSeed}`]    || null,
@@ -574,7 +645,7 @@
 
     if (!team) {
       slot.classList.add('empty');
-      if (game.round === 1) {
+      if (game.round <= 1) {
         slot.innerHTML = '<span class="team-name">TBD</span>';
       } else {
         const feeder = position === 'top' ? game.feederTop : game.feederBottom;
@@ -596,8 +667,8 @@
 
     if (team.is_eliminated) slot.classList.add('eliminated');
 
-    // Clickable only when editable and game not decided
-    if (canEdit && myEntry && !(gr && gr.winner_id)) {
+    // Clickable only when editable, game not decided, and not a First Four game
+    if (canEdit && myEntry && !(gr && gr.winner_id) && game.round !== 0) {
       slot.addEventListener('click', () => pickTeam(gameNumber, team.id));
     } else {
       slot.classList.add('locked');
@@ -880,7 +951,7 @@
     if (!teams.length) { $('admin-content').innerHTML = '<p>Seed teams first.</p>'; return; }
 
     let html = '';
-    for (let round = 1; round <= 6; round++) {
+    for (let round = 0; round <= 6; round++) {
       const rGames = BS.getRoundGames(round);
       html += `<h4 style="margin:16px 0 8px;color:var(--accent)">${BS.ROUND_NAMES[round]}</h4>`;
       html += '<div style="display:flex;flex-direction:column;gap:6px">';
