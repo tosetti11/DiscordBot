@@ -222,6 +222,7 @@ body {
   border-radius: 2px;
 }
 .team-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-name.playin-pair { font-size: 10px; color: #f9a825; font-style: italic; }
 .champion-logo {
   width: 64px; height: 64px; object-fit: contain;
   margin-bottom: 8px;

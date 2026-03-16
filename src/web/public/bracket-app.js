@@ -12,11 +12,13 @@
   let tournament  = null;
   let teams       = [];
   let teamsMap    = {};   // "East-1" → team ,  "id-42" → team
+  let playinPairs = {};   // "West-11" → [team1, team2]  (First Four pairs)
+  let ffR1Map     = {};   // R1 game_number → First Four game_number
   let games       = [];
   let gamesMap    = {};   // gameNumber → game record
   let myEntry     = null;
   let myPicks     = {};   // gameNumber → teamId
-  let currentRegion = 'East';
+  let currentRegion = 'firstfour';
   let isAdminUser   = false;
   let canEdit       = false;
   let toastTimer;
@@ -305,9 +307,26 @@
 
   function buildTeamsMap() {
     teamsMap = {};
+    playinPairs = {};
+    ffR1Map = {};
     for (const t of teams) {
-      teamsMap[`${t.region}-${t.seed}`] = t;
+      const key = `${t.region}-${t.seed}`;
+      if (t.is_playin) {
+        if (!playinPairs[key]) playinPairs[key] = [];
+        playinPairs[key].push(t);
+      } else {
+        teamsMap[key] = t;
+      }
       teamsMap[`id-${t.id}`] = t;
+    }
+    // Also add play-in teams to region-seed if only play-in teams exist for that slot
+    for (const key of Object.keys(playinPairs)) {
+      if (!teamsMap[key]) teamsMap[key] = null; // mark as play-in pending
+    }
+    // Build reverse map: R1 game → First Four game
+    for (const ffGn of (BS.FIRST_FOUR_GAMES || [])) {
+      const ffDef = BS.BRACKET[ffGn];
+      if (ffDef) ffR1Map[ffDef.advancesTo] = ffGn;
     }
   }
 
@@ -625,10 +644,21 @@
       };
     }
     if (g.round === 1) {
-      return {
-        top:    teamsMap[`${g.region}-${g.topSeed}`]    || null,
-        bottom: teamsMap[`${g.region}-${g.bottomSeed}`] || null,
-      };
+      const top = teamsMap[`${g.region}-${g.topSeed}`] || null;
+      let bottom = teamsMap[`${g.region}-${g.bottomSeed}`] || null;
+      // For play-in seed slots: check if First Four game is resolved
+      const ffGn = ffR1Map[gameNumber];
+      if (ffGn) {
+        const ffGame = gamesMap[ffGn];
+        if (ffGame && ffGame.winner_id) {
+          // First Four resolved — winner is placed
+          bottom = teamsMap[`id-${ffGame.winner_id}`] || null;
+        } else {
+          // Not resolved — return null so buildTeamSlot shows the pair label
+          bottom = null;
+        }
+      }
+      return { top, bottom };
     }
     // Later rounds — teams come from picks (user's bracket)
     const tId = myPicks[g.feederTop];
@@ -645,6 +675,18 @@
 
     if (!team) {
       slot.classList.add('empty');
+      // Check if this is a play-in seed slot with pending First Four
+      const ffGn = (game.round === 1) ? ffR1Map[gameNumber] : null;
+      if (ffGn) {
+        const ffDef = BS.BRACKET[ffGn];
+        const pairKey = `${ffDef.region}-${ffDef.topSeed}`;
+        const pair = playinPairs[pairKey];
+        if (pair && pair.length === 2) {
+          const names = pair.map(t => esc(t.short_name || t.team_name)).join('/');
+          slot.innerHTML = `<span class="seed">${pair[0].seed}</span><span class="team-name playin-pair">${names}</span>`;
+          return slot;
+        }
+      }
       if (game.round <= 1) {
         slot.innerHTML = '<span class="team-name">TBD</span>';
       } else {
