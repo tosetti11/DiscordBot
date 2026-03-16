@@ -3446,7 +3446,6 @@ function initRemindersPage() {
 
   // Live preview listeners
   const msgInput = document.getElementById('reminder-message');
-  const linkInput = document.getElementById('reminder-link');
   const typeSelect = document.getElementById('reminder-type');
   const repeatSelect = document.getElementById('reminder-repeat');
   const charCount = document.getElementById('reminder-char-count');
@@ -3455,7 +3454,8 @@ function initRemindersPage() {
     charCount.textContent = msgInput.value.length;
     updateReminderPreview();
   });
-  linkInput.addEventListener('input', () => updateReminderPreview());
+  // Link inputs use event delegation
+  document.getElementById('reminder-links-container').addEventListener('input', () => updateReminderPreview());
   typeSelect.addEventListener('change', () => updateReminderPreview());
   repeatSelect.addEventListener('change', () => updateReminderPreview());
 
@@ -3464,7 +3464,7 @@ function initRemindersPage() {
 
 function updateReminderPreview() {
   const msg = document.getElementById('reminder-message').value || 'Your reminder will appear here...';
-  const link = document.getElementById('reminder-link').value;
+  const links = getReminderLinks();
   const typeVal = document.getElementById('reminder-type').value;
   const typeInfo = REMINDER_TYPES[typeVal] || null;
   const repeat = document.getElementById('reminder-repeat').value;
@@ -3481,15 +3481,15 @@ function updateReminderPreview() {
   // Update message
   document.getElementById('reminder-preview-description').textContent = msg;
 
-  // Update link
+  // Update links
   const linkField = document.getElementById('reminder-preview-link-field');
-  const linkValue = document.getElementById('reminder-preview-link-value');
-  if (link) {
+  const linkList = document.getElementById('reminder-preview-link-list');
+  if (links.length) {
     linkField.classList.remove('hidden');
-    linkValue.textContent = link;
-    linkValue.href = link;
+    linkList.innerHTML = links.map(l => `<a href="${esc(l)}" target="_blank" rel="noopener">${esc(l)}</a>`).join('<br>');
   } else {
     linkField.classList.add('hidden');
+    linkList.innerHTML = '';
   }
 
   // Update meta (time + repeat)
@@ -3499,8 +3499,9 @@ function updateReminderPreview() {
     metaHtml += `<span>📅 ${esc(timeInput.value)}</span>`;
   }
   const chSel = document.getElementById('reminder-channel');
-  if (chSel.value && chSel.selectedOptions[0]) {
-    metaHtml += `<span>${esc(chSel.selectedOptions[0].textContent)}</span>`;
+  const selectedChannels = Array.from(chSel.selectedOptions).map(o => o.textContent);
+  if (selectedChannels.length) {
+    metaHtml += `<span>${selectedChannels.map(n => esc(n)).join(', ')}</span>`;
   }
   if (repeat && repeat !== 'none') {
     metaHtml += `<span>🔁 ${repeat}</span>`;
@@ -3520,12 +3521,12 @@ async function loadReminderChannels() {
   if (!guildId) return;
 
   const sel = document.getElementById('reminder-channel');
-  sel.innerHTML = '<option value="">Loading...</option>';
+  sel.innerHTML = '<option value="" disabled>Loading...</option>';
 
   try {
     const res = await fetch(`/api/guilds/${guildId}/channels`);
     const channels = await res.json();
-    sel.innerHTML = '<option value="">Select channel...</option>';
+    sel.innerHTML = '';
     channels.forEach(ch => {
       const opt = document.createElement('option');
       opt.value = ch.id;
@@ -3533,8 +3534,12 @@ async function loadReminderChannels() {
       sel.appendChild(opt);
     });
   } catch (e) {
-    sel.innerHTML = '<option value="">Failed to load</option>';
+    sel.innerHTML = '<option value="" disabled>Failed to load</option>';
   }
+
+  // Also populate edit modal channel selector
+  const editSel = document.getElementById('edit-reminder-channel');
+  if (editSel) editSel.innerHTML = sel.innerHTML;
 
   // Also refresh reminders list
   loadReminders();
@@ -3575,14 +3580,21 @@ async function loadReminders() {
       card.className = 'reminder-card';
       card.dataset.reminderId = rem.id;
       card.dataset.reminderData = JSON.stringify(rem);
+
+      const channelDisplay = (rem.channelNames || [rem.channelName || rem.channelId || '—']).map(n => '#' + esc(n)).join(', ');
+      const linksHtml = (rem.links || []).length
+        ? `<div class="reminder-links">${rem.links.map(l => `<a href="${esc(l)}" target="_blank" rel="noopener">🔗 ${esc(l)}</a>`).join(' ')}</div>`
+        : '';
+
       card.innerHTML = `
         <span class="reminder-icon">${typeInfo.emoji}</span>
         <div class="reminder-info">
           <div class="reminder-type-label">${esc(typeInfo.label)}</div>
           <div class="reminder-msg">${esc(rem.message) || ''}</div>
+          ${linksHtml}
           <div class="reminder-meta">
             <span>📅 ${esc(timeStr)}</span>
-            <span>#${esc(rem.channelName || rem.channelId || '—')}</span>
+            <span>${channelDisplay}</span>
             ${repeatLabel}
           </div>
         </div>
@@ -3597,14 +3609,51 @@ async function loadReminders() {
   }
 }
 
+// ─── Multi-link helpers ─────────
+function getReminderLinks() {
+  const inputs = document.querySelectorAll('#reminder-links-container .reminder-link-input');
+  return Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+}
+function getEditReminderLinks() {
+  const inputs = document.querySelectorAll('#edit-reminder-links-container .edit-reminder-link-input');
+  return Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+}
+function addReminderLinkRow() {
+  const container = document.getElementById('reminder-links-container');
+  const row = document.createElement('div');
+  row.className = 'link-row';
+  row.innerHTML = `<input type="text" class="form-input reminder-link-input" placeholder="https://...">
+    <button type="button" class="btn btn-sm btn-secondary" onclick="addReminderLinkRow()">+</button>
+    <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove(); updateReminderPreview();">&times;</button>`;
+  container.appendChild(row);
+}
+function addEditReminderLinkRow() {
+  const container = document.getElementById('edit-reminder-links-container');
+  const row = document.createElement('div');
+  row.className = 'link-row';
+  row.innerHTML = `<input type="text" class="form-input edit-reminder-link-input" placeholder="https://...">
+    <button type="button" class="btn btn-sm btn-secondary" onclick="addEditReminderLinkRow()">+</button>
+    <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">&times;</button>`;
+  container.appendChild(row);
+}
+function resetReminderLinks() {
+  const container = document.getElementById('reminder-links-container');
+  container.innerHTML = `<div class="link-row">
+    <input type="text" class="form-input reminder-link-input" placeholder="https://thegamblingkingapp.com">
+    <button type="button" class="btn btn-sm btn-secondary" onclick="addReminderLinkRow()">+</button>
+  </div>`;
+}
+
 async function submitReminder(e) {
   if (e && e.preventDefault) e.preventDefault();
 
   const guildId = document.getElementById('reminder-guild').value;
-  const channelId = document.getElementById('reminder-channel').value;
+  const channelSel = document.getElementById('reminder-channel');
+  const channelIds = Array.from(channelSel.selectedOptions).map(o => o.value).filter(Boolean);
   const type = document.getElementById('reminder-type').value;
   const message = document.getElementById('reminder-message').value.trim();
   const repeat = document.getElementById('reminder-repeat').value;
+  const links = getReminderLinks();
   const statusDiv = document.getElementById('reminder-status');
   const sendBtn = document.getElementById('reminder-send-btn');
 
@@ -3633,9 +3682,9 @@ async function submitReminder(e) {
     }
   }
 
-  if (!guildId || !channelId || !type || !message) {
+  if (!guildId || !channelIds.length || !type || !message) {
     statusDiv.className = 'announce-status announce-error';
-    statusDiv.textContent = 'Please fill all required fields.';
+    statusDiv.textContent = 'Please fill all required fields (including at least one channel).';
     statusDiv.classList.remove('hidden');
     return;
   }
@@ -3648,7 +3697,7 @@ async function submitReminder(e) {
     const res = await fetch(`/api/guilds/${guildId}/reminders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, message, scheduledAt, channelId, repeat })
+      body: JSON.stringify({ type, message, scheduledAt, channelIds, repeat, links })
     });
     const data = await res.json();
     if (data.error) {
@@ -3667,7 +3716,7 @@ async function submitReminder(e) {
 
     // Reset form
     document.getElementById('reminder-message').value = '';
-    document.getElementById('reminder-link').value = '';
+    resetReminderLinks();
     document.getElementById('reminder-time').value = '';
     document.getElementById('reminder-char-count').textContent = '0';
     delete document.getElementById('reminder-time').dataset.isoValue;
@@ -3757,11 +3806,26 @@ function openEditReminder(reminderId) {
   document.getElementById('edit-reminder-message').value = rem.message || '';
   document.getElementById('edit-reminder-repeat').value = rem.repeat || 'none';
 
-  // Populate channel dropdown
+  // Populate channel dropdown and select saved channels
   const chSel = document.getElementById('edit-reminder-channel');
   const mainChSel = document.getElementById('reminder-channel');
   chSel.innerHTML = mainChSel.innerHTML;
-  chSel.value = rem.channelId || '';
+  const savedChIds = rem.channelIds || (rem.channelId ? [rem.channelId] : []);
+  Array.from(chSel.options).forEach(o => { o.selected = savedChIds.includes(o.value); });
+
+  // Populate links
+  const linksContainer = document.getElementById('edit-reminder-links-container');
+  const savedLinks = rem.links || [];
+  linksContainer.innerHTML = '';
+  if (savedLinks.length === 0) savedLinks.push('');
+  savedLinks.forEach(l => {
+    const row = document.createElement('div');
+    row.className = 'link-row';
+    row.innerHTML = `<input type="text" class="form-input edit-reminder-link-input" placeholder="https://..." value="${esc(l)}">
+      <button type="button" class="btn btn-sm btn-secondary" onclick="addEditReminderLinkRow()">+</button>
+      <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">&times;</button>`;
+    linksContainer.appendChild(row);
+  });
 
   // Set time
   const editTimeInput = document.getElementById('edit-reminder-time');
@@ -3800,8 +3864,10 @@ async function submitEditReminder(e) {
   const guildId = document.getElementById('reminder-guild').value;
   const type = document.getElementById('edit-reminder-type').value;
   const message = document.getElementById('edit-reminder-message').value.trim();
-  const channelId = document.getElementById('edit-reminder-channel').value;
+  const editChSel = document.getElementById('edit-reminder-channel');
+  const channelIds = Array.from(editChSel.selectedOptions).map(o => o.value).filter(Boolean);
   const repeat = document.getElementById('edit-reminder-repeat').value;
+  const links = getEditReminderLinks();
 
   const timeInput = document.getElementById('edit-reminder-time');
   let scheduledAt = null;
@@ -3812,9 +3878,10 @@ async function submitEditReminder(e) {
   const body = {};
   if (type) body.type = type;
   if (message) body.message = message;
-  if (channelId) body.channelId = channelId;
+  if (channelIds.length) body.channelIds = channelIds;
   if (scheduledAt) body.scheduledAt = scheduledAt;
   if (repeat) body.repeat = repeat;
+  body.links = links;
 
   try {
     const res = await fetch(`/api/guilds/${guildId}/reminders/${editingReminderId}`, {

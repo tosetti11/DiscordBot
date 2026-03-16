@@ -3,18 +3,20 @@ const { supabase } = require('../config/supabase');
 /**
  * Create a new reminder
  */
-async function createReminder({ guildId, channelId, creatorId, type, message, scheduledAt, repeat }) {
+async function createReminder({ guildId, channelId, channelIds, creatorId, type, message, scheduledAt, repeat, links }) {
   const { data, error } = await supabase
     .from('reminders')
     .insert({
       guild_id: guildId,
-      channel_id: channelId,
+      channel_id: channelId || (channelIds && channelIds[0]) || '',
+      channel_ids: channelIds && channelIds.length ? channelIds : (channelId ? [channelId] : []),
       creator_discord_id: creatorId,
       type,
       message,
       scheduled_at: scheduledAt,
       repeat: repeat || 'none',
       is_active: true,
+      links: links || [],
     })
     .select()
     .single();
@@ -104,7 +106,12 @@ async function updateReminder(id, guildId, fields) {
   if (fields.type !== undefined) updates.type = fields.type;
   if (fields.scheduledAt !== undefined) updates.scheduled_at = fields.scheduledAt;
   if (fields.channelId !== undefined) updates.channel_id = fields.channelId;
+  if (fields.channelIds !== undefined) {
+    updates.channel_ids = fields.channelIds;
+    if (fields.channelIds.length) updates.channel_id = fields.channelIds[0];
+  }
   if (fields.repeat !== undefined) updates.repeat = fields.repeat;
+  if (fields.links !== undefined) updates.links = fields.links;
 
   if (Object.keys(updates).length === 0) return null;
 

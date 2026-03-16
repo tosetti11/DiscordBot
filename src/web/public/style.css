@@ -2459,6 +2459,56 @@ textarea {
   flex-shrink: 0;
 }
 
+/* Link rows */
+.link-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.link-row .form-input {
+  flex: 1;
+}
+.link-row .btn-danger {
+  background: rgba(220, 53, 69, 0.2);
+  color: #ff6b6b;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.link-row .btn-danger:hover {
+  background: rgba(220, 53, 69, 0.4);
+}
+.form-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Reminder links in cards */
+.reminder-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0;
+}
+.reminder-links a {
+  color: var(--accent-primary);
+  font-size: 12px;
+  text-decoration: none;
+}
+.reminder-links a:hover {
+  text-decoration: underline;
+}
+
+/* Multi-select channel styling */
+select[multiple].form-select {
+  height: auto;
+  min-height: 80px;
+}
+
 /* Textarea with emoji button */
 .textarea-with-emoji {
   position: relative;

@@ -2237,16 +2237,23 @@ Rules:
 
       // Get channel names
       const guild = discordClient?.guilds.cache.get(guildId);
-      const result = reminders.map(r => ({
-        id: r.id,
-        type: r.type,
-        message: r.message,
-        channelId: r.channel_id,
-        channelName: guild?.channels.cache.get(r.channel_id)?.name || r.channel_id,
-        scheduledAt: r.scheduled_at,
-        repeat: r.repeat,
-        creatorId: r.creator_discord_id,
-      }));
+      const result = reminders.map(r => {
+        const channelIds = r.channel_ids && r.channel_ids.length ? r.channel_ids : [r.channel_id];
+        const channelNames = channelIds.map(cid => guild?.channels.cache.get(cid)?.name || cid);
+        return {
+          id: r.id,
+          type: r.type,
+          message: r.message,
+          channelId: r.channel_id,
+          channelIds,
+          channelNames,
+          channelName: channelNames[0],
+          scheduledAt: r.scheduled_at,
+          repeat: r.repeat,
+          creatorId: r.creator_discord_id,
+          links: r.links || [],
+        };
+      });
 
       res.json(result);
     } catch (err) {
@@ -2263,9 +2270,10 @@ Rules:
       const admin = await isAdminInGuild(guildId, req.user.discordId);
       if (!admin) return res.status(403).json({ error: 'Only admins can create reminders' });
 
-      const { type, message, scheduledAt, channelId, repeat } = req.body;
+      const { type, message, scheduledAt, channelId, channelIds, repeat, links } = req.body;
 
-      if (!type || !message || !scheduledAt || !channelId) {
+      const resolvedChannelIds = channelIds && channelIds.length ? channelIds : (channelId ? [channelId] : []);
+      if (!type || !message || !scheduledAt || !resolvedChannelIds.length) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
@@ -2276,12 +2284,14 @@ Rules:
 
       const reminder = await remindersDb.createReminder({
         guildId,
-        channelId,
+        channelId: resolvedChannelIds[0],
+        channelIds: resolvedChannelIds,
         creatorId: req.user.discordId,
         type,
         message,
         scheduledAt: schedDate.toISOString(),
         repeat: repeat || 'none',
+        links: Array.isArray(links) ? links : [],
       });
 
       res.json({ success: true, reminder });
@@ -2322,7 +2332,7 @@ Rules:
       const admin = await isAdminInGuild(guildId, req.user.discordId);
       if (!admin) return res.status(403).json({ error: 'Only admins can edit reminders' });
 
-      const { type, message, scheduledAt, channelId, repeat } = req.body;
+      const { type, message, scheduledAt, channelId, channelIds, repeat, links } = req.body;
 
       const fields = {};
       if (type) fields.type = type;
@@ -2332,8 +2342,15 @@ Rules:
         if (isNaN(schedDate.getTime())) return res.status(400).json({ error: 'Invalid schedule time' });
         fields.scheduledAt = schedDate.toISOString();
       }
-      if (channelId) fields.channelId = channelId;
+      if (channelIds && channelIds.length) {
+        fields.channelIds = channelIds;
+        fields.channelId = channelIds[0];
+      } else if (channelId) {
+        fields.channelId = channelId;
+        fields.channelIds = [channelId];
+      }
       if (repeat) fields.repeat = repeat;
+      if (links !== undefined) fields.links = Array.isArray(links) ? links : [];
 
       const updated = await remindersDb.updateReminder(reminderId, guildId, fields);
       if (!updated) return res.status(400).json({ error: 'No changes provided' });

@@ -255,11 +255,10 @@ async function execute(interaction) {
  */
 async function fireReminder(client, reminder) {
   try {
-    const channel = await client.channels.fetch(reminder.channel_id);
-    if (!channel) {
-      console.error(`[Reminder] Channel ${reminder.channel_id} not found`);
-      return;
-    }
+    // Resolve target channels (multi-channel support)
+    const channelIds = reminder.channel_ids && reminder.channel_ids.length
+      ? reminder.channel_ids
+      : [reminder.channel_id];
 
     const typeInfo = REMINDER_TYPES[reminder.type] || REMINDER_TYPES.custom;
 
@@ -269,6 +268,15 @@ async function fireReminder(client, reminder) {
       .setDescription(reminder.message)
       .setTimestamp()
       .setFooter({ text: 'GK | Scheduled Reminder' });
+
+    // Add clickable links to the embed
+    const links = reminder.links || [];
+    if (links.length === 1) {
+      embed.addFields({ name: '🔗 Link', value: links[0] });
+    } else if (links.length > 1) {
+      const linkList = links.map((l, i) => `[Link ${i + 1}](${l})`).join(' | ');
+      embed.addFields({ name: '🔗 Links', value: linkList });
+    }
 
     // Add flair based on type
     let content = null;
@@ -286,13 +294,25 @@ async function fireReminder(client, reminder) {
       content = '🎉 **ANNOUNCEMENT**';
     }
 
-    await channel.send({ content, embeds: [embed] });
+    // Send to all target channels
+    const channelNameList = [];
+    for (const chId of channelIds) {
+      try {
+        const channel = await client.channels.fetch(chId);
+        if (channel) {
+          await channel.send({ content, embeds: [embed] });
+          channelNameList.push(`#${channel.name}`);
+        }
+      } catch (chErr) {
+        console.error(`[Reminder] Failed to send to channel ${chId}:`, chErr.message);
+      }
+    }
 
     // Mark as fired (handles repeat scheduling)
     await remindersDb.markReminderFired(reminder);
 
     const repeatNote = reminder.repeat !== 'none' ? ` (next: ${reminder.repeat})` : ' (done)';
-    console.log(`[Reminder] Fired "${reminder.message.slice(0, 40)}..." in #${channel.name}${repeatNote}`);
+    console.log(`[Reminder] Fired "${reminder.message.slice(0, 40)}..." in ${channelNameList.join(', ')}${repeatNote}`);
   } catch (err) {
     console.error(`[Reminder] Error firing reminder ${reminder.id}:`, err.message);
   }

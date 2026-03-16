@@ -840,10 +840,11 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="reminder-channel">Channel</label>
-              <select id="reminder-channel" class="form-select" required>
-                <option value="">Select channel...</option>
+              <label for="reminder-channel">Channels</label>
+              <select id="reminder-channel" class="form-select" multiple size="4" required>
+                <option value="" disabled>Select channel(s)...</option>
               </select>
+              <span class="form-hint">Hold Ctrl/Cmd to select multiple</span>
             </div>
             <div class="form-group">
               <label for="reminder-type">Type</label>
@@ -867,8 +868,13 @@
               <span class="char-count"><span id="reminder-char-count">0</span>/2000</span>
             </div>
             <div class="form-group">
-              <label for="reminder-link">Link (optional)</label>
-              <input type="text" id="reminder-link" class="form-input" placeholder="https://thegamblingkingapp.com">
+              <label>Links (optional)</label>
+              <div id="reminder-links-container">
+                <div class="link-row">
+                  <input type="text" class="form-input reminder-link-input" placeholder="https://thegamblingkingapp.com">
+                  <button type="button" class="btn btn-sm btn-secondary" onclick="addReminderLinkRow()">+</button>
+                </div>
+              </div>
             </div>
             <div class="form-group">
               <label for="reminder-time">When</label>
@@ -907,8 +913,8 @@
                   <div class="reminder-preview-type" id="reminder-preview-type"></div>
                   <p class="preview-description" id="reminder-preview-description">Your reminder will appear here...</p>
                   <div class="preview-link hidden" id="reminder-preview-link-field">
-                    <strong>🔗 Link</strong>
-                    <a id="reminder-preview-link-value" href="#" target="_blank"></a>
+                    <strong>🔗 Links</strong>
+                    <div id="reminder-preview-link-list"></div>
                   </div>
                   <div class="reminder-preview-meta" id="reminder-preview-meta"></div>
                   <div class="preview-footer">
@@ -956,14 +962,24 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="edit-reminder-channel">Channel</label>
-              <select id="edit-reminder-channel" class="form-select"></select>
+              <label for="edit-reminder-channel">Channels</label>
+              <select id="edit-reminder-channel" class="form-select" multiple size="4"></select>
+              <span class="form-hint">Hold Ctrl/Cmd to select multiple</span>
             </div>
             <div class="form-group">
               <label for="edit-reminder-message">Message</label>
               <div class="textarea-with-emoji">
                 <textarea id="edit-reminder-message" class="form-input form-textarea" rows="3" required></textarea>
                 <button type="button" class="btn-emoji-picker" onclick="toggleEmojiPicker('edit-reminder-message')" title="Insert server emoji">😀</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Links (optional)</label>
+              <div id="edit-reminder-links-container">
+                <div class="link-row">
+                  <input type="text" class="form-input edit-reminder-link-input" placeholder="https://...">
+                  <button type="button" class="btn btn-sm btn-secondary" onclick="addEditReminderLinkRow()">+</button>
+                </div>
               </div>
             </div>
             <div class="form-group">
