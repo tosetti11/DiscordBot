@@ -14,6 +14,8 @@
   let teamsMap    = {};   // "East-1" → team ,  "id-42" → team
   let playinPairs = {};   // "West-11" → [team1, team2]  (First Four pairs)
   let ffR1Map     = {};   // R1 game_number → First Four game_number
+  let pairRepId   = {};   // "West-11" → representative team ID (first team)
+  let repToPairKey = {};  // representative team ID → pair key (e.g. "West-11")
   let games       = [];
   let gamesMap    = {};   // gameNumber → game record
   let myEntry     = null;
@@ -295,6 +297,7 @@
       loadDraftPicks();
     }
 
+    resolvePlayinPicks();
     renderBracketUI();
   }
 
@@ -309,6 +312,8 @@
     teamsMap = {};
     playinPairs = {};
     ffR1Map = {};
+    pairRepId = {};
+    repToPairKey = {};
     for (const t of teams) {
       const key = `${t.region}-${t.seed}`;
       if (t.is_playin) {
@@ -319,9 +324,12 @@
       }
       teamsMap[`id-${t.id}`] = t;
     }
-    // Also add play-in teams to region-seed if only play-in teams exist for that slot
-    for (const key of Object.keys(playinPairs)) {
-      if (!teamsMap[key]) teamsMap[key] = null; // mark as play-in pending
+    // Build pair representative IDs and reverse map
+    for (const [key, pair] of Object.entries(playinPairs)) {
+      if (pair.length >= 1) {
+        pairRepId[key] = pair[0].id;
+        repToPairKey[String(pair[0].id)] = key;
+      }
     }
     // Build reverse map: R1 game → First Four game
     for (const ffGn of (BS.FIRST_FOUR_GAMES || [])) {
@@ -333,6 +341,33 @@
   function buildGamesMap() {
     gamesMap = {};
     for (const g of games) gamesMap[g.game_number] = g;
+  }
+
+  /** When a First Four game resolves, swap the pair representative ID
+   *  with the actual winner's ID throughout the user's picks. */
+  function resolvePlayinPicks() {
+    let changed = false;
+    for (const ffGn of (BS.FIRST_FOUR_GAMES || [])) {
+      const ffGame = gamesMap[ffGn];
+      if (!ffGame || !ffGame.winner_id) continue;
+      const ffDef = BS.BRACKET[ffGn];
+      if (!ffDef) continue;
+      const pairKey = `${ffDef.region}-${ffDef.topSeed}`;
+      const repId = pairRepId[pairKey];
+      if (!repId) continue;
+      // If winner is not the representative, swap all occurrences
+      if (String(ffGame.winner_id) !== String(repId)) {
+        for (const [gn, tid] of Object.entries(myPicks)) {
+          if (String(tid) === String(repId)) {
+            myPicks[gn] = ffGame.winner_id;
+            changed = true;
+          }
+        }
+      }
+      // Clean up: remove this pair from the rep maps so it's treated as a normal team
+      delete repToPairKey[String(repId)];
+    }
+    if (changed) saveDraftPicks();
   }
 
   /* ─── Draft picks in localStorage ─── */
@@ -651,11 +686,17 @@
       if (ffGn) {
         const ffGame = gamesMap[ffGn];
         if (ffGame && ffGame.winner_id) {
-          // First Four resolved — winner is placed
           bottom = teamsMap[`id-${ffGame.winner_id}`] || null;
         } else {
-          // Not resolved — return null so buildTeamSlot shows the pair label
-          bottom = null;
+          // Not resolved — return a synthetic pair team for display
+          const ffDef = BS.BRACKET[ffGn];
+          const pairKey = `${ffDef.region}-${ffDef.topSeed}`;
+          const pair = playinPairs[pairKey];
+          if (pair && pair.length === 2) {
+            bottom = { _isPair: true, pairKey, id: pairRepId[pairKey], seed: pair[0].seed, pair };
+          } else {
+            bottom = null;
+          }
         }
       }
       return { top, bottom };
@@ -664,9 +705,34 @@
     const tId = myPicks[g.feederTop];
     const bId = myPicks[g.feederBottom];
     return {
-      top:    tId ? (teamsMap[`id-${tId}`] || null) : null,
-      bottom: bId ? (teamsMap[`id-${bId}`] || null) : null,
+      top:    tId ? resolvePickTeam(tId) : null,
+      bottom: bId ? resolvePickTeam(bId) : null,
     };
+  }
+
+  /** Resolve a picked team ID: if it's a pair representative and FF not resolved, return pair object */
+  function resolvePickTeam(teamId) {
+    const pairKey = repToPairKey[String(teamId)];
+    if (pairKey) {
+      // Check if the First Four for this pair is resolved
+      const ffGn = (BS.FIRST_FOUR_GAMES || []).find(gn => {
+        const d = BS.BRACKET[gn];
+        return d && `${d.region}-${d.topSeed}` === pairKey;
+      });
+      if (ffGn) {
+        const ffGame = gamesMap[ffGn];
+        if (ffGame && ffGame.winner_id) {
+          // Resolved — return the actual winner team
+          return teamsMap[`id-${ffGame.winner_id}`] || null;
+        }
+      }
+      // Not resolved — return pair object
+      const pair = playinPairs[pairKey];
+      if (pair && pair.length === 2) {
+        return { _isPair: true, pairKey, id: pairRepId[pairKey], seed: pair[0].seed, pair };
+      }
+    }
+    return teamsMap[`id-${teamId}`] || null;
   }
 
   function buildTeamSlot(gameNumber, team, position, game) {
@@ -675,24 +741,29 @@
 
     if (!team) {
       slot.classList.add('empty');
-      // Check if this is a play-in seed slot with pending First Four
-      const ffGn = (game.round === 1) ? ffR1Map[gameNumber] : null;
-      if (ffGn) {
-        const ffDef = BS.BRACKET[ffGn];
-        const pairKey = `${ffDef.region}-${ffDef.topSeed}`;
-        const pair = playinPairs[pairKey];
-        if (pair && pair.length === 2) {
-          const names = pair.map(t => esc(t.short_name || t.team_name)).join('/');
-          slot.innerHTML = `<span class="seed">${pair[0].seed}</span><span class="team-name playin-pair">${names}</span>`;
-          return slot;
-        }
-      }
       if (game.round <= 1) {
         slot.innerHTML = '<span class="team-name">TBD</span>';
       } else {
         const feeder = position === 'top' ? game.feederTop : game.feederBottom;
         slot.innerHTML = `<span class="team-name">Winner of #${feeder}</span>`;
       }
+      return slot;
+    }
+
+    // Handle play-in pair display
+    if (team._isPair) {
+      const names = team.pair.map(t => esc(t.short_name || t.team_name)).join('/');
+      const pickedId = myPicks[gameNumber];
+      const isPicked = pickedId != null && String(pickedId) === String(team.id);
+      if (isPicked) slot.classList.add('picked');
+      // Clickable to advance pair through bracket
+      if (canEdit && myEntry) {
+        const gr = gamesMap[gameNumber];
+        if (!(gr && gr.winner_id)) {
+          slot.addEventListener('click', () => pickTeam(gameNumber, team.id));
+        } else { slot.classList.add('locked'); }
+      } else { slot.classList.add('locked'); }
+      slot.innerHTML = `<span class="seed">${team.seed}</span><span class="team-name playin-pair">${names}</span>`;
       return slot;
     }
 
