@@ -90,7 +90,7 @@ async function seed() {
     const t = await bracketDb.createTournament({
       name: 'March Madness 2025 (Preview)',
       year: 2025,
-      entry_fee: 25,
+      entry_fee: 50,
       prize_description: '1st: 60%, 2nd: 25%, 3rd: 15%',
       lock_date: '2026-03-20T12:00:00Z',
       venmo_username: 'YourVenmo',
