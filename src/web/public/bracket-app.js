@@ -756,11 +756,10 @@
       const pickedId = myPicks[gameNumber];
       const isPicked = pickedId != null && String(pickedId) === String(team.id);
       if (isPicked) slot.classList.add('picked');
-      // Clickable to advance pair through bracket
       if (canEdit && myEntry) {
         const gr = gamesMap[gameNumber];
         if (!(gr && gr.winner_id)) {
-          slot.addEventListener('click', () => pickTeam(gameNumber, team.id));
+          attachPickHandlers(slot, gameNumber, team.id);
         } else { slot.classList.add('locked'); }
       } else { slot.classList.add('locked'); }
       slot.innerHTML = `<span class="seed">${team.seed}</span><span class="team-name playin-pair">${names}</span>`;
@@ -782,7 +781,7 @@
 
     // Clickable only when editable, game not decided, and not a First Four game
     if (canEdit && myEntry && !(gr && gr.winner_id) && game.round !== 0) {
-      slot.addEventListener('click', () => pickTeam(gameNumber, team.id));
+      attachPickHandlers(slot, gameNumber, team.id);
     } else {
       slot.classList.add('locked');
     }
@@ -793,6 +792,35 @@
   }
 
   /* ═══════════ Pick Handling ═══════════ */
+  let _clickTimer = null;
+  function attachPickHandlers(slot, gameNumber, teamId) {
+    slot.addEventListener('click', () => {
+      clearTimeout(_clickTimer);
+      _clickTimer = setTimeout(() => pickTeam(gameNumber, teamId), 220);
+    });
+    slot.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      clearTimeout(_clickTimer);
+      unpickTeam(gameNumber);
+    });
+  }
+
+  function unpickTeam(gameNumber) {
+    const pick = myPicks[gameNumber];
+    if (pick == null) return;
+    // Clear this pick and all downstream picks of the same team
+    const downstream = BS.getDownstreamGames(gameNumber);
+    for (const gn of downstream) {
+      if (myPicks[gn] != null && String(myPicks[gn]) === String(pick)) {
+        delete myPicks[gn];
+      }
+    }
+    delete myPicks[gameNumber];
+    saveDraftPicks();
+    renderCurrentRegion();
+    updatePickCount();
+  }
+
   function pickTeam(gameNumber, teamId) {
     const oldPick = myPicks[gameNumber];
     if (oldPick != null && String(oldPick) === String(teamId)) return; // no-op
