@@ -3136,8 +3136,7 @@ Rules:
           );
 
           const mirrorPayload2 = { files: [mirrorAttachment], components: [mirrorPollRow] };
-          mirrorPayload2.content = 'Are You Tailing This Bet?';
-          if (bet.share_link) mirrorPayload2.content = buildContentWithLink('Are You Tailing This Bet?', bet.share_link);
+          if (bet.share_link) mirrorPayload2.content = buildContentWithLink('', bet.share_link);
           const mirrorMsg = await mirrorChannel.send(mirrorPayload2);
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
@@ -3239,8 +3238,7 @@ Rules:
           );
 
           const mirrorPayload = { files: [mirrorAttachment], components: [mirrorPollRow2] };
-          mirrorPayload.content = 'Are You Tailing This Bet?';
-          if (bet.share_link) mirrorPayload.content = buildContentWithLink('Are You Tailing This Bet?', bet.share_link);
+          if (bet.share_link) mirrorPayload.content = buildContentWithLink('', bet.share_link);
           const mirrorMsg = await mirrorChannel.send(mirrorPayload);
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
