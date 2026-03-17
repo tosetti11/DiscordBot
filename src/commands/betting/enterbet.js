@@ -153,31 +153,36 @@ async function updateTailMessage(interaction, betId) {
   pollContent += `👍 **Tailing (${yesTails.length}):** ${yesTails.length ? yesLabels.join(', ') : 'None'}\n`;
   pollContent += `👎 **Fading (${noCount})**`;
 
-  // Keep the buttons — preserve any existing Link buttons (e.g. Comment)
-  const buttons = [
-    new ButtonBuilder()
-      .setCustomId(`tailbet_yes_${betId}`)
-      .setLabel(`✅ Tail (${yesTails.length})`)
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`tailbet_no_${betId}`)
-      .setLabel(`❌ Fade (${noCount})`)
-      .setStyle(ButtonStyle.Danger),
-  ];
+  // Build the tail/fade buttons with counts
+  const buildButtons = (extraButtons) => {
+    const btns = [
+      new ButtonBuilder()
+        .setCustomId(`tailbet_yes_${betId}`)
+        .setLabel(`✅ Tail (${yesTails.length})`)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`tailbet_no_${betId}`)
+        .setLabel(`❌ Fade (${noCount})`)
+        .setStyle(ButtonStyle.Danger),
+    ];
+    if (extraButtons) btns.push(...extraButtons);
+    return new ActionRowBuilder().addComponents(btns);
+  };
 
-  // Preserve Link-style buttons (Comment) from original message
+  // Preserve Link-style buttons (Comment) from the interacted message
+  const linkButtons = [];
   try {
     const existingRow = interaction.message?.components?.[0];
     if (existingRow) {
       for (const comp of existingRow.components) {
         if (comp.style === ButtonStyle.Link || comp.data?.style === 5) {
-          buttons.push(ButtonBuilder.from(comp));
+          linkButtons.push(ButtonBuilder.from(comp));
         }
       }
     }
   } catch (e) { /* not critical */ }
 
-  const pollRow = new ActionRowBuilder().addComponents(buttons);
+  const pollRow = buildButtons(linkButtons);
 
   // For button interactions use update(), for modal submits edit the message directly
   if (interaction.isButton && interaction.isButton()) {
@@ -196,6 +201,53 @@ async function updateTailMessage(interaction, betId) {
     } catch (e) {
       console.log('[TailPoll] Could not update poll message:', e.message);
     }
+  }
+
+  // Sync tail/fade counts to the OTHER channel's message (original <-> mirror)
+  try {
+    const { data: bet } = await supabase
+      .from('bets')
+      .select('message_id, channel_id, mirror_message_id, mirror_channel_id')
+      .eq('id', betId)
+      .single();
+
+    if (!bet) return;
+
+    const interactedMsgId = interaction.message?.id;
+    let otherMsgId, otherChannelId;
+
+    if (interactedMsgId === bet.mirror_message_id) {
+      // Interacted with mirror → update the original
+      otherMsgId = bet.message_id;
+      otherChannelId = bet.channel_id;
+    } else {
+      // Interacted with original → update the mirror
+      otherMsgId = bet.mirror_message_id;
+      otherChannelId = bet.mirror_channel_id;
+    }
+
+    if (otherMsgId && otherChannelId) {
+      const otherChannel = await interaction.client.channels.fetch(otherChannelId);
+      const otherMsg = await otherChannel.messages.fetch(otherMsgId);
+
+      // Preserve Link buttons from the OTHER message
+      const otherLinkButtons = [];
+      try {
+        const otherRow = otherMsg.components?.[0];
+        if (otherRow) {
+          for (const comp of otherRow.components) {
+            if (comp.style === ButtonStyle.Link || comp.data?.style === 5) {
+              otherLinkButtons.push(ButtonBuilder.from(comp));
+            }
+          }
+        }
+      } catch (e) { /* not critical */ }
+
+      const otherPollRow = buildButtons(otherLinkButtons);
+      await otherMsg.edit({ content: pollContent, components: [otherPollRow] });
+    }
+  } catch (e) {
+    console.log('[TailPoll] Could not sync other channel:', e.message);
   }
 }
 const {
