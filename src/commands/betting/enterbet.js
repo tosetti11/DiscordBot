@@ -153,8 +153,8 @@ async function updateTailMessage(interaction, betId) {
   pollContent += `👍 **Tailing (${yesTails.length}):** ${yesTails.length ? yesLabels.join(', ') : 'None'}\n`;
   pollContent += `👎 **Fading (${noCount})**`;
 
-  // Keep the buttons
-  const pollRow = new ActionRowBuilder().addComponents(
+  // Keep the buttons — preserve any existing Link buttons (e.g. Comment)
+  const buttons = [
     new ButtonBuilder()
       .setCustomId(`tailbet_yes_${betId}`)
       .setLabel(`✅ Tail (${yesTails.length})`)
@@ -162,8 +162,22 @@ async function updateTailMessage(interaction, betId) {
     new ButtonBuilder()
       .setCustomId(`tailbet_no_${betId}`)
       .setLabel(`❌ Fade (${noCount})`)
-      .setStyle(ButtonStyle.Danger)
-  );
+      .setStyle(ButtonStyle.Danger),
+  ];
+
+  // Preserve Link-style buttons (Comment) from original message
+  try {
+    const existingRow = interaction.message?.components?.[0];
+    if (existingRow) {
+      for (const comp of existingRow.components) {
+        if (comp.style === ButtonStyle.Link || comp.data?.style === 5) {
+          buttons.push(ButtonBuilder.from(comp));
+        }
+      }
+    }
+  } catch (e) { /* not critical */ }
+
+  const pollRow = new ActionRowBuilder().addComponents(buttons);
 
   // For button interactions use update(), for modal submits edit the message directly
   if (interaction.isButton && interaction.isButton()) {

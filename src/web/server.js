@@ -1480,6 +1480,7 @@ function createWebServer() {
           const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
           const mirrorAttachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
           const mirrorLegPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+          if (mirrorMsg.components?.length) mirrorLegPayload.components = mirrorMsg.components;
           if (updatedBet.share_link) mirrorLegPayload.content = buildContentWithLink('', updatedBet.share_link);
           await mirrorMsg.edit(mirrorLegPayload);
         } catch (e) {
@@ -1865,6 +1866,7 @@ function createWebServer() {
           const mirrorImgBuffer = await generateBetCardImage(updatedBet, mirrorName, mirrorAvatar);
           const mirrorAttachment = new ABMirrorEdit(mirrorImgBuffer, { name: 'bet-card.png' });
           const mirrorEditPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+          if (mirrorMsg.components?.length) mirrorEditPayload.components = mirrorMsg.components;
           if (updatedBet.share_link) mirrorEditPayload.content = buildContentWithLink('', updatedBet.share_link);
           else mirrorEditPayload.content = '';
           await mirrorMsg.edit(mirrorEditPayload);
@@ -3126,8 +3128,16 @@ Rules:
           const mirrorImgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
           const { AttachmentBuilder: ABMirror } = require('discord.js');
           const mirrorAttachment = new ABMirror(mirrorImgBuffer, { name: 'bet-card.png' });
-          const mirrorPayload2 = { files: [mirrorAttachment], flags: [4096] };
-          if (bet.share_link) mirrorPayload2.content = buildContentWithLink('', bet.share_link);
+
+          const mirrorPollRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Tail').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('Fade').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setLabel('Comment').setStyle(ButtonStyle.Link).setURL(`https://discord.com/channels/${guildId}/${channelId}/${message.id}`),
+          );
+
+          const mirrorPayload2 = { files: [mirrorAttachment], components: [mirrorPollRow] };
+          mirrorPayload2.content = 'Are You Tailing This Bet?';
+          if (bet.share_link) mirrorPayload2.content = buildContentWithLink('Are You Tailing This Bet?', bet.share_link);
           const mirrorMsg = await mirrorChannel.send(mirrorPayload2);
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
@@ -3221,8 +3231,16 @@ Rules:
           const mirrorImgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
           const { AttachmentBuilder: ABMirror2 } = require('discord.js');
           const mirrorAttachment = new ABMirror2(mirrorImgBuffer, { name: 'bet-card.png' });
-          const mirrorPayload = { files: [mirrorAttachment], flags: [4096] };
-          if (bet.share_link) mirrorPayload.content = buildContentWithLink('', bet.share_link);
+
+          const mirrorPollRow2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Tail').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('Fade').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setLabel('Comment').setStyle(ButtonStyle.Link).setURL(`https://discord.com/channels/${guildId}/${channelId}/${message.id}`),
+          );
+
+          const mirrorPayload = { files: [mirrorAttachment], components: [mirrorPollRow2] };
+          mirrorPayload.content = 'Are You Tailing This Bet?';
+          if (bet.share_link) mirrorPayload.content = buildContentWithLink('Are You Tailing This Bet?', bet.share_link);
           const mirrorMsg = await mirrorChannel.send(mirrorPayload);
           await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 

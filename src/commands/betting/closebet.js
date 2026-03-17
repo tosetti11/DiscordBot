@@ -316,6 +316,7 @@ async function updateParlayEmbed(interaction, session) {
         const mirrorMsg = await mirrorChannel.messages.fetch(fullBet.mirror_message_id);
         const mirrorAttachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
         const mirrorPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+        if (mirrorMsg.components?.length) mirrorPayload.components = mirrorMsg.components;
         if (fullBet.share_link) mirrorPayload.content = `🔗 **Copy this bet:** <${fullBet.share_link}>`;
         await mirrorMsg.edit(mirrorPayload);
       } catch (e) {
