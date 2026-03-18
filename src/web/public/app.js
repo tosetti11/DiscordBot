@@ -7366,7 +7366,7 @@ function renderAiPicks(picks) {
         </div>
         <div class="ai-pick-odds">${oddsStr}</div>
         <div class="ai-pick-result">
-          <span class="ai-pick-result-badge ${status}">${status === 'pending' ? '⏳ LIVE' : status.toUpperCase()}</span>
+          <span class="ai-pick-result-badge ${status}">${status === 'pending' ? '⏳ PENDING' : status.toUpperCase()}</span>
         </div>
       </div>
     `;
