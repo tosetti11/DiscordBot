@@ -13,12 +13,13 @@ const AI_CHANNEL_ID = '1483720217044713674';
 // Seasonal sport weighting — prefer sports that are in season
 function getSeasonalSports() {
   const month = new Date().getMonth() + 1; // 1-12
-  if (month >= 9 && month <= 12) return ['nfl', 'nba', 'nhl', 'ncaa_mbb', 'ncaa_football'];
-  if (month >= 1 && month <= 2) return ['nba', 'nhl', 'ncaa_mbb', 'nfl'];
-  if (month === 3) return ['nba', 'nhl', 'ncaa_mbb', 'mlb'];
-  if (month >= 4 && month <= 6) return ['nba', 'nhl', 'mlb'];
-  if (month >= 7 && month <= 8) return ['mlb', 'nfl', 'mma'];
-  return ['nba', 'nfl', 'mlb', 'nhl'];
+  if (month >= 9 && month <= 12) return ['nfl', 'nba', 'nhl', 'ncaa_mbb', 'ncaa_football', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ucl'];
+  if (month >= 1 && month <= 2) return ['nba', 'nhl', 'ncaa_mbb', 'nfl', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ucl'];
+  if (month === 3) return ['nba', 'nhl', 'ncaa_mbb', 'mlb', 'epl', 'la_liga', 'serie_a', 'ucl', 'kbo', 'npb'];
+  if (month >= 4 && month <= 5) return ['nba', 'nhl', 'mlb', 'epl', 'la_liga', 'serie_a', 'ucl', 'kbo', 'npb'];
+  if (month === 6) return ['mlb', 'wnba', 'mls', 'kbo', 'npb', 'golf_pga'];
+  if (month >= 7 && month <= 8) return ['mlb', 'wnba', 'mls', 'mma', 'kbo', 'npb', 'golf_pga', 'epl'];
+  return ['nba', 'nfl', 'mlb', 'nhl', 'epl'];
 }
 
 /**
@@ -97,7 +98,8 @@ ${gamesJson}
 
 Select ONE "Lock Pick of the Day" — your single best value play. Requirements:
 - Odds MUST be between -135 and +100 (this is a value-focused approach)
-- The pick must be a moneyline, spread, or over/under (team_game bets). Player props are acceptable too.
+- The pick must be a moneyline, spread, over/under, or team total (team_game bets). Player props are acceptable too.
+- Team total = one team's score over/under a line (e.g. 'Lakers Over 112.5')
 - Focus on value — find where the line is off or where one side has a clear edge
 - Distribute picks across sports over time (don't always pick the same sport)
 - Consider the matchup, records, situational factors, and line value
@@ -106,8 +108,8 @@ Return a JSON object with this EXACT structure:
 {
   "sport": "<sport value from the game>",
   "betCategory": "team_game" or "player_prop",
-  "wagerType": "moneyline" or "spread" or "total" or "prop",
-  "pick": "<formatted pick text, e.g. 'Lakers ML', 'Celtics -3.5', 'Over 220.5'>",
+  "wagerType": "moneyline" or "spread" or "total" or "team_total" or "prop",
+  "pick": "<formatted pick text, e.g. 'Lakers ML', 'Celtics -3.5', 'Over 220.5', 'Lakers Over 112.5'>",
   "teamA": "<team being bet on or first team for totals>",
   "teamB": "<opponent or second team>",
   "playerName": "<player name if player_prop, else null>",
@@ -469,6 +471,20 @@ function resolvePickResult(pick, game) {
       if (actualTotal < totalLine) return { status: 'win', note: `Total: ${actualTotal} (Under ${totalLine}) ✅` };
       if (actualTotal > totalLine) return { status: 'loss', note: `Total: ${actualTotal} (Under ${totalLine}) ❌` };
       return { status: 'push', note: `Total: ${actualTotal} = ${totalLine}` };
+    }
+  }
+
+  if (wt === 'team_total') {
+    const totalLine = parseFloat(pick.spread_value);
+    const isOver = (pick.over_under || '').toLowerCase() === 'over';
+    if (isOver) {
+      if (pickScore > totalLine) return { status: 'win', note: `${pick.team_a}: ${pickScore} pts (Over ${totalLine}) ✅` };
+      if (pickScore < totalLine) return { status: 'loss', note: `${pick.team_a}: ${pickScore} pts (Over ${totalLine}) ❌` };
+      return { status: 'push', note: `${pick.team_a}: ${pickScore} = ${totalLine}` };
+    } else {
+      if (pickScore < totalLine) return { status: 'win', note: `${pick.team_a}: ${pickScore} pts (Under ${totalLine}) ✅` };
+      if (pickScore > totalLine) return { status: 'loss', note: `${pick.team_a}: ${pickScore} pts (Under ${totalLine}) ❌` };
+      return { status: 'push', note: `${pick.team_a}: ${pickScore} = ${totalLine}` };
     }
   }
 

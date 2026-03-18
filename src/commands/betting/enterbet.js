@@ -261,7 +261,7 @@ const {
   ButtonStyle,
 } = require('discord.js');
 const { PermissionFlagsBits, AttachmentBuilder } = require('discord.js');
-const { SPORTS } = require('../../config/constants');
+const { SPORTS, SPORTS_PAGE_2 } = require('../../config/constants');
 const { americanToDecimal, decimalToAmerican } = require('../../utils/odds');
 const { buildBetEmbed } = require('../../utils/embeds');
 
@@ -423,6 +423,7 @@ async function handleCategorySelect(interaction) {
     label: s.name,
     value: s.value,
   }));
+  sportOptions.push({ label: 'More Sports ▸', value: '__more_sports__', description: 'KBO, NPB, Olympics, F1, Rugby & more', emoji: '🌍' });
 
   const row = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
@@ -447,7 +448,21 @@ async function handleSportSelect(interaction) {
   const session = betSessions.get(userId);
   if (!session) return interaction.update({ content: 'Session expired. Use `/enterbet` again.', components: [] });
 
-  session.currentSport = interaction.values[0];
+  const selected = interaction.values[0];
+
+  // "More Sports" → show page 2 dropdown
+  if (selected === '__more_sports__') {
+    const page2Options = SPORTS_PAGE_2.map(s => ({ label: s.name, value: s.value }));
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('enterbet_sport')
+        .setPlaceholder('Select sport (Page 2)')
+        .addOptions(page2Options)
+    );
+    return interaction.update({ content: '🌍 **More Sports:**', components: [row] });
+  }
+
+  session.currentSport = selected;
   betSessions.set(userId, session);
 
   if (session.currentCategory === 'player_prop') {
@@ -470,6 +485,7 @@ async function handleSportSelect(interaction) {
           { label: 'Moneyline', value: 'moneyline', description: 'Pick the winner', emoji: '💰' },
           { label: 'Spread', value: 'spread', description: 'Point spread bet', emoji: '📊' },
           { label: 'Over/Under', value: 'total', description: 'Total points line', emoji: '🔢' },
+          { label: 'Team Total', value: 'team_total', description: 'Single team over/under', emoji: '🎯' },
         ])
     );
 
@@ -489,8 +505,8 @@ async function handleWagerTypeSelect(interaction) {
   session.currentWagerType = interaction.values[0];
   betSessions.set(userId, session);
 
-  // For total bets, ask Over or Under first
-  if (session.currentWagerType === 'total') {
+  // For total or team_total bets, ask Over or Under first
+  if (session.currentWagerType === 'total' || session.currentWagerType === 'team_total') {
     const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -527,7 +543,7 @@ async function showTeamGameModal(interaction, session) {
   const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
   const wagerType = session.currentWagerType;
 
-  const wagerLabels = { moneyline: 'Moneyline', spread: 'Spread', total: 'Over/Under' };
+  const wagerLabels = { moneyline: 'Moneyline', spread: 'Spread', total: 'Over/Under', team_total: 'Team Total' };
   const modal = new ModalBuilder()
     .setCustomId('enterbet_team_modal')
     .setTitle(`${wagerLabels[wagerType]} Bet${legLabel}`);
@@ -588,6 +604,15 @@ async function showTeamGameModal(interaction, session) {
       .setRequired(true)
       .setMaxLength(10);
     fields.push(new ActionRowBuilder().addComponents(totalInput));
+  } else if (wagerType === 'team_total') {
+    const ttInput = new TextInputBuilder()
+      .setCustomId('line_value')
+      .setLabel(`${session.overUnder || 'Over/Under'} — Team Total Line`)
+      .setPlaceholder('e.g. 112.5, 3.5, 24.5')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(10);
+    fields.push(new ActionRowBuilder().addComponents(ttInput));
   }
 
   if (session.betType === 'parlay') {
@@ -909,6 +934,9 @@ async function handleTeamModalSubmit(interaction) {
     pick = `${teamA} ML`;
   } else if (wagerType === 'spread') {
     pick = `${teamA} ${spreadValue > 0 ? '+' : ''}${spreadValue}`;
+  } else if (wagerType === 'team_total') {
+    const direction = session.overUnder || 'Over';
+    pick = `${teamA} ${direction} ${Math.abs(spreadValue)}`;
   } else {
     // total — use the over/under choice from session
     const direction = session.overUnder || (spreadValue > 0 ? 'Over' : 'Under');

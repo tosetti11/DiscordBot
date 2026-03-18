@@ -6,22 +6,49 @@
 
 // ── Sport-to-ESPN path mapping ──
 const ESPN_PATHS = {
+  // Major US
   nba: 'basketball/nba',
   nfl: 'football/nfl',
   mlb: 'baseball/mlb',
   nhl: 'hockey/nhl',
+  wnba: 'basketball/wnba',
+  // College
   cfb: 'football/college-football',
   cbb: 'basketball/mens-college-basketball',
   ncaa_football: 'football/college-football',
   ncaa_mbb: 'basketball/mens-college-basketball',
   ncaa_wbb: 'basketball/womens-college-basketball',
-  wnba: 'basketball/wnba',
+  // Soccer
   mls: 'soccer/usa.1',
   epl: 'soccer/eng.1',
   la_liga: 'soccer/esp.1',
+  serie_a: 'soccer/ita.1',
+  bundesliga: 'soccer/ger.1',
+  ligue_1: 'soccer/fra.1',
   ucl: 'soccer/uefa.champions',
+  liga_mx: 'soccer/mex.1',
+  eredivisie: 'soccer/ned.1',
+  primeira_liga: 'soccer/por.1',
+  europa_league: 'soccer/uefa.europa',
+  // Combat
   mma: 'mma/ufc',
   ufc: 'mma/ufc',
+  // Tennis
+  tennis_atp: 'tennis',
+  tennis_wta: 'tennis',
+  // International Baseball
+  kbo: 'baseball/kbo',
+  npb: 'baseball/npb',
+  // Golf
+  golf_pga: 'golf',
+  // Motorsport
+  nascar: 'racing/nascar',
+  f1: 'racing/f1',
+  // Other
+  rugby: 'rugby/sixnations',
+  cricket: 'cricket',
+  cfl: 'football/cfl',
+  afl: 'football/afl',
 };
 
 // ── Response cache (avoid hammering ESPN) ──

@@ -1,51 +1,98 @@
 module.exports = {
-  // Sport options for dropdowns
+  // Sport options for dropdowns (max 25 per Discord select menu — use pages if needed)
   SPORTS: [
+    // Major US
     { name: 'NFL', value: 'nfl' },
     { name: 'NBA', value: 'nba' },
     { name: 'MLB', value: 'mlb' },
     { name: 'NHL', value: 'nhl' },
+    { name: 'WNBA', value: 'wnba' },
+    // College
     { name: 'NCAA Football', value: 'ncaa_football' },
     { name: 'NCAA Men\'s Basketball', value: 'ncaa_mbb' },
     { name: 'NCAA Women\'s Basketball', value: 'ncaa_wbb' },
+    // Soccer
     { name: 'Soccer - MLS', value: 'mls' },
     { name: 'Soccer - Premier League', value: 'epl' },
     { name: 'Soccer - La Liga', value: 'la_liga' },
+    { name: 'Soccer - Serie A', value: 'serie_a' },
+    { name: 'Soccer - Bundesliga', value: 'bundesliga' },
+    { name: 'Soccer - Ligue 1', value: 'ligue_1' },
     { name: 'Soccer - Champions League', value: 'ucl' },
+    { name: 'Soccer - Liga MX', value: 'liga_mx' },
+    // Combat
     { name: 'UFC / MMA', value: 'ufc' },
     { name: 'Boxing', value: 'boxing' },
-    { name: 'Tennis', value: 'tennis' },
-    { name: 'Golf', value: 'golf' },
+    // Tennis
+    { name: 'Tennis - ATP', value: 'tennis_atp' },
+    { name: 'Tennis - WTA', value: 'tennis_wta' },
+    // Golf
+    { name: 'Golf - PGA Tour', value: 'golf_pga' },
+    { name: 'Golf - LIV', value: 'golf_liv' },
+    { name: 'Golf - DP World Tour', value: 'golf_dp' },
+    // Other
     { name: 'NASCAR', value: 'nascar' },
-    { name: 'WNBA', value: 'wnba' },
+  ],
+
+  // Page 2 sports (shown when user clicks "More Sports")
+  SPORTS_PAGE_2: [
     { name: 'Esports', value: 'esports' },
-    { name: 'Other', value: 'other' },
+    // International Baseball
+    { name: 'Baseball - KBO (Korea)', value: 'kbo' },
+    { name: 'Baseball - NPB (Japan)', value: 'npb' },
+    { name: 'Baseball - CPBL (Taiwan)', value: 'cpbl' },
+    // More Soccer
+    { name: 'Soccer - Eredivisie', value: 'eredivisie' },
+    { name: 'Soccer - Primeira Liga', value: 'primeira_liga' },
+    { name: 'Soccer - World Cup', value: 'world_cup' },
+    { name: 'Soccer - Europa League', value: 'europa_league' },
+    // More Tennis
+    { name: 'Tennis - Grand Slam', value: 'tennis_gs' },
+    // More Golf
+    { name: 'Golf - LPGA', value: 'golf_lpga' },
+    { name: 'Golf - PGA Champions', value: 'golf_champions' },
+    // International
+    { name: 'Rugby', value: 'rugby' },
+    { name: 'Cricket', value: 'cricket' },
+    { name: 'F1 Racing', value: 'f1' },
+    { name: 'Olympics', value: 'olympics' },
+    { name: 'CFL', value: 'cfl' },
+    { name: 'XFL / UFL', value: 'xfl' },
+    { name: 'Aussie Rules (AFL)', value: 'afl' },
+    { name: 'Darts', value: 'darts' },
+    { name: 'Table Tennis', value: 'table_tennis' },
+    { name: 'Custom / Other', value: 'other' },
   ],
 
   // Sport display names
   SPORT_NAMES: {
-    nfl: 'NFL',
-    nba: 'NBA',
-    mlb: 'MLB',
-    nhl: 'NHL',
-    cfb: 'College Football',
-    cbb: 'College Basketball',
-    ncaa_football: 'NCAA Football',
-    ncaa_mbb: 'NCAA Men\'s Basketball',
-    ncaa_wbb: 'NCAA Women\'s Basketball',
-    mma: 'UFC / MMA',
-    mls: 'MLS',
-    epl: 'Premier League',
-    la_liga: 'La Liga',
-    ucl: 'Champions League',
-    ufc: 'UFC / MMA',
-    boxing: 'Boxing',
-    tennis: 'Tennis',
-    golf: 'Golf',
-    nascar: 'NASCAR',
-    wnba: 'WNBA',
-    esports: 'Esports',
-    other: 'Other',
+    // Major US
+    nfl: 'NFL', nba: 'NBA', mlb: 'MLB', nhl: 'NHL', wnba: 'WNBA',
+    // College
+    cfb: 'College Football', cbb: 'College Basketball',
+    ncaa_football: 'NCAA Football', ncaa_mbb: 'NCAA MBB', ncaa_wbb: 'NCAA WBB',
+    // Soccer
+    mls: 'MLS', epl: 'Premier League', la_liga: 'La Liga',
+    serie_a: 'Serie A', bundesliga: 'Bundesliga', ligue_1: 'Ligue 1',
+    ucl: 'Champions League', liga_mx: 'Liga MX',
+    eredivisie: 'Eredivisie', primeira_liga: 'Primeira Liga',
+    world_cup: 'World Cup', europa_league: 'Europa League',
+    // Combat
+    mma: 'UFC / MMA', ufc: 'UFC / MMA', boxing: 'Boxing',
+    // Tennis
+    tennis: 'Tennis', tennis_atp: 'ATP Tennis', tennis_wta: 'WTA Tennis', tennis_gs: 'Grand Slam',
+    // Golf
+    golf: 'Golf', golf_pga: 'PGA Tour', golf_liv: 'LIV Golf',
+    golf_dp: 'DP World Tour', golf_lpga: 'LPGA', golf_champions: 'PGA Champions',
+    // International Baseball
+    kbo: 'KBO (Korea)', npb: 'NPB (Japan)', cpbl: 'CPBL (Taiwan)',
+    // Motorsport
+    nascar: 'NASCAR', f1: 'Formula 1',
+    // Other
+    rugby: 'Rugby', cricket: 'Cricket', olympics: 'Olympics',
+    cfl: 'CFL', xfl: 'XFL / UFL', afl: 'AFL',
+    darts: 'Darts', table_tennis: 'Table Tennis',
+    esports: 'Esports', other: 'Other',
   },
 
   // Status emojis
@@ -62,6 +109,7 @@ module.exports = {
     moneyline: 'Moneyline',
     spread: 'Spread',
     total: 'Over/Under',
+    team_total: 'Team Total',
     prop: 'Player Prop',
     futures: 'Futures',
   },
