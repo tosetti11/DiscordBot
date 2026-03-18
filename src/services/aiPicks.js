@@ -28,7 +28,13 @@ async function generateDailyPick(client, guildId) {
   // Check if we already have a pick for today
   const existing = await aiPicksDb.getTodaysAiPick(guildId);
   if (existing) {
-    console.log('[AI Pick] Already have a pick for today, skipping.');
+    // If pick exists but wasn't posted to Discord, post it now
+    if (!existing.message_id) {
+      console.log('[AI Pick] Found unposted pick for today, posting now...');
+      await postPickToDiscord(client, existing, guildId);
+    } else {
+      console.log('[AI Pick] Already have a pick for today, skipping.');
+    }
     return existing;
   }
 
@@ -179,6 +185,9 @@ IMPORTANT: Return ONLY valid JSON. No markdown, no explanation outside the JSON.
       record_units: unitsPl,
       streak: streak,
     });
+
+    // Post to Discord
+    await postPickToDiscord(client, aiPick, guildId);
 
     return aiPick;
   } catch (err) {
