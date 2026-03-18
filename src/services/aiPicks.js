@@ -308,6 +308,18 @@ function buildTailFadeRow(pickId, counts) {
 }
 
 /**
+ * Build message content showing who is tailing/fading
+ */
+function buildTailFadeContent(counts) {
+  let content = '🔒 **AI LOCK OF THE DAY** 🔒\n\n';
+  const tailMentions = (counts.tailUsers || []).map(u => `<@${u.discordId}> (${u.units}u)`);
+  const fadeMentions = (counts.fadeUsers || []).map(u => `<@${u.discordId}>`);
+  content += `👍 **Tailing (${counts.tails}):** ${tailMentions.length ? tailMentions.join(', ') : 'None'}\n`;
+  content += `👎 **Fading (${counts.fades}):** ${fadeMentions.length ? fadeMentions.join(', ') : 'None'}`;
+  return content;
+}
+
+/**
  * Handle Tail/Fade button interaction (toggle + unit modal for tails)
  */
 async function handleTailFade(interaction) {
@@ -329,7 +341,7 @@ async function handleTailFade(interaction) {
         await aiPicksDb.removeTailFade(pickId, interaction.user.id);
         const counts = await aiPicksDb.getTailFadeCounts(pickId);
         await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-        await interaction.message.edit({ components: [buildTailFadeRow(pickId, counts)] });
+        await interaction.message.edit({ content: buildTailFadeContent(counts), components: [buildTailFadeRow(pickId, counts)] });
         await interaction.followUp({ content: '🔓 Tail removed.', ephemeral: true });
         return;
       }
@@ -357,14 +369,14 @@ async function handleTailFade(interaction) {
       await aiPicksDb.removeTailFade(pickId, interaction.user.id);
       const counts = await aiPicksDb.getTailFadeCounts(pickId);
       await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-      await interaction.message.edit({ components: [buildTailFadeRow(pickId, counts)] });
+      await interaction.message.edit({ content: buildTailFadeContent(counts), components: [buildTailFadeRow(pickId, counts)] });
       await interaction.followUp({ content: '↩️ Fade removed.', ephemeral: true });
     } else {
       // Not fading (or was tailing) → switch to fade
       await aiPicksDb.recordTailFade(pickId, interaction.user.id, 'fade', 0);
       const counts = await aiPicksDb.getTailFadeCounts(pickId);
       await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-      await interaction.message.edit({ components: [buildTailFadeRow(pickId, counts)] });
+      await interaction.message.edit({ content: buildTailFadeContent(counts), components: [buildTailFadeRow(pickId, counts)] });
       await interaction.followUp({ content: '🚫 Fade locked in.', ephemeral: true });
     }
   } catch (err) {
@@ -388,7 +400,7 @@ async function handleTailUnitsModal(interaction) {
     await aiPicksDb.recordTailFade(pickId, interaction.user.id, 'tail', units);
     const counts = await aiPicksDb.getTailFadeCounts(pickId);
     await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-    await interaction.message.edit({ components: [buildTailFadeRow(pickId, counts)] });
+    await interaction.message.edit({ content: buildTailFadeContent(counts), components: [buildTailFadeRow(pickId, counts)] });
     await interaction.followUp({ content: `🔒 Tailing **${units}u** — locked in!`, ephemeral: true });
   } catch (err) {
     console.error('[AI Pick] Tail units modal error:', err);

@@ -187,15 +187,23 @@ async function removeTailFade(pickId, discordId) {
 async function getTailFadeCounts(pickId) {
   const { data, error } = await supabase
     .from('ai_pick_tails')
-    .select('action, units')
+    .select('discord_id, action, units')
     .eq('pick_id', pickId);
   if (error) throw error;
   let tails = 0, fades = 0, totalUnits = 0;
+  const tailUsers = [];
+  const fadeUsers = [];
   for (const r of (data || [])) {
-    if (r.action === 'tail') { tails++; totalUnits += Number(r.units) || 0; }
-    else fades++;
+    if (r.action === 'tail') {
+      tails++;
+      totalUnits += Number(r.units) || 0;
+      tailUsers.push({ discordId: r.discord_id, units: Number(r.units) || 1 });
+    } else {
+      fades++;
+      fadeUsers.push({ discordId: r.discord_id });
+    }
   }
-  return { tails, fades, totalUnits };
+  return { tails, fades, totalUnits, tailUsers, fadeUsers };
 }
 
 async function getTailLeaderboard(guildId) {
