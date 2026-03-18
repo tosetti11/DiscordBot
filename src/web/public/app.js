@@ -388,11 +388,17 @@ function setupEventListeners() {
   // Bet category change (single)
   betCategory.addEventListener('change', () => {
     updateCategoryFields(betCategory.value);
+    updateSportSpecificFields();
   });
 
   // Wager type change (single)
   wagerType.addEventListener('change', () => {
     updateWagerFields(wagerType.value);
+  });
+
+  // Sport change (single) — show/hide fight/golf fields
+  document.getElementById('sport-select').addEventListener('change', () => {
+    updateSportSpecificFields();
   });
 
   // Over/Under toggles
@@ -446,20 +452,41 @@ function updateWagerFields(wager) {
   const spreadRow = document.getElementById('spread-line-row');
   const ouRow = document.getElementById('over-under-row');
   const spreadLabel = document.getElementById('spread-label');
+  const periodRow = document.getElementById('period-row');
 
   if (wager === 'spread') {
     spreadRow.classList.remove('hidden');
     ouRow.classList.add('hidden');
+    periodRow.classList.remove('hidden');
     spreadLabel.textContent = 'Spread';
     document.getElementById('spread-value').placeholder = 'e.g. -1.5, +3, -7';
   } else if (wager === 'total') {
     spreadRow.classList.remove('hidden');
     ouRow.classList.remove('hidden');
+    periodRow.classList.remove('hidden');
     spreadLabel.textContent = 'Total Line';
     document.getElementById('spread-value').placeholder = 'e.g. 220.5, 48.5';
   } else {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
+    periodRow.classList.add('hidden');
+  }
+}
+
+// ── Sport-specific field visibility (single bet) ──
+function updateSportSpecificFields() {
+  const sport = document.getElementById('sport-select')?.value || '';
+  const category = document.getElementById('bet-category')?.value || '';
+  const fightFields = document.getElementById('fight-fields');
+  const golfFields = document.getElementById('golf-fields');
+
+  // Fight fields: shown for UFC/Boxing regardless of category
+  if (fightFields) {
+    fightFields.classList.toggle('hidden', !['ufc', 'boxing'].includes(sport));
+  }
+  // Golf fields: shown for golf + player_prop
+  if (golfFields) {
+    golfFields.classList.toggle('hidden', !(sport === 'golf' && category === 'player_prop'));
   }
 }
 
@@ -520,6 +547,26 @@ function buildParlayLegs() {
         </div>
       </div>
 
+      <!-- Period selector (for spread/total) -->
+      <div class="form-row leg-period-row-${i} hidden">
+        <div class="form-group">
+          <label>Period</label>
+          <select class="leg-period" data-leg="${i}">
+            <option value="full_game">Full Game</option>
+            <option value="1st_half">1st Half</option>
+            <option value="2nd_half">2nd Half</option>
+            <option value="1st_quarter">1st Quarter</option>
+            <option value="2nd_quarter">2nd Quarter</option>
+            <option value="3rd_quarter">3rd Quarter</option>
+            <option value="4th_quarter">4th Quarter</option>
+            <option value="1st_period">1st Period</option>
+            <option value="2nd_period">2nd Period</option>
+            <option value="3rd_period">3rd Period</option>
+            <option value="1st_set">1st Set</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Team fields -->
       <div class="leg-team-fields-${i} hidden">
         <div class="form-row">
@@ -566,6 +613,55 @@ function buildParlayLegs() {
         </div>
       </div>
 
+      <!-- Fight fields (MMA/Boxing) -->
+      <div class="leg-fight-fields-${i} hidden">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Round <span class="optional">(opt)</span></label>
+            <select class="leg-fight-round" data-leg="${i}">
+              <option value="">Any / Full Fight</option>
+              ${[1,2,3,4,5,6,7,8,9,10,11,12].map(r => `<option value="${r}">Round ${r}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Method <span class="optional">(opt)</span></label>
+            <select class="leg-fight-method" data-leg="${i}">
+              <option value="">Any</option>
+              <option value="ko_tko">KO/TKO</option>
+              <option value="submission">Submission</option>
+              <option value="decision">Decision</option>
+              <option value="unanimous_decision">Unanimous Decision</option>
+              <option value="split_decision">Split Decision</option>
+              <option value="dq">Disqualification</option>
+              <option value="points">Points</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Golf fields -->
+      <div class="leg-golf-fields-${i} hidden">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Round <span class="optional">(opt)</span></label>
+            <select class="leg-golf-round" data-leg="${i}">
+              <option value="">N/A</option>
+              <option value="1">Round 1</option>
+              <option value="2">Round 2</option>
+              <option value="3">Round 3</option>
+              <option value="4">Round 4</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Hole # <span class="optional">(opt)</span></label>
+            <select class="leg-golf-hole" data-leg="${i}">
+              <option value="">N/A</option>
+              ${Array.from({length:18},(_,j)=>`<option value="${j+1}">Hole ${j+1}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      </div>
+
       <!-- Futures fields -->
       <div class="leg-futures-fields-${i} hidden">
         <div class="form-row">
@@ -600,6 +696,7 @@ function buildParlayLegs() {
     card.querySelector('.leg-category').addEventListener('change', (e) => {
       const leg = e.target.dataset.leg;
       const cat = e.target.value;
+      const sport = card.querySelector('.leg-sport')?.value || '';
 
       document.querySelector(`.leg-team-fields-${leg}`).classList.toggle('hidden', cat !== 'team_game');
       document.querySelector(`.leg-prop-fields-${leg}`).classList.toggle('hidden', cat !== 'player_prop');
@@ -607,6 +704,21 @@ function buildParlayLegs() {
       document.querySelector(`.leg-wager-row-${leg}`).classList.toggle('hidden', cat !== 'team_game');
       document.querySelector(`.leg-ou-row-${leg}`).classList.add('hidden');
       document.querySelector(`.leg-spread-row-${leg}`).classList.add('hidden');
+      document.querySelector(`.leg-period-row-${leg}`).classList.add('hidden');
+
+      // Sport-specific
+      document.querySelector(`.leg-fight-fields-${leg}`).classList.toggle('hidden', !['ufc', 'boxing'].includes(sport));
+      document.querySelector(`.leg-golf-fields-${leg}`).classList.toggle('hidden', !(sport === 'golf' && cat === 'player_prop'));
+    });
+
+    // Wire up sport change for this leg
+    card.querySelector('.leg-sport').addEventListener('change', (e) => {
+      const leg = e.target.dataset.leg;
+      const sport = e.target.value;
+      const cat = card.querySelector('.leg-category')?.value || '';
+
+      document.querySelector(`.leg-fight-fields-${leg}`).classList.toggle('hidden', !['ufc', 'boxing'].includes(sport));
+      document.querySelector(`.leg-golf-fields-${leg}`).classList.toggle('hidden', !(sport === 'golf' && cat === 'player_prop'));
     });
 
     // Wire up wager type for this leg
@@ -617,18 +729,22 @@ function buildParlayLegs() {
       const spreadRow = document.querySelector(`.leg-spread-row-${leg}`);
       const ouRow = document.querySelector(`.leg-ou-row-${leg}`);
       const spreadLabel = document.querySelector(`.leg-spread-label-${leg}`);
+      const periodRow = document.querySelector(`.leg-period-row-${leg}`);
 
       if (wager === 'spread') {
         spreadRow.classList.remove('hidden');
         ouRow.classList.add('hidden');
+        periodRow.classList.remove('hidden');
         spreadLabel.textContent = 'Spread';
       } else if (wager === 'total') {
         spreadRow.classList.remove('hidden');
         ouRow.classList.remove('hidden');
+        periodRow.classList.remove('hidden');
         spreadLabel.textContent = 'Total Line';
       } else {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
+        periodRow.classList.add('hidden');
       }
     });
 
@@ -711,6 +827,8 @@ async function handleSubmit(e) {
                 leg.spreadValue = String(totalVal + 0.5);
               }
             }
+            // Period
+            leg.period = document.querySelector(`.leg-period[data-leg="${i}"]`)?.value || 'full_game';
           }
           if (wager === 'total') {
             const activeOU = document.querySelector(`.leg-ou-btn[data-leg="${i}"].active`);
@@ -731,6 +849,20 @@ async function handleSubmit(e) {
           leg.futuresMarket = document.querySelector(`.leg-futures-market[data-leg="${i}"]`)?.value;
           leg.futuresSelection = document.querySelector(`.leg-futures-selection[data-leg="${i}"]`)?.value;
           if (!leg.futuresMarket || !leg.futuresSelection) throw new Error(`Leg ${i}: Enter market and selection`);
+        }
+
+        // Sport-specific extras
+        if (['ufc', 'boxing'].includes(sport)) {
+          const fr = document.querySelector(`.leg-fight-round[data-leg="${i}"]`)?.value;
+          const fm = document.querySelector(`.leg-fight-method[data-leg="${i}"]`)?.value;
+          if (fr) leg.fightRound = parseInt(fr);
+          if (fm) leg.fightMethod = fm;
+        }
+        if (sport === 'golf') {
+          const gr = document.querySelector(`.leg-golf-round[data-leg="${i}"]`)?.value;
+          const gh = document.querySelector(`.leg-golf-hole[data-leg="${i}"]`)?.value;
+          if (gr) leg.golfRound = parseInt(gr);
+          if (gh) leg.golfHole = parseInt(gh);
         }
 
         legs.push(leg);
@@ -787,6 +919,8 @@ async function handleSubmit(e) {
               body.spreadValue = String(totalVal + 0.5);
             }
           }
+          // Period
+          body.period = document.getElementById('period-select')?.value || 'full_game';
         }
         if (wager === 'total') {
           const activeOU = document.querySelector('#over-under-row .toggle-btn.active');
@@ -807,6 +941,20 @@ async function handleSubmit(e) {
         body.futuresMarket = document.getElementById('futures-market').value;
         body.futuresSelection = document.getElementById('futures-selection').value;
         if (!body.futuresMarket || !body.futuresSelection) throw new Error('Enter market and selection');
+      }
+
+      // Sport-specific extras
+      if (['ufc', 'boxing'].includes(sport)) {
+        const fr = document.getElementById('fight-round')?.value;
+        const fm = document.getElementById('fight-method')?.value;
+        if (fr) body.fightRound = parseInt(fr);
+        if (fm) body.fightMethod = fm;
+      }
+      if (sport === 'golf') {
+        const gr = document.getElementById('golf-round')?.value;
+        const gh = document.getElementById('golf-hole')?.value;
+        if (gr) body.golfRound = parseInt(gr);
+        if (gh) body.golfHole = parseInt(gh);
       }
 
       body.oddsAmerican = document.getElementById('odds').value;
@@ -843,6 +991,11 @@ async function handleSubmit(e) {
             propDescription: leg.propDescription || null,
             spreadValue: leg.spreadValue || null,
             eventStartTime: leg.eventStartTime || null,
+            period: leg.period || 'full_game',
+            fightRound: leg.fightRound || null,
+            fightMethod: leg.fightMethod || null,
+            golfRound: leg.golfRound || null,
+            golfHole: leg.golfHole || null,
           };
           // Only include overUnder if it was set (total bets)
           if (leg.overUnder) legPatch.overUnder = leg.overUnder;
@@ -866,6 +1019,11 @@ async function handleSubmit(e) {
         patchBody.spreadValue = body.spreadValue || null;
         patchBody.eventStartTime = body.eventStartTime || null;
         patchBody.betNote = body.betNote || null;
+        patchBody.period = body.period || 'full_game';
+        patchBody.fightRound = body.fightRound || null;
+        patchBody.fightMethod = body.fightMethod || null;
+        patchBody.golfRound = body.golfRound || null;
+        patchBody.golfHole = body.golfHole || null;
         // Reconstruct pick on the client for futures
         if (body.betCategory === 'futures' && body.futuresMarket && body.futuresSelection) {
           patchBody.pick = `${body.futuresMarket}: ${body.futuresSelection}`;
@@ -1284,6 +1442,38 @@ function applySingleData(data) {
 
   // Event time
   if (data.eventStartTime) document.getElementById('event-time').value = normalizeEventTime(data.eventStartTime);
+
+  // Period
+  if (data.period && data.period !== 'full_game') {
+    const periodEl = document.getElementById('period-select');
+    if (periodEl) periodEl.value = data.period;
+  }
+
+  // Fight fields
+  if (data.fightRound) {
+    const frEl = document.getElementById('fight-round');
+    if (frEl) frEl.value = data.fightRound;
+  }
+  if (data.fightMethod) {
+    const fmEl = document.getElementById('fight-method');
+    if (fmEl) fmEl.value = data.fightMethod;
+  }
+
+  // Golf fields
+  if (data.golfRound) {
+    const grEl = document.getElementById('golf-round');
+    if (grEl) grEl.value = data.golfRound;
+  }
+  if (data.golfHole) {
+    const ghEl = document.getElementById('golf-hole');
+    if (ghEl) ghEl.value = data.golfHole;
+  }
+
+  // Trigger sport-specific field visibility
+  if (data.sport) {
+    const sportEl = document.getElementById('sport-select');
+    sportEl.dispatchEvent(new Event('change'));
+  }
 }
 
 function applyParlayData(data) {
@@ -1398,6 +1588,38 @@ function applyParlayData(data) {
     if (leg.eventStartTime) {
       const el = document.querySelector(`.leg-event-time[data-leg="${i}"]`);
       if (el) el.value = normalizeEventTime(leg.eventStartTime);
+    }
+
+    // Period
+    if (leg.period && leg.period !== 'full_game') {
+      const el = document.querySelector(`.leg-period[data-leg="${i}"]`);
+      if (el) el.value = leg.period;
+    }
+
+    // Fight fields
+    if (leg.fightRound) {
+      const el = document.querySelector(`.leg-fight-round[data-leg="${i}"]`);
+      if (el) el.value = leg.fightRound;
+    }
+    if (leg.fightMethod) {
+      const el = document.querySelector(`.leg-fight-method[data-leg="${i}"]`);
+      if (el) el.value = leg.fightMethod;
+    }
+
+    // Golf fields
+    if (leg.golfRound) {
+      const el = document.querySelector(`.leg-golf-round[data-leg="${i}"]`);
+      if (el) el.value = leg.golfRound;
+    }
+    if (leg.golfHole) {
+      const el = document.querySelector(`.leg-golf-hole[data-leg="${i}"]`);
+      if (el) el.value = leg.golfHole;
+    }
+
+    // Trigger sport-specific field visibility for each leg
+    if (leg.sport) {
+      const sportEl = document.querySelector(`.leg-sport[data-leg="${i}"]`);
+      if (sportEl) sportEl.dispatchEvent(new Event('change'));
     }
   });
 
@@ -3235,6 +3457,35 @@ async function fetchBetForEdit(betId) {
           // Game time per leg
           const legTimeEl = document.querySelector(`.leg-event-time[data-leg="${idx}"]`);
           if (legTimeEl && leg.eventStartTime) legTimeEl.value = leg.eventStartTime;
+
+          // Period per leg
+          if (leg.period && leg.period !== 'full_game') {
+            const el = document.querySelector(`.leg-period[data-leg="${idx}"]`);
+            if (el) el.value = leg.period;
+          }
+
+          // Fight fields per leg
+          if (leg.fightRound) {
+            const el = document.querySelector(`.leg-fight-round[data-leg="${idx}"]`);
+            if (el) el.value = leg.fightRound;
+          }
+          if (leg.fightMethod) {
+            const el = document.querySelector(`.leg-fight-method[data-leg="${idx}"]`);
+            if (el) el.value = leg.fightMethod;
+          }
+
+          // Golf fields per leg
+          if (leg.golfRound) {
+            const el = document.querySelector(`.leg-golf-round[data-leg="${idx}"]`);
+            if (el) el.value = leg.golfRound;
+          }
+          if (leg.golfHole) {
+            const el = document.querySelector(`.leg-golf-hole[data-leg="${idx}"]`);
+            if (el) el.value = leg.golfHole;
+          }
+
+          // Trigger sport-specific field visibility
+          if (sportEl) sportEl.dispatchEvent(new Event('change'));
         });
       }, 100);
 
@@ -3303,6 +3554,39 @@ async function fetchBetForEdit(betId) {
       document.getElementById('event-time').value = bet.eventStartTime || '';
       document.getElementById('bet-note').value = bet.betNote || '';
       document.getElementById('share-link').value = bet.shareLink || '';
+
+      // Period
+      if (bet.period && bet.period !== 'full_game') {
+        const periodEl = document.getElementById('period-select');
+        if (periodEl) periodEl.value = bet.period;
+      }
+
+      // Fight fields
+      if (bet.fightRound) {
+        const frEl = document.getElementById('fight-round');
+        if (frEl) frEl.value = bet.fightRound;
+      }
+      if (bet.fightMethod) {
+        const fmEl = document.getElementById('fight-method');
+        if (fmEl) fmEl.value = bet.fightMethod;
+      }
+
+      // Golf fields
+      if (bet.golfRound) {
+        const grEl = document.getElementById('golf-round');
+        if (grEl) grEl.value = bet.golfRound;
+      }
+      if (bet.golfHole) {
+        const ghEl = document.getElementById('golf-hole');
+        if (ghEl) ghEl.value = bet.golfHole;
+      }
+
+      // Trigger sport-specific field visibility
+      const sportEl = document.getElementById('sport-select');
+      if (sportEl) sportEl.dispatchEvent(new Event('change'));
+      // Also trigger wager type to show period row
+      const wagerSel2 = document.getElementById('wager-type');
+      if (wagerSel2) wagerSel2.dispatchEvent(new Event('change'));
     }
 
     // Whale toggle

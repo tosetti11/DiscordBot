@@ -1404,6 +1404,11 @@ function createWebServer() {
       channelId: bet.channel_id,
       mirrorChannelId: bet.mirror_channel_id || null,
       mirrorScoreboardMsgId: bet.mirror_scoreboard_msg_id || null,
+      period: bet.period || 'full_game',
+      fightRound: bet.fight_round || null,
+      fightMethod: bet.fight_method || null,
+      golfHole: bet.golf_hole || null,
+      golfRound: bet.golf_round || null,
       legs: (bet.parlay_legs || []).map(l => ({
         id: l.id,
         legNumber: l.leg_number,
@@ -1420,6 +1425,11 @@ function createWebServer() {
         spreadValue: l.spread_value,
         status: l.status,
         eventStartTime: l.event_start_time,
+        period: l.period || 'full_game',
+        fightRound: l.fight_round || null,
+        fightMethod: l.fight_method || null,
+        golfHole: l.golf_hole || null,
+        golfRound: l.golf_round || null,
       })),
     };
   }
@@ -1706,7 +1716,7 @@ function createWebServer() {
       const { betId } = req.params;
       const { oddsAmerican, units, pick, betNote, sport, wagerType, teamA, teamB,
               eventStartTime, playerName, propDescription, betCategory, spreadValue,
-              shareLink, legs } = req.body;
+              shareLink, legs, period, fightRound, fightMethod, golfHole, golfRound } = req.body;
 
       const bet = await db.getBet(betId);
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
@@ -1731,27 +1741,49 @@ function createWebServer() {
       if (betCategory !== undefined) fields.bet_category = betCategory;
       if (spreadValue !== undefined) fields.spread_value = spreadValue ? parseFloat(spreadValue) : null;
       if (shareLink !== undefined) fields.share_link = (typeof shareLink === 'string' ? shareLink.slice(0, 500) : shareLink) || null;
+      if (period !== undefined) fields.period = period || 'full_game';
+      if (fightRound !== undefined) fields.fight_round = fightRound ? parseInt(fightRound) : null;
+      if (fightMethod !== undefined) fields.fight_method = fightMethod || null;
+      if (golfHole !== undefined) fields.golf_hole = golfHole ? parseInt(golfHole) : null;
+      if (golfRound !== undefined) fields.golf_round = golfRound ? parseInt(golfRound) : null;
 
       if (Object.keys(fields).length > 0) {
         // Reconstruct `pick` from edited field values + existing bet data
         const mergedBet = { ...bet, ...fields };
         const cat = mergedBet.bet_category || bet.bet_category;
         const wt = mergedBet.wager_type || bet.wager_type;
+        const EDIT_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S' };
+        const EDIT_FIGHT_METHOD_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
+        const editPeriod = mergedBet.period && mergedBet.period !== 'full_game' ? ` (${EDIT_PERIOD_LABELS[mergedBet.period] || mergedBet.period})` : '';
         if (cat === 'futures') {
           // pick comes pre-built from client for futures (market: selection)
           if (!fields.pick && bet.pick) fields.pick = bet.pick;
         } else if (cat === 'team_game') {
           const tA = mergedBet.team_a || '';
-          if (wt === 'moneyline') fields.pick = `${tA} ML`;
+          if (wt === 'moneyline') fields.pick = `${tA} ML${editPeriod}`;
           else if (wt === 'spread') {
             const sv = parseFloat(mergedBet.spread_value || 0);
-            fields.pick = `${tA} ${sv > 0 ? '+' : ''}${sv}`;
+            fields.pick = `${tA} ${sv > 0 ? '+' : ''}${sv}${editPeriod}`;
           } else if (wt === 'total') {
             const sv = parseFloat(mergedBet.spread_value || 0);
-            fields.pick = `Over ${Math.abs(sv)}`;
+            fields.pick = `Over ${Math.abs(sv)}${editPeriod}`;
           }
         } else if (cat === 'player_prop') {
           fields.pick = mergedBet.prop_description || mergedBet.pick || bet.pick;
+        }
+        // Append fight context
+        if (['ufc', 'boxing'].includes(mergedBet.sport) && fields.pick) {
+          const fParts = [];
+          if (mergedBet.fight_round) fParts.push(`Rd ${mergedBet.fight_round}`);
+          if (mergedBet.fight_method) fParts.push(EDIT_FIGHT_METHOD_LABELS[mergedBet.fight_method] || mergedBet.fight_method);
+          if (fParts.length) fields.pick += ` (${fParts.join(', ')})`;
+        }
+        // Append golf context
+        if (mergedBet.sport === 'golf' && fields.pick) {
+          const gParts = [];
+          if (mergedBet.golf_round) gParts.push(`R${mergedBet.golf_round}`);
+          if (mergedBet.golf_hole) gParts.push(`Hole ${mergedBet.golf_hole}`);
+          if (gParts.length) fields.pick += ` (${gParts.join(', ')})`;
         }
 
         await db.updateBetFields(betId, fields);
@@ -1772,25 +1804,47 @@ function createWebServer() {
           if (leg.oddsAmerican !== undefined) legFields.odds_american = leg.oddsAmerican ? parseInt(leg.oddsAmerican) : null;
           if (leg.spreadValue !== undefined) legFields.spread_value = leg.spreadValue ? parseFloat(leg.spreadValue) : null;
           if (leg.eventStartTime !== undefined) legFields.event_start_time = leg.eventStartTime || null;
+          if (leg.period !== undefined) legFields.period = leg.period || 'full_game';
+          if (leg.fightRound !== undefined) legFields.fight_round = leg.fightRound ? parseInt(leg.fightRound) : null;
+          if (leg.fightMethod !== undefined) legFields.fight_method = leg.fightMethod || null;
+          if (leg.golfHole !== undefined) legFields.golf_hole = leg.golfHole ? parseInt(leg.golfHole) : null;
+          if (leg.golfRound !== undefined) legFields.golf_round = leg.golfRound ? parseInt(leg.golfRound) : null;
 
           // Reconstruct leg pick
           const lCat = leg.betCategory || 'team_game';
           const lWt = leg.wagerType || 'moneyline';
+          const LEG_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S' };
+          const LEG_FIGHT_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
+          const lPeriod = leg.period && leg.period !== 'full_game' ? ` (${LEG_PERIOD_LABELS[leg.period] || leg.period})` : '';
           if (lCat === 'futures') {
             // pick comes pre-built from client for futures legs
             if (leg.pick) legFields.pick = leg.pick;
           } else if (lCat === 'team_game') {
             const lTeamA = leg.teamA || '';
-            if (lWt === 'moneyline') legFields.pick = `${lTeamA} ML`;
+            if (lWt === 'moneyline') legFields.pick = `${lTeamA} ML${lPeriod}`;
             else if (lWt === 'spread') {
               const sv = parseFloat(leg.spreadValue || 0);
-              legFields.pick = `${lTeamA} ${sv > 0 ? '+' : ''}${sv}`;
+              legFields.pick = `${lTeamA} ${sv > 0 ? '+' : ''}${sv}${lPeriod}`;
             } else if (lWt === 'total') {
               const sv = parseFloat(leg.spreadValue || 0);
-              legFields.pick = `${leg.overUnder || 'Over'} ${Math.abs(sv)}`;
+              legFields.pick = `${leg.overUnder || 'Over'} ${Math.abs(sv)}${lPeriod}`;
             }
           } else if (lCat === 'player_prop') {
             legFields.pick = leg.propDescription || '';
+          }
+          // Append fight context to leg pick
+          if (['ufc', 'boxing'].includes(leg.sport) && legFields.pick) {
+            const fParts = [];
+            if (leg.fightRound) fParts.push(`Rd ${leg.fightRound}`);
+            if (leg.fightMethod) fParts.push(LEG_FIGHT_LABELS[leg.fightMethod] || leg.fightMethod);
+            if (fParts.length) legFields.pick += ` (${fParts.join(', ')})`;
+          }
+          // Append golf context to leg pick
+          if (leg.sport === 'golf' && legFields.pick) {
+            const gParts = [];
+            if (leg.golfRound) gParts.push(`R${leg.golfRound}`);
+            if (leg.golfHole) gParts.push(`Hole ${leg.golfHole}`);
+            if (gParts.length) legFields.pick += ` (${gParts.join(', ')})`;
           }
 
           if (Object.keys(legFields).length > 0) {
@@ -1999,7 +2053,12 @@ For a SINGLE bet:
   "futuresSelection": "<selection or null>",
   "oddsAmerican": "<American odds like -110, +150>",
   "wagerAmount": "<dollar wager/stake amount as a number, or null if not visible>",
-  "eventStartTime": "<game date and time in format like 'Thu Mar 5 7:00 PM ET', or null>"
+  "eventStartTime": "<game date and time in format like 'Thu Mar 5 7:00 PM ET', or null>",
+  "period": "<one of: full_game, 1st_half, 2nd_half, 1st_quarter, 2nd_quarter, 3rd_quarter, 4th_quarter, 1st_period, 2nd_period, 3rd_period, 1st_set — default full_game>",
+  "fightRound": "<round number 1-12 for UFC/Boxing bets, or null>",
+  "fightMethod": "<one of: ko_tko, submission, decision, unanimous_decision, split_decision, dq, points — or null>",
+  "golfRound": "<tournament round 1-4 for golf bets, or null>",
+  "golfHole": "<hole number 1-18 for golf bets, or null>"
 }
 
 For a PARLAY (multiple legs):
@@ -2020,7 +2079,12 @@ For a PARLAY (multiple legs):
       "propDescription": "<prop description or null>",
       "futuresMarket": "<market or null>",
       "futuresSelection": "<selection or null>",
-      "eventStartTime": "<game date and time in format like 'Thu Mar 5 7:00 PM ET', or null>"
+      "eventStartTime": "<game date and time in format like 'Thu Mar 5 7:00 PM ET', or null>",
+      "period": "<period value — default full_game>",
+      "fightRound": "<round number or null>",
+      "fightMethod": "<method value or null>",
+      "golfRound": "<round 1-4 or null>",
+      "golfHole": "<hole 1-18 or null>"
     }
   ]
 }
@@ -2043,6 +2107,9 @@ Rules:
 - Map the sport to the closest value from the valid sports list
 - For eventStartTime, ALWAYS format as "Day Mon DD H:MM AM/PM ET" (e.g. "Thu Mar 5 7:00 PM ET"). If only a time is visible (e.g. "7:00 PM"), assume today's date and use the full format. If no time is visible, use null.
 - IMPORTANT: Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}. Games on betting slips are almost always within the next 1-7 days from today. Use the CURRENT month and year when constructing dates. Do NOT guess old or future months — the event is happening very soon.
+- PERIOD DETECTION: If the bet is for a specific half, quarter, or period (e.g. "1st Half Over 110.5", "3rd Period ML", "1Q Spread -2.5"), set the period field accordingly. Look for indicators like "1H", "2H", "1st Half", "2nd Half", "1Q", "2Q", "3Q", "4Q", "1st Quarter", "1st Period", "2P", "3P", "1st Set". Default to "full_game" if no period is specified.
+- FIGHT BETS (UFC/Boxing): If the bet mentions a specific round (e.g. "Round 3", "Rd 1-2", "goes the distance"), extract fightRound as the round number. If a method of victory is specified (e.g. "by KO/TKO", "by Submission", "by Decision", "by Points"), set fightMethod to the matching value (ko_tko, submission, decision, unanimous_decision, split_decision, dq, points).
+- GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds.
 - Return ONLY valid JSON, no markdown or explanation`;
 
       // Process each image through OpenAI Vision
@@ -2956,6 +3023,7 @@ Rules:
         futuresMarket, futuresSelection,
         spreadValue, oddsAmerican, units, betNote, shareLink,
         eventStartTime, isWhale, overUnder,
+        period, fightRound, fightMethod, golfHole, golfRound,
         onBehalfOf, // admin placing bet for another user
         // Parlay fields
         legs,
@@ -3062,22 +3130,40 @@ Rules:
           status: 'open',
         }, displayName);
 
+        const PERIOD_LABELS_P = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S' };
+        const FIGHT_METHOD_LABELS_P = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
+
         const legRecords = legs.map((leg, i) => {
+          const legPeriod = leg.period && leg.period !== 'full_game' ? ` (${PERIOD_LABELS_P[leg.period] || leg.period})` : '';
           let legPick = truncate(leg.pick);
           if (leg.betCategory === 'futures') {
             legPick = `${truncate(leg.futuresMarket, 200)}: ${truncate(leg.futuresSelection, 200)}`;
           } else if (leg.betCategory === 'team_game') {
             if (leg.wagerType === 'moneyline') {
-              legPick = `${truncate(leg.teamA, 200)} ML`;
+              legPick = `${truncate(leg.teamA, 200)} ML${legPeriod}`;
             } else if (leg.wagerType === 'spread') {
               const sv = parseFloat(leg.spreadValue);
-              legPick = `${truncate(leg.teamA, 200)} ${sv > 0 ? '+' : ''}${sv}`;
+              legPick = `${truncate(leg.teamA, 200)} ${sv > 0 ? '+' : ''}${sv}${legPeriod}`;
             } else if (leg.wagerType === 'total') {
               const sv = parseFloat(leg.spreadValue);
-              legPick = `${leg.overUnder || 'Over'} ${Math.abs(sv)}`;
+              legPick = `${leg.overUnder || 'Over'} ${Math.abs(sv)}${legPeriod}`;
             }
           } else {
             legPick = truncate(leg.propDescription) || truncate(leg.pick);
+          }
+
+          // Append fight/golf context
+          if (['ufc', 'boxing'].includes(leg.sport)) {
+            const parts = [];
+            if (leg.fightRound) parts.push(`Rd ${leg.fightRound}`);
+            if (leg.fightMethod) parts.push(FIGHT_METHOD_LABELS_P[leg.fightMethod] || leg.fightMethod);
+            if (parts.length) legPick += ` (${parts.join(', ')})`;
+          }
+          if (leg.sport === 'golf') {
+            const parts = [];
+            if (leg.golfRound) parts.push(`R${leg.golfRound}`);
+            if (leg.golfHole) parts.push(`Hole ${leg.golfHole}`);
+            if (parts.length) legPick += ` (${parts.join(', ')})`;
           }
 
           return {
@@ -3096,6 +3182,11 @@ Rules:
             odds_decimal: leg.oddsAmerican ? americanToDecimal(parseInt(leg.oddsAmerican)) : null,
             event_start_time: leg.eventStartTime || null,
             status: 'open',
+            period: leg.period || 'full_game',
+            fight_round: leg.fightRound ? parseInt(leg.fightRound) : null,
+            fight_method: leg.fightMethod || null,
+            golf_hole: leg.golfHole ? parseInt(leg.golfHole) : null,
+            golf_round: leg.golfRound ? parseInt(leg.golfRound) : null,
           };
         });
 
@@ -3159,21 +3250,39 @@ Rules:
 
       } else {
         // ── Single bet ──
+        const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S' };
+        const FIGHT_METHOD_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
+        const periodTag = period && period !== 'full_game' ? ` (${PERIOD_LABELS[period] || period})` : '';
+
         let finalPick = safePick;
         if (betCategory === 'futures') {
           finalPick = `${safeFuturesMarket}: ${safeFuturesSelection}`;
         } else if (betCategory === 'team_game') {
           if (wagerType === 'moneyline') {
-            finalPick = `${safeTeamA} ML`;
+            finalPick = `${safeTeamA} ML${periodTag}`;
           } else if (wagerType === 'spread') {
             const sv = parseFloat(spreadValue);
-            finalPick = `${safeTeamA} ${sv > 0 ? '+' : ''}${sv}`;
+            finalPick = `${safeTeamA} ${sv > 0 ? '+' : ''}${sv}${periodTag}`;
           } else if (wagerType === 'total') {
             const sv = parseFloat(spreadValue);
-            finalPick = `${overUnder || 'Over'} ${Math.abs(sv)}`;
+            finalPick = `${overUnder || 'Over'} ${Math.abs(sv)}${periodTag}`;
           }
         } else {
           finalPick = safePropDesc || safePick;
+        }
+
+        // Append fight/golf context to pick text
+        if (['ufc', 'boxing'].includes(sport)) {
+          const parts = [];
+          if (fightRound) parts.push(`Rd ${fightRound}`);
+          if (fightMethod) parts.push(FIGHT_METHOD_LABELS[fightMethod] || fightMethod);
+          if (parts.length) finalPick += ` (${parts.join(', ')})`;
+        }
+        if (sport === 'golf') {
+          const parts = [];
+          if (golfRound) parts.push(`R${golfRound}`);
+          if (golfHole) parts.push(`Hole ${golfHole}`);
+          if (parts.length) finalPick += ` (${parts.join(', ')})`;
         }
 
         const betData = {
@@ -3200,6 +3309,11 @@ Rules:
           is_whale: isWhale || false,
           is_retro: false,
           status: 'open',
+          period: period || 'full_game',
+          fight_round: fightRound ? parseInt(fightRound) : null,
+          fight_method: fightMethod || null,
+          golf_hole: golfHole ? parseInt(golfHole) : null,
+          golf_round: golfRound ? parseInt(golfRound) : null,
         };
 
         const bet = await db.createBet(betData, displayName);

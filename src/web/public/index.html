@@ -237,6 +237,26 @@
               </div>
             </div>
 
+            <!-- Period selector (for spreads/totals) -->
+            <div id="period-row" class="form-row hidden">
+              <div class="form-group">
+                <label for="period-select">Period</label>
+                <select id="period-select">
+                  <option value="full_game">Full Game</option>
+                  <option value="1st_half">1st Half</option>
+                  <option value="2nd_half">2nd Half</option>
+                  <option value="1st_quarter">1st Quarter</option>
+                  <option value="2nd_quarter">2nd Quarter</option>
+                  <option value="3rd_quarter">3rd Quarter</option>
+                  <option value="4th_quarter">4th Quarter</option>
+                  <option value="1st_period">1st Period</option>
+                  <option value="2nd_period">2nd Period</option>
+                  <option value="3rd_period">3rd Period</option>
+                  <option value="1st_set">1st Set</option>
+                </select>
+              </div>
+            </div>
+
             <!-- Team Game fields -->
             <div id="team-fields" class="dynamic-fields hidden">
               <div class="form-row">
@@ -279,6 +299,83 @@
                 <div class="form-group">
                   <label for="prop-team-b">Team B</label>
                   <input type="text" id="prop-team-b" placeholder="e.g. Celtics" maxlength="100">
+                </div>
+              </div>
+            </div>
+
+            <!-- MMA/Boxing fields (shown when sport is ufc or boxing) -->
+            <div id="fight-fields" class="dynamic-fields hidden">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="fight-round">Round <span class="optional">(optional)</span></label>
+                  <select id="fight-round">
+                    <option value="">Any / Full Fight</option>
+                    <option value="1">Round 1</option>
+                    <option value="2">Round 2</option>
+                    <option value="3">Round 3</option>
+                    <option value="4">Round 4</option>
+                    <option value="5">Round 5</option>
+                    <option value="6">Round 6</option>
+                    <option value="7">Round 7</option>
+                    <option value="8">Round 8</option>
+                    <option value="9">Round 9</option>
+                    <option value="10">Round 10</option>
+                    <option value="11">Round 11</option>
+                    <option value="12">Round 12</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="fight-method">Method <span class="optional">(optional)</span></label>
+                  <select id="fight-method">
+                    <option value="">Any</option>
+                    <option value="ko_tko">KO/TKO</option>
+                    <option value="submission">Submission</option>
+                    <option value="decision">Decision</option>
+                    <option value="unanimous_decision">Unanimous Decision</option>
+                    <option value="split_decision">Split Decision</option>
+                    <option value="dq">Disqualification</option>
+                    <option value="points">Points</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Golf fields (shown when sport is golf and category is player_prop) -->
+            <div id="golf-fields" class="dynamic-fields hidden">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="golf-round">Tournament Round <span class="optional">(optional)</span></label>
+                  <select id="golf-round">
+                    <option value="">N/A</option>
+                    <option value="1">Round 1</option>
+                    <option value="2">Round 2</option>
+                    <option value="3">Round 3</option>
+                    <option value="4">Round 4</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="golf-hole">Hole # <span class="optional">(optional)</span></label>
+                  <select id="golf-hole">
+                    <option value="">N/A</option>
+                    <option value="1">Hole 1</option>
+                    <option value="2">Hole 2</option>
+                    <option value="3">Hole 3</option>
+                    <option value="4">Hole 4</option>
+                    <option value="5">Hole 5</option>
+                    <option value="6">Hole 6</option>
+                    <option value="7">Hole 7</option>
+                    <option value="8">Hole 8</option>
+                    <option value="9">Hole 9</option>
+                    <option value="10">Hole 10</option>
+                    <option value="11">Hole 11</option>
+                    <option value="12">Hole 12</option>
+                    <option value="13">Hole 13</option>
+                    <option value="14">Hole 14</option>
+                    <option value="15">Hole 15</option>
+                    <option value="16">Hole 16</option>
+                    <option value="17">Hole 17</option>
+                    <option value="18">Hole 18</option>
+                  </select>
                 </div>
               </div>
             </div>

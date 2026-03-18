@@ -66,6 +66,32 @@ module.exports = {
     futures: 'Futures',
   },
 
+  // Period options for totals/spreads
+  PERIODS: {
+    full_game: 'Full Game',
+    '1st_half': '1st Half',
+    '2nd_half': '2nd Half',
+    '1st_period': '1st Period',
+    '2nd_period': '2nd Period',
+    '3rd_period': '3rd Period',
+    '1st_quarter': '1st Quarter',
+    '2nd_quarter': '2nd Quarter',
+    '3rd_quarter': '3rd Quarter',
+    '4th_quarter': '4th Quarter',
+    '1st_set': '1st Set',
+  },
+
+  // Fight methods for MMA/Boxing
+  FIGHT_METHODS: {
+    ko_tko: 'KO/TKO',
+    submission: 'Submission',
+    decision: 'Decision',
+    unanimous_decision: 'Unanimous Decision',
+    split_decision: 'Split Decision',
+    dq: 'Disqualification',
+    points: 'Points',
+  },
+
   // Colors for embeds
   COLORS: {
     primary: 0xFFD700,    // Gold

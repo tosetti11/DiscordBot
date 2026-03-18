@@ -1,6 +1,6 @@
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
-const { SPORT_NAMES, WAGER_TYPES } = require('../config/constants');
+const { SPORT_NAMES, WAGER_TYPES, PERIODS, FIGHT_METHODS } = require('../config/constants');
 const { formatOdds, calculatePayout } = require('./odds');
 
 // ── Register bundled fonts ───────────────────────────────────
@@ -374,6 +374,35 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     tagX += ctx.measureText(wagerLabel.toUpperCase()).width + 10;
   }
 
+  // Period pill (non-full_game)
+  if (!isParlay && bet.period && bet.period !== 'full_game') {
+    const periodLabel = (PERIODS[bet.period] || bet.period).toUpperCase();
+    const ppw = drawPill(ctx, tagX, curY, periodLabel, 'rgba(100, 180, 255, 0.15)', '#64B4FF', 10, '700', 7, 3);
+    tagX += ppw + 6;
+  }
+
+  // Fight details pill
+  if (!isParlay && ['ufc', 'boxing'].includes(bet.sport)) {
+    const fParts = [];
+    if (bet.fight_round) fParts.push(`RD ${bet.fight_round}`);
+    if (bet.fight_method) fParts.push((FIGHT_METHODS[bet.fight_method] || bet.fight_method).toUpperCase());
+    if (fParts.length) {
+      const fpw = drawPill(ctx, tagX, curY, fParts.join(' • '), 'rgba(255, 80, 80, 0.15)', '#FF6B6B', 10, '700', 7, 3);
+      tagX += fpw + 6;
+    }
+  }
+
+  // Golf details pill
+  if (!isParlay && bet.sport === 'golf') {
+    const gParts = [];
+    if (bet.golf_round) gParts.push(`R${bet.golf_round}`);
+    if (bet.golf_hole) gParts.push(`HOLE ${bet.golf_hole}`);
+    if (gParts.length) {
+      const gpw = drawPill(ctx, tagX, curY, gParts.join(' • '), 'rgba(80, 200, 80, 0.15)', '#50C850', 10, '700', 7, 3);
+      tagX += gpw + 6;
+    }
+  }
+
   if (isParlay) {
     ctx.font = '600 11px ' + FF;
     ctx.fillStyle = C.textMuted;
@@ -461,7 +490,42 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       ctx.fillText(legEmoji, legX, curY + 13);
       ctx.font = '600 10px ' + FF;
       ctx.fillStyle = C.textMuted;
-      ctx.fillText(legSport, legX + 22, curY + 12);
+      let legTagX = legX + 22;
+      ctx.fillText(legSport, legTagX, curY + 12);
+      legTagX += ctx.measureText(legSport).width + 6;
+
+      // Period tag on leg
+      if (leg.period && leg.period !== 'full_game') {
+        const lPeriodLabel = (PERIODS[leg.period] || leg.period).toUpperCase();
+        ctx.fillStyle = '#64B4FF';
+        ctx.fillText(lPeriodLabel, legTagX, curY + 12);
+        legTagX += ctx.measureText(lPeriodLabel).width + 6;
+      }
+
+      // Fight tag on leg
+      if (['ufc', 'boxing'].includes(leg.sport)) {
+        const lfParts = [];
+        if (leg.fight_round) lfParts.push(`RD ${leg.fight_round}`);
+        if (leg.fight_method) lfParts.push((FIGHT_METHODS[leg.fight_method] || leg.fight_method).toUpperCase());
+        if (lfParts.length) {
+          ctx.fillStyle = '#FF6B6B';
+          const lfText = lfParts.join(' • ');
+          ctx.fillText(lfText, legTagX, curY + 12);
+          legTagX += ctx.measureText(lfText).width + 6;
+        }
+      }
+
+      // Golf tag on leg
+      if (leg.sport === 'golf') {
+        const lgParts = [];
+        if (leg.golf_round) lgParts.push(`R${leg.golf_round}`);
+        if (leg.golf_hole) lgParts.push(`HOLE ${leg.golf_hole}`);
+        if (lgParts.length) {
+          ctx.fillStyle = '#50C850';
+          const lgText = lgParts.join(' • ');
+          ctx.fillText(lgText, legTagX, curY + 12);
+        }
+      }
       curY += 16;
 
       // Leg pick
