@@ -153,28 +153,49 @@ async function getTodaysAiPick(guildId) {
 }
 
 // Tail/Fade per-user tracking
-async function recordTailFade(pickId, discordId, action) {
+async function getUserTailFade(pickId, discordId) {
   const { data, error } = await supabase
     .from('ai_pick_tails')
-    .upsert({ pick_id: pickId, discord_id: discordId, action }, { onConflict: 'pick_id,discord_id' })
+    .select('*')
+    .eq('pick_id', pickId)
+    .eq('discord_id', discordId)
+    .limit(1)
+    .single();
+  if (error && error.code !== 'PGRST116') throw error;
+  return data || null;
+}
+
+async function recordTailFade(pickId, discordId, action, units = 1) {
+  const { data, error } = await supabase
+    .from('ai_pick_tails')
+    .upsert({ pick_id: pickId, discord_id: discordId, action, units }, { onConflict: 'pick_id,discord_id' })
     .select()
     .single();
   if (error) throw error;
   return data;
 }
 
+async function removeTailFade(pickId, discordId) {
+  const { error } = await supabase
+    .from('ai_pick_tails')
+    .delete()
+    .eq('pick_id', pickId)
+    .eq('discord_id', discordId);
+  if (error) throw error;
+}
+
 async function getTailFadeCounts(pickId) {
   const { data, error } = await supabase
     .from('ai_pick_tails')
-    .select('action')
+    .select('action, units')
     .eq('pick_id', pickId);
   if (error) throw error;
-  let tails = 0, fades = 0;
+  let tails = 0, fades = 0, totalUnits = 0;
   for (const r of (data || [])) {
-    if (r.action === 'tail') tails++;
+    if (r.action === 'tail') { tails++; totalUnits += Number(r.units) || 0; }
     else fades++;
   }
-  return { tails, fades };
+  return { tails, fades, totalUnits };
 }
 
 async function getTailLeaderboard(guildId) {
@@ -267,7 +288,9 @@ module.exports = {
   getAiPicksByMonth,
   getAllAiPicks,
   getTodaysAiPick,
+  getUserTailFade,
   recordTailFade,
+  removeTailFade,
   getTailFadeCounts,
   getTailLeaderboard,
   getMonthlyRecap,

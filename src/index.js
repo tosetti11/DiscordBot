@@ -551,6 +551,9 @@ async function handleModalSubmit(interaction) {
   if (id.startsWith('tailbet_units_')) {
     return enterbet.handleTailUnitsModal(interaction);
   }
+  if (id.startsWith('aipick_tail_units_')) {
+    return aiPickService.handleTailUnitsModal(interaction);
+  }
 }
 
 // ─── Login ───

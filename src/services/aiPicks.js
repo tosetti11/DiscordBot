@@ -286,40 +286,110 @@ async function postPickToDiscord(client, aiPick, guildId) {
 }
 
 /**
- * Handle Tail/Fade button interaction
+ * Build the Tail/Fade button row with current counts
+ */
+function buildTailFadeRow(pickId, counts) {
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+  const tailLabel = counts.totalUnits > 0
+    ? `🔒 Tail (${counts.tails}) ${counts.totalUnits}u`
+    : `🔒 Tail (${counts.tails})`;
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`aipick_tail_${pickId}`)
+      .setLabel(tailLabel)
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`aipick_fade_${pickId}`)
+      .setLabel(`Fade (${counts.fades})`)
+      .setStyle(ButtonStyle.Danger),
+  );
+}
+
+/**
+ * Handle Tail/Fade button interaction (toggle + unit modal for tails)
  */
 async function handleTailFade(interaction) {
-  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+  const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
   const customId = interaction.customId;
   const parts = customId.split('_');
   const action = parts[1]; // 'tail' or 'fade'
   const pickId = parts.slice(2).join('_');
 
   try {
+    // Check if user already has an action on this pick
+    const existing = await aiPicksDb.getUserTailFade(pickId, interaction.user.id);
+
+    // TAIL button clicked
+    if (action === 'tail') {
+      if (existing && existing.action === 'tail') {
+        // Already tailing → toggle OFF (remove)
+        await interaction.deferUpdate();
+        await aiPicksDb.removeTailFade(pickId, interaction.user.id);
+        const counts = await aiPicksDb.getTailFadeCounts(pickId);
+        await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
+        await interaction.message.edit({ components: [buildTailFadeRow(pickId, counts)] });
+        await interaction.followUp({ content: '🔓 Tail removed.', ephemeral: true });
+        return;
+      }
+      // Not tailing → show modal to pick units
+      const modal = new ModalBuilder()
+        .setCustomId(`aipick_tail_units_${pickId}`)
+        .setTitle('Tail — How many units?');
+      const unitsInput = new TextInputBuilder()
+        .setCustomId('units')
+        .setLabel('Units (1-5)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('1')
+        .setMinLength(1)
+        .setMaxLength(1)
+        .setRequired(true);
+      modal.addComponents(new ActionRowBuilder().addComponents(unitsInput));
+      await interaction.showModal(modal);
+      return;
+    }
+
+    // FADE button clicked
     await interaction.deferUpdate();
-
-    // Record the user's tail/fade
-    await aiPicksDb.recordTailFade(pickId, interaction.user.id, action);
-
-    // Get updated counts
-    const counts = await aiPicksDb.getTailFadeCounts(pickId);
-    await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-
-    // Update buttons with new counts
-    const newRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`aipick_tail_${pickId}`)
-        .setLabel(`🔒 Tail (${counts.tails})`)
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`aipick_fade_${pickId}`)
-        .setLabel(`Fade (${counts.fades})`)
-        .setStyle(ButtonStyle.Danger),
-    );
-
-    await interaction.message.edit({ components: [newRow] });
+    if (existing && existing.action === 'fade') {
+      // Already fading → toggle OFF (remove)
+      await aiPicksDb.removeTailFade(pickId, interaction.user.id);
+      const counts = await aiPicksDb.getTailFadeCounts(pickId);
+      await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
+      await interaction.message.edit({ components: [buildTailFadeRow(pickId, counts)] });
+      await interaction.followUp({ content: '↩️ Fade removed.', ephemeral: true });
+    } else {
+      // Not fading (or was tailing) → switch to fade
+      await aiPicksDb.recordTailFade(pickId, interaction.user.id, 'fade', 0);
+      const counts = await aiPicksDb.getTailFadeCounts(pickId);
+      await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
+      await interaction.message.edit({ components: [buildTailFadeRow(pickId, counts)] });
+      await interaction.followUp({ content: '🚫 Fade locked in.', ephemeral: true });
+    }
   } catch (err) {
     console.error('[AI Pick] Tail/Fade error:', err);
+  }
+}
+
+/**
+ * Handle the Tail units modal submission
+ */
+async function handleTailUnitsModal(interaction) {
+  try {
+    const pickId = interaction.customId.replace('aipick_tail_units_', '');
+    const raw = interaction.fields.getTextInputValue('units');
+    const units = parseInt(raw, 10);
+    if (isNaN(units) || units < 1 || units > 5) {
+      return interaction.reply({ content: '❌ Enter a number between 1 and 5.', ephemeral: true });
+    }
+
+    await interaction.deferUpdate();
+    await aiPicksDb.recordTailFade(pickId, interaction.user.id, 'tail', units);
+    const counts = await aiPicksDb.getTailFadeCounts(pickId);
+    await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
+    await interaction.message.edit({ components: [buildTailFadeRow(pickId, counts)] });
+    await interaction.followUp({ content: `🔒 Tailing **${units}u** — locked in!`, ephemeral: true });
+  } catch (err) {
+    console.error('[AI Pick] Tail units modal error:', err);
   }
 }
 
@@ -513,6 +583,7 @@ module.exports = {
   generateDailyPick,
   postPickToDiscord,
   handleTailFade,
+  handleTailUnitsModal,
   autoClosePendingPicks,
   postResultToDiscord,
   postMonthlyRecap,
