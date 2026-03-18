@@ -1777,6 +1777,7 @@ function switchPage(page) {
     'game-picks': document.getElementById('game-picks-page'),
     scoreboard: document.getElementById('scoreboard-page'),
     profile: document.getElementById('profile-page'),
+    'ai-picks': document.getElementById('ai-picks-page'),
   };
 
   // Hide all, show selected
@@ -1799,6 +1800,7 @@ function switchPage(page) {
   if (page === 'props') initPropsIfNeeded();
   if (page === 'game-picks') initGamePicksPage();
   if (page === 'profile') loadProfilePage();
+  if (page === 'ai-picks') initAiPicksPage();
 }
 
 // ═══════════════════════════════════════════════
@@ -7209,4 +7211,201 @@ async function loadProfilePage(targetDiscordId) {
 function viewProfile(discordId) {
   switchPage('profile');
   loadProfilePage(discordId);
+}
+
+// ═══════════════════════════════════════════════
+//  AI Picks Page
+// ═══════════════════════════════════════════════
+
+let aiPicksInitialized = false;
+let aiPicksData = [];
+let aiPicksGuildId = null;
+let aiCurrentMonth = null; // null = show all
+
+const SPORT_LABELS = { nba: 'NBA', nfl: 'NFL', mlb: 'MLB', nhl: 'NHL', cfb: 'NCAAF', cbb: 'NCAAB', wnba: 'WNBA', mma: 'MMA' };
+const WAGER_LABELS = { moneyline: 'ML', spread: 'Spread', total: 'O/U', player_prop: 'Prop', team_prop: 'Team Prop' };
+
+function initAiPicksPage() {
+  if (!currentUser || !currentUser.guilds || currentUser.guilds.length === 0) return;
+  aiPicksGuildId = currentUser.guilds[0].id;
+  if (aiPicksInitialized) {
+    // Refresh data on re-visit
+    fetchAiPicks();
+    return;
+  }
+  aiPicksInitialized = true;
+  fetchAiPicks();
+}
+
+async function fetchAiPicks() {
+  if (!aiPicksGuildId) return;
+  try {
+    const [picksRes, recordRes] = await Promise.all([
+      fetch(`/api/guilds/${aiPicksGuildId}/ai-picks`),
+      fetch(`/api/guilds/${aiPicksGuildId}/ai-picks/record`),
+    ]);
+    const picks = await picksRes.json();
+    const recordData = await recordRes.json();
+    aiPicksData = picks;
+
+    // Render summary
+    const r = recordData.record || { wins: 0, losses: 0, pushes: 0 };
+    const streak = recordData.streak || 0;
+    const totalBets = r.wins + r.losses;
+    const units = recordData.fullRecord?.reduce((sum, p) => {
+      if (p.status === 'win') {
+        const odds = p.odds_american;
+        return sum + (odds > 0 ? odds / 100 : 100 / Math.abs(odds));
+      }
+      if (p.status === 'loss') return sum - 1;
+      return sum;
+    }, 0) || 0;
+    const roi = totalBets > 0 ? ((units / totalBets) * 100).toFixed(1) : '0.0';
+
+    document.getElementById('ai-record').textContent = `${r.wins}-${r.losses}-${r.pushes}`;
+
+    const unitsEl = document.getElementById('ai-units');
+    unitsEl.textContent = `${units >= 0 ? '+' : ''}${units.toFixed(1)}u`;
+    unitsEl.className = 'ai-summary-value ' + (units >= 0 ? 'positive' : 'negative');
+
+    const streakEl = document.getElementById('ai-streak');
+    streakEl.textContent = streak > 0 ? `🔥 ${streak}W` : streak < 0 ? `${Math.abs(streak)}L` : '—';
+
+    document.getElementById('ai-roi').textContent = roi + '%';
+
+    // Build month selector
+    buildAiMonthSelector(picks);
+    renderAiPicks(picks);
+  } catch (err) {
+    console.error('AI Picks error:', err);
+    document.getElementById('ai-picks-list').innerHTML = '<p class="muted-text">Failed to load picks.</p>';
+  }
+}
+
+function buildAiMonthSelector(picks) {
+  const container = document.getElementById('ai-month-selector');
+  const months = new Set();
+  picks.forEach(p => {
+    const d = new Date(p.pick_date || p.created_at);
+    months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  });
+  const sorted = [...months].sort().reverse();
+
+  container.innerHTML = '';
+  // "All" button
+  const allBtn = document.createElement('button');
+  allBtn.className = 'ai-month-btn' + (aiCurrentMonth === null ? ' active' : '');
+  allBtn.textContent = 'All';
+  allBtn.onclick = () => { aiCurrentMonth = null; renderAiPicks(aiPicksData); highlightMonthBtn(container, null); };
+  container.appendChild(allBtn);
+
+  sorted.forEach(m => {
+    const [y, mo] = m.split('-');
+    const label = new Date(y, mo - 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    const btn = document.createElement('button');
+    btn.className = 'ai-month-btn' + (aiCurrentMonth === m ? ' active' : '');
+    btn.textContent = label;
+    btn.dataset.month = m;
+    btn.onclick = () => { aiCurrentMonth = m; renderAiPicks(aiPicksData); highlightMonthBtn(container, m); };
+    container.appendChild(btn);
+  });
+}
+
+function highlightMonthBtn(container, month) {
+  container.querySelectorAll('.ai-month-btn').forEach(b => b.classList.remove('active'));
+  if (month === null) {
+    container.querySelector('.ai-month-btn').classList.add('active');
+  } else {
+    const btn = container.querySelector(`.ai-month-btn[data-month="${month}"]`);
+    if (btn) btn.classList.add('active');
+  }
+}
+
+function renderAiPicks(picks) {
+  const list = document.getElementById('ai-picks-list');
+  let filtered = picks;
+  if (aiCurrentMonth) {
+    const [y, m] = aiCurrentMonth.split('-').map(Number);
+    filtered = picks.filter(p => {
+      const d = new Date(p.pick_date || p.created_at);
+      return d.getFullYear() === y && d.getMonth() + 1 === m;
+    });
+  }
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<p class="muted-text">No picks for this period.</p>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(p => {
+    const d = new Date(p.pick_date || p.created_at);
+    const day = d.getDate();
+    const month = d.toLocaleString('en-US', { month: 'short' });
+    const status = p.status || 'pending';
+    const sportLabel = SPORT_LABELS[p.sport] || p.sport?.toUpperCase() || '';
+    const wagerLabel = WAGER_LABELS[p.wager_type] || '';
+    const oddsStr = p.odds_american > 0 ? `+${p.odds_american}` : `${p.odds_american}`;
+    const matchup = (p.team_a && p.team_b) ? `${p.team_a} vs ${p.team_b}` : '';
+    const conf = p.confidence ? `${p.confidence}%` : '';
+
+    return `
+      <div class="ai-pick-card ${status}">
+        <div class="ai-pick-date">
+          <div class="ai-pick-date-day">${day}</div>
+          <div class="ai-pick-date-month">${month}</div>
+        </div>
+        <div class="ai-pick-info">
+          <div class="ai-pick-title">${esc(p.pick || '—')}</div>
+          <div class="ai-pick-meta">
+            ${sportLabel ? `<span>🏟️ ${sportLabel}</span>` : ''}
+            ${wagerLabel ? `<span>📊 ${wagerLabel}</span>` : ''}
+            ${matchup ? `<span>⚔️ ${esc(matchup)}</span>` : ''}
+            ${conf ? `<span>🎯 ${conf}</span>` : ''}
+            ${p.tail_count ? `<span>🤝 ${p.tail_count} tails</span>` : ''}
+          </div>
+        </div>
+        <div class="ai-pick-odds">${oddsStr}</div>
+        <div class="ai-pick-result">
+          <span class="ai-pick-result-badge ${status}">${status === 'pending' ? '⏳ LIVE' : status.toUpperCase()}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function switchAiTab(tab) {
+  document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.ai-tab[data-aitab="${tab}"]`).classList.add('active');
+  document.getElementById('ai-tab-picks').classList.toggle('hidden', tab !== 'picks');
+  document.getElementById('ai-tab-leaderboard').classList.toggle('hidden', tab !== 'leaderboard');
+  if (tab === 'leaderboard') fetchAiLeaderboard();
+}
+
+async function fetchAiLeaderboard() {
+  if (!aiPicksGuildId) return;
+  const list = document.getElementById('ai-leaderboard-list');
+  try {
+    const res = await fetch(`/api/guilds/${aiPicksGuildId}/ai-picks/leaderboard`);
+    const lb = await res.json();
+    if (!lb || lb.length === 0) {
+      list.innerHTML = '<p class="muted-text">No tail/fade data yet. Minimum 3 picks required.</p>';
+      return;
+    }
+    list.innerHTML = lb.map((row, i) => {
+      const rank = i + 1;
+      const rankDisplay = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : rank;
+      const pct = row.total > 0 ? ((row.correct / row.total) * 100).toFixed(0) : 0;
+      return `
+        <div class="ai-lb-row">
+          <div class="ai-lb-rank">${rankDisplay}</div>
+          <div class="ai-lb-name">${esc(row.username)}</div>
+          <div class="ai-lb-stat">${row.total} picks</div>
+          <div class="ai-lb-stat correct">${pct}% correct</div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('AI leaderboard error:', err);
+    list.innerHTML = '<p class="muted-text">Failed to load leaderboard.</p>';
+  }
 }

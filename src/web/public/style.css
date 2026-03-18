@@ -6294,3 +6294,192 @@ textarea {
   .pf-header { margin-top: -30px; }
   .pf-row-label, .pf-row-value { font-size: 12px; }
 }
+
+/* ─── AI Picks Page ─── */
+.ai-picks-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.ai-summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  padding: 16px 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-summary-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #FFD700;
+}
+.ai-summary-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ai-summary-value.positive { color: #43b581; }
+.ai-summary-value.negative { color: #ff4444; }
+
+.ai-picks-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.ai-tab {
+  padding: 8px 16px;
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.ai-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ai-tab.active {
+  background: rgba(255, 215, 0, 0.12);
+  color: #FFD700;
+  border-color: rgba(255, 215, 0, 0.3);
+}
+
+.ai-month-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.ai-month-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--bg-hover);
+  border-radius: 20px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.ai-month-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ai-month-btn.active {
+  background: rgba(255, 215, 0, 0.12);
+  color: #FFD700;
+  border-color: rgba(255, 215, 0, 0.3);
+}
+
+.ai-pick-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: border-color 0.15s;
+}
+.ai-pick-card:hover { border-color: rgba(255, 215, 0, 0.3); }
+.ai-pick-card.win { border-left: 4px solid #43b581; }
+.ai-pick-card.loss { border-left: 4px solid #ff4444; }
+.ai-pick-card.push { border-left: 4px solid #FFD700; }
+.ai-pick-card.pending { border-left: 4px solid #58a6ff; }
+
+.ai-pick-date {
+  min-width: 50px;
+  text-align: center;
+}
+.ai-pick-date-day {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.ai-pick-date-month {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.ai-pick-info { flex: 1; min-width: 0; }
+.ai-pick-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-pick-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ai-pick-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+.ai-pick-result {
+  text-align: right;
+  min-width: 60px;
+}
+.ai-pick-result-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.ai-pick-result-badge.win { background: rgba(67,181,129,0.15); color: #43b581; }
+.ai-pick-result-badge.loss { background: rgba(255,68,68,0.15); color: #ff4444; }
+.ai-pick-result-badge.push { background: rgba(255,215,0,0.15); color: #FFD700; }
+.ai-pick-result-badge.pending { background: rgba(88,166,255,0.12); color: #58a6ff; }
+
+.ai-pick-odds {
+  font-weight: 800;
+  font-size: 14px;
+  color: #FFD700;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Tail Leaderboard */
+.ai-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+}
+.ai-lb-rank {
+  font-size: 18px;
+  font-weight: 800;
+  color: #FFD700;
+  min-width: 30px;
+  text-align: center;
+}
+.ai-lb-rank:nth-child(1) { color: #FFD700; }
+.ai-lb-name { flex: 1; font-weight: 600; color: var(--text-primary); }
+.ai-lb-stat {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 60px;
+  text-align: center;
+}
+.ai-lb-stat.correct { color: #43b581; font-weight: 700; }
+
+@media (max-width: 640px) {
+  .ai-picks-summary { grid-template-columns: repeat(2, 1fr); }
+  .ai-pick-card { flex-wrap: wrap; gap: 10px; }
+  .ai-pick-odds { min-width: auto; }
+}

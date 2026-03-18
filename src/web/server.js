@@ -3596,6 +3596,54 @@ Rules:
     }
   });
 
+  // ─── AI Picks API ───
+  const aiPicksDb = require('../database/aiPicks');
+
+  app.get('/api/guilds/:guildId/ai-picks', authMiddleware, async (req, res) => {
+    try {
+      const picks = await aiPicksDb.getAllAiPicks(req.params.guildId);
+      res.json(picks || []);
+    } catch (err) {
+      console.error('[API] AI picks error:', err.message);
+      res.status(500).json({ error: 'Failed to fetch AI picks' });
+    }
+  });
+
+  app.get('/api/guilds/:guildId/ai-picks/record', authMiddleware, async (req, res) => {
+    try {
+      const record = await aiPicksDb.getAiPickRecord(req.params.guildId);
+      const streak = await aiPicksDb.getAiPickStreak(req.params.guildId);
+      const fullRecord = await aiPicksDb.getAiPickFullRecord(req.params.guildId);
+      res.json({ record, streak, fullRecord });
+    } catch (err) {
+      console.error('[API] AI picks record error:', err.message);
+      res.status(500).json({ error: 'Failed to fetch record' });
+    }
+  });
+
+  app.get('/api/guilds/:guildId/ai-picks/leaderboard', authMiddleware, async (req, res) => {
+    try {
+      const lb = await aiPicksDb.getTailLeaderboard(req.params.guildId);
+      // Resolve usernames
+      const guild = discordClient?.guilds?.cache?.get(req.params.guildId);
+      const enriched = [];
+      for (const row of (lb || [])) {
+        let username = row.discord_id;
+        if (guild) {
+          try {
+            const member = await guild.members.fetch(row.discord_id);
+            username = member.displayName || member.user.username;
+          } catch {}
+        }
+        enriched.push({ ...row, username });
+      }
+      res.json(enriched);
+    } catch (err) {
+      console.error('[API] AI picks leaderboard error:', err.message);
+      res.status(500).json({ error: 'Failed to fetch leaderboard' });
+    }
+  });
+
   // ─── Bracket Challenge Routes ───
   require('./bracketRoutes')(app, { jwt, JWT_SECRET, discordClient, path });
 

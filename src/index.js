@@ -26,6 +26,7 @@ const { generateScoreboardImage } = require('./utils/scoreboardImage');
 const { createWebServer, setDiscordClient } = require('./web/server');
 const { startBracketUpdater } = require('./services/bracketUpdater');
 const roleManager = require('./services/roleManager');
+const aiPickService = require('./services/aiPicks');
 
 // ── Scoreboard helpers ──
 function findPlayer(players, playerName) {
@@ -287,6 +288,81 @@ client.once(Events.ClientReady, (c) => {
   }, 60_000); */
   // console.log('   📡 Scoreboard poller started (60s interval)');
 
+  // ─── AI Pick of the Day Scheduler ───
+  const AI_GUILD_ID = process.env.DISCORD_GUILD_ID;
+  if (AI_GUILD_ID) {
+    // Helper: ms until next occurrence of HH:MM ET
+    function msUntilET(hour, minute) {
+      const now = new Date();
+      const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const diffMs = now.getTime() - et.getTime(); // offset from ET
+      const target = new Date(et);
+      target.setHours(hour, minute, 0, 0);
+      if (target <= et) target.setDate(target.getDate() + 1);
+      return target.getTime() - et.getTime();
+    }
+
+    // 9:30 AM ET — Teaser
+    setTimeout(function scheduleTeaser() {
+      aiPickService.postTeaser(client).catch(e => console.error('[AI Picks] Teaser error:', e.message));
+      setInterval(() => {
+        aiPickService.postTeaser(client).catch(e => console.error('[AI Picks] Teaser error:', e.message));
+      }, 24 * 60 * 60_000);
+    }, msUntilET(9, 30));
+
+    // 10:00 AM ET — Daily pick
+    setTimeout(function schedulePick() {
+      aiPickService.generateDailyPick(client, AI_GUILD_ID).catch(e => console.error('[AI Picks] Pick error:', e.message));
+      setInterval(() => {
+        aiPickService.generateDailyPick(client, AI_GUILD_ID).catch(e => console.error('[AI Picks] Pick error:', e.message));
+      }, 24 * 60 * 60_000);
+    }, msUntilET(10, 0));
+
+    // Auto-close pending picks every 5 minutes
+    setInterval(async () => {
+      try {
+        await aiPickService.autoClosePendingPicks(client);
+      } catch (err) {
+        console.error('[AI Picks] Auto-close error:', err.message);
+      }
+    }, 5 * 60_000);
+
+    // Monthly recap — check daily at midnight ET
+    setTimeout(function scheduleRecap() {
+      (async () => {
+        try {
+          const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          if (now.getDate() === 1) {
+            const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+            const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+            await aiPickService.postMonthlyRecap(client, AI_GUILD_ID, prevYear, prevMonth);
+          }
+        } catch (e) { console.error('[AI Picks] Monthly recap error:', e.message); }
+      })();
+      setInterval(async () => {
+        try {
+          const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          if (now.getDate() === 1) {
+            const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+            const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+            await aiPickService.postMonthlyRecap(client, AI_GUILD_ID, prevYear, prevMonth);
+          }
+        } catch (e) { console.error('[AI Picks] Monthly recap error:', e.message); }
+      }, 24 * 60 * 60_000);
+    }, msUntilET(0, 5));
+
+    console.log('   🤖 AI Pick of the Day scheduler started');
+
+    // Fire today's pick on startup if none exists yet (15s delay for connections)
+    setTimeout(async () => {
+      try {
+        await aiPickService.generateDailyPick(client, AI_GUILD_ID);
+      } catch (e) {
+        console.error('[AI Picks] Startup pick error:', e.message);
+      }
+    }, 15_000);
+  }
+
   // ─── Web Server ───
   setDiscordClient(client);
   const webApp = createWebServer();
@@ -441,6 +517,9 @@ async function handleButton(interaction) {
   }
   if (id.startsWith('tailbet_')) {
     return enterbet.handleTailPoll(interaction);
+  }
+  if (id.startsWith('aipick_tail_') || id.startsWith('aipick_fade_')) {
+    return aiPickService.handleTailFade(interaction);
   }
 }
 

@@ -81,6 +81,9 @@
         <a href="javascript:void(0)" class="sidebar-link" data-page="tools" onclick="switchPage('tools')">
           <span class="sidebar-icon">🔧</span> Tools
         </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="ai-picks" onclick="switchPage('ai-picks')">
+          <span class="sidebar-icon">🤖</span> AI Picks
+        </a>
         <a href="/bracket.html" class="sidebar-link" target="_blank">
           <span class="sidebar-icon">🏀</span> Tournament
         </a>
@@ -1818,6 +1821,55 @@
       </div>
     </div>
   </main>
+
+  <!-- AI Picks Page -->
+  <main id="ai-picks-page" class="main-content hidden">
+    <div class="stats-container">
+      <h2 class="section-title">🤖 AI Pick of the Day</h2>
+
+      <!-- Record Summary -->
+      <div class="ai-picks-summary" id="ai-picks-summary">
+        <div class="ai-summary-card">
+          <span class="ai-summary-value" id="ai-record">—</span>
+          <span class="ai-summary-label">Record</span>
+        </div>
+        <div class="ai-summary-card">
+          <span class="ai-summary-value" id="ai-units">—</span>
+          <span class="ai-summary-label">Units</span>
+        </div>
+        <div class="ai-summary-card">
+          <span class="ai-summary-value" id="ai-streak">—</span>
+          <span class="ai-summary-label">Streak</span>
+        </div>
+        <div class="ai-summary-card">
+          <span class="ai-summary-value" id="ai-roi">—</span>
+          <span class="ai-summary-label">ROI</span>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="ai-picks-tabs">
+        <button class="ai-tab active" data-aitab="picks" onclick="switchAiTab('picks')">📅 Picks</button>
+        <button class="ai-tab" data-aitab="leaderboard" onclick="switchAiTab('leaderboard')">🏆 Tail Leaderboard</button>
+      </div>
+
+      <!-- Picks Tab -->
+      <div id="ai-tab-picks" class="ai-tab-content">
+        <div class="ai-month-selector" id="ai-month-selector"></div>
+        <div id="ai-picks-list" class="ai-picks-list">
+          <p class="muted-text">Loading picks...</p>
+        </div>
+      </div>
+
+      <!-- Leaderboard Tab -->
+      <div id="ai-tab-leaderboard" class="ai-tab-content hidden">
+        <div id="ai-leaderboard-list" class="ai-picks-list">
+          <p class="muted-text">Loading leaderboard...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
   </div>
 
   <!-- Floating Chat Panel -->
