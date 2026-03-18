@@ -1779,7 +1779,7 @@ function createWebServer() {
           if (fParts.length) fields.pick += ` (${fParts.join(', ')})`;
         }
         // Append golf context
-        if (mergedBet.sport === 'golf' && fields.pick) {
+        if (mergedBet.sport?.startsWith('golf') && fields.pick) {
           const gParts = [];
           if (mergedBet.golf_round) gParts.push(`R${mergedBet.golf_round}`);
           if (mergedBet.golf_hole) gParts.push(`Hole ${mergedBet.golf_hole}`);
@@ -1828,6 +1828,9 @@ function createWebServer() {
             } else if (lWt === 'total') {
               const sv = parseFloat(leg.spreadValue || 0);
               legFields.pick = `${leg.overUnder || 'Over'} ${Math.abs(sv)}${lPeriod}`;
+            } else if (lWt === 'team_total') {
+              const sv = parseFloat(leg.spreadValue || 0);
+              legFields.pick = `${lTeamA} ${leg.overUnder || 'Over'} ${Math.abs(sv)}${lPeriod}`;
             }
           } else if (lCat === 'player_prop') {
             legFields.pick = leg.propDescription || '';
@@ -1840,7 +1843,7 @@ function createWebServer() {
             if (fParts.length) legFields.pick += ` (${fParts.join(', ')})`;
           }
           // Append golf context to leg pick
-          if (leg.sport === 'golf' && legFields.pick) {
+          if (leg.sport?.startsWith('golf') && legFields.pick) {
             const gParts = [];
             if (leg.golfRound) gParts.push(`R${leg.golfRound}`);
             if (leg.golfHole) gParts.push(`Hole ${leg.golfHole}`);
@@ -3147,6 +3150,9 @@ Rules:
             } else if (leg.wagerType === 'total') {
               const sv = parseFloat(leg.spreadValue);
               legPick = `${leg.overUnder || 'Over'} ${Math.abs(sv)}${legPeriod}`;
+            } else if (leg.wagerType === 'team_total') {
+              const sv = parseFloat(leg.spreadValue);
+              legPick = `${truncate(leg.teamA, 200)} ${leg.overUnder || 'Over'} ${Math.abs(sv)}${legPeriod}`;
             }
           } else {
             legPick = truncate(leg.propDescription) || truncate(leg.pick);
@@ -3159,7 +3165,7 @@ Rules:
             if (leg.fightMethod) parts.push(FIGHT_METHOD_LABELS_P[leg.fightMethod] || leg.fightMethod);
             if (parts.length) legPick += ` (${parts.join(', ')})`;
           }
-          if (leg.sport === 'golf') {
+          if (leg.sport?.startsWith('golf')) {
             const parts = [];
             if (leg.golfRound) parts.push(`R${leg.golfRound}`);
             if (leg.golfHole) parts.push(`Hole ${leg.golfHole}`);
@@ -3266,6 +3272,9 @@ Rules:
           } else if (wagerType === 'total') {
             const sv = parseFloat(spreadValue);
             finalPick = `${overUnder || 'Over'} ${Math.abs(sv)}${periodTag}`;
+          } else if (wagerType === 'team_total') {
+            const sv = parseFloat(spreadValue);
+            finalPick = `${safeTeamA} ${overUnder || 'Over'} ${Math.abs(sv)}${periodTag}`;
           }
         } else {
           finalPick = safePropDesc || safePick;
@@ -3278,7 +3287,7 @@ Rules:
           if (fightMethod) parts.push(FIGHT_METHOD_LABELS[fightMethod] || fightMethod);
           if (parts.length) finalPick += ` (${parts.join(', ')})`;
         }
-        if (sport === 'golf') {
+        if (sport?.startsWith('golf')) {
           const parts = [];
           if (golfRound) parts.push(`R${golfRound}`);
           if (golfHole) parts.push(`Hole ${golfHole}`);

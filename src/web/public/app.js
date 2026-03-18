@@ -62,25 +62,60 @@ function trackActivity(event) {
 }
 
 const SPORTS = [
+  // Major US
   { name: 'NFL', value: 'nfl' },
   { name: 'NBA', value: 'nba' },
   { name: 'MLB', value: 'mlb' },
   { name: 'NHL', value: 'nhl' },
+  { name: 'WNBA', value: 'wnba' },
+  // College
   { name: 'NCAA Football', value: 'ncaa_football' },
   { name: "NCAA Men's Basketball", value: 'ncaa_mbb' },
   { name: "NCAA Women's Basketball", value: 'ncaa_wbb' },
+  // Soccer
   { name: 'Soccer - MLS', value: 'mls' },
   { name: 'Soccer - Premier League', value: 'epl' },
   { name: 'Soccer - La Liga', value: 'la_liga' },
+  { name: 'Soccer - Serie A', value: 'serie_a' },
+  { name: 'Soccer - Bundesliga', value: 'bundesliga' },
+  { name: 'Soccer - Ligue 1', value: 'ligue_1' },
   { name: 'Soccer - Champions League', value: 'ucl' },
+  { name: 'Soccer - Liga MX', value: 'liga_mx' },
+  { name: 'Soccer - Eredivisie', value: 'eredivisie' },
+  { name: 'Soccer - Primeira Liga', value: 'primeira_liga' },
+  { name: 'Soccer - World Cup', value: 'world_cup' },
+  { name: 'Soccer - Europa League', value: 'europa_league' },
+  // Combat
   { name: 'UFC / MMA', value: 'ufc' },
   { name: 'Boxing', value: 'boxing' },
-  { name: 'Tennis', value: 'tennis' },
-  { name: 'Golf', value: 'golf' },
+  // Tennis
+  { name: 'Tennis - ATP', value: 'tennis_atp' },
+  { name: 'Tennis - WTA', value: 'tennis_wta' },
+  { name: 'Tennis - Grand Slam', value: 'tennis_gs' },
+  // Golf
+  { name: 'Golf - PGA Tour', value: 'golf_pga' },
+  { name: 'Golf - LIV', value: 'golf_liv' },
+  { name: 'Golf - DP World Tour', value: 'golf_dp' },
+  { name: 'Golf - LPGA', value: 'golf_lpga' },
+  { name: 'Golf - PGA Champions', value: 'golf_champions' },
+  // International Baseball
+  { name: 'Baseball - KBO (Korea)', value: 'kbo' },
+  { name: 'Baseball - NPB (Japan)', value: 'npb' },
+  { name: 'Baseball - CPBL (Taiwan)', value: 'cpbl' },
+  // Motorsport
   { name: 'NASCAR', value: 'nascar' },
-  { name: 'WNBA', value: 'wnba' },
+  { name: 'F1 Racing', value: 'f1' },
+  // Other
+  { name: 'Rugby', value: 'rugby' },
+  { name: 'Cricket', value: 'cricket' },
+  { name: 'Olympics', value: 'olympics' },
+  { name: 'CFL', value: 'cfl' },
+  { name: 'XFL / UFL', value: 'xfl' },
+  { name: 'Aussie Rules (AFL)', value: 'afl' },
+  { name: 'Darts', value: 'darts' },
+  { name: 'Table Tennis', value: 'table_tennis' },
   { name: 'Esports', value: 'esports' },
-  { name: 'Other', value: 'other' },
+  { name: 'Custom / Other', value: 'other' },
 ];
 
 let currentUser = null;
@@ -466,6 +501,12 @@ function updateWagerFields(wager) {
     periodRow.classList.remove('hidden');
     spreadLabel.textContent = 'Total Line';
     document.getElementById('spread-value').placeholder = 'e.g. 220.5, 48.5';
+  } else if (wager === 'team_total') {
+    spreadRow.classList.remove('hidden');
+    ouRow.classList.remove('hidden');
+    periodRow.classList.remove('hidden');
+    spreadLabel.textContent = 'Team Total Line';
+    document.getElementById('spread-value').placeholder = 'e.g. 112.5, 3.5, 24.5';
   } else {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
@@ -484,9 +525,9 @@ function updateSportSpecificFields() {
   if (fightFields) {
     fightFields.classList.toggle('hidden', !['ufc', 'boxing'].includes(sport));
   }
-  // Golf fields: shown for golf + player_prop
+  // Golf fields: shown for golf sports + player_prop
   if (golfFields) {
-    golfFields.classList.toggle('hidden', !(sport === 'golf' && category === 'player_prop'));
+    golfFields.classList.toggle('hidden', !(sport.startsWith('golf') && category === 'player_prop'));
   }
 }
 
@@ -532,6 +573,7 @@ function buildParlayLegs() {
             <option value="moneyline">💰 Moneyline</option>
             <option value="spread">📊 Spread</option>
             <option value="total">🔢 Over/Under</option>
+            <option value="team_total">🎯 Team Total</option>
           </select>
         </div>
       </div>
@@ -708,7 +750,7 @@ function buildParlayLegs() {
 
       // Sport-specific
       document.querySelector(`.leg-fight-fields-${leg}`).classList.toggle('hidden', !['ufc', 'boxing'].includes(sport));
-      document.querySelector(`.leg-golf-fields-${leg}`).classList.toggle('hidden', !(sport === 'golf' && cat === 'player_prop'));
+      document.querySelector(`.leg-golf-fields-${leg}`).classList.toggle('hidden', !(sport.startsWith('golf') && cat === 'player_prop'));
     });
 
     // Wire up sport change for this leg
@@ -718,7 +760,7 @@ function buildParlayLegs() {
       const cat = card.querySelector('.leg-category')?.value || '';
 
       document.querySelector(`.leg-fight-fields-${leg}`).classList.toggle('hidden', !['ufc', 'boxing'].includes(sport));
-      document.querySelector(`.leg-golf-fields-${leg}`).classList.toggle('hidden', !(sport === 'golf' && cat === 'player_prop'));
+      document.querySelector(`.leg-golf-fields-${leg}`).classList.toggle('hidden', !(sport.startsWith('golf') && cat === 'player_prop'));
     });
 
     // Wire up wager type for this leg
@@ -741,6 +783,11 @@ function buildParlayLegs() {
         ouRow.classList.remove('hidden');
         periodRow.classList.remove('hidden');
         spreadLabel.textContent = 'Total Line';
+      } else if (wager === 'team_total') {
+        spreadRow.classList.remove('hidden');
+        ouRow.classList.remove('hidden');
+        periodRow.classList.remove('hidden');
+        spreadLabel.textContent = 'Team Total Line';
       } else {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
@@ -817,11 +864,11 @@ async function handleSubmit(e) {
           leg.teamB = document.querySelector(`.leg-team-b[data-leg="${i}"]`)?.value;
           if (!leg.teamA || !leg.teamB) throw new Error(`Leg ${i}: Enter both teams`);
 
-          if (wager === 'spread' || wager === 'total') {
+          if (wager === 'spread' || wager === 'total' || wager === 'team_total') {
             leg.spreadValue = document.querySelector(`.leg-spread-value[data-leg="${i}"]`)?.value;
             if (!leg.spreadValue) throw new Error(`Leg ${i}: Enter ${wager === 'spread' ? 'spread' : 'total line'}`);
             // Enforce .5 intervals for total lines (over/under)
-            if (wager === 'total') {
+            if (wager === 'total' || wager === 'team_total') {
               const totalVal = parseFloat(leg.spreadValue);
               if (!isNaN(totalVal) && totalVal % 1 === 0) {
                 leg.spreadValue = String(totalVal + 0.5);
@@ -830,7 +877,7 @@ async function handleSubmit(e) {
             // Period
             leg.period = document.querySelector(`.leg-period[data-leg="${i}"]`)?.value || 'full_game';
           }
-          if (wager === 'total') {
+          if (wager === 'total' || wager === 'team_total') {
             const activeOU = document.querySelector(`.leg-ou-btn[data-leg="${i}"].active`);
             leg.overUnder = activeOU ? activeOU.dataset.value : 'Over';
           }
@@ -858,7 +905,7 @@ async function handleSubmit(e) {
           if (fr) leg.fightRound = parseInt(fr);
           if (fm) leg.fightMethod = fm;
         }
-        if (sport === 'golf') {
+        if (sport.startsWith('golf')) {
           const gr = document.querySelector(`.leg-golf-round[data-leg="${i}"]`)?.value;
           const gh = document.querySelector(`.leg-golf-hole[data-leg="${i}"]`)?.value;
           if (gr) leg.golfRound = parseInt(gr);
@@ -909,11 +956,11 @@ async function handleSubmit(e) {
         body.teamB = document.getElementById('team-b').value;
         if (!body.teamA || !body.teamB) throw new Error('Enter both teams');
 
-        if (wager === 'spread' || wager === 'total') {
+        if (wager === 'spread' || wager === 'total' || wager === 'team_total') {
           body.spreadValue = document.getElementById('spread-value').value;
           if (!body.spreadValue) throw new Error(`Enter ${wager === 'spread' ? 'spread' : 'total line'}`);
           // Enforce .5 intervals for total lines (over/under)
-          if (wager === 'total') {
+          if (wager === 'total' || wager === 'team_total') {
             const totalVal = parseFloat(body.spreadValue);
             if (!isNaN(totalVal) && totalVal % 1 === 0) {
               body.spreadValue = String(totalVal + 0.5);
@@ -922,7 +969,7 @@ async function handleSubmit(e) {
           // Period
           body.period = document.getElementById('period-select')?.value || 'full_game';
         }
-        if (wager === 'total') {
+        if (wager === 'total' || wager === 'team_total') {
           const activeOU = document.querySelector('#over-under-row .toggle-btn.active');
           body.overUnder = activeOU ? activeOU.dataset.value : 'Over';
         }
@@ -950,7 +997,7 @@ async function handleSubmit(e) {
         if (fr) body.fightRound = parseInt(fr);
         if (fm) body.fightMethod = fm;
       }
-      if (sport === 'golf') {
+      if (sport.startsWith('golf')) {
         const gr = document.getElementById('golf-round')?.value;
         const gh = document.getElementById('golf-hole')?.value;
         if (gr) body.golfRound = parseInt(gr);

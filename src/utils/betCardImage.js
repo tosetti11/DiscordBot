@@ -393,7 +393,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   }
 
   // Golf details pill
-  if (!isParlay && bet.sport === 'golf') {
+  if (!isParlay && bet.sport?.startsWith('golf')) {
     const gParts = [];
     if (bet.golf_round) gParts.push(`R${bet.golf_round}`);
     if (bet.golf_hole) gParts.push(`HOLE ${bet.golf_hole}`);
@@ -516,7 +516,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       }
 
       // Golf tag on leg
-      if (leg.sport === 'golf') {
+      if (leg.sport?.startsWith('golf')) {
         const lgParts = [];
         if (leg.golf_round) lgParts.push(`R${leg.golf_round}`);
         if (leg.golf_hole) lgParts.push(`HOLE ${leg.golf_hole}`);
