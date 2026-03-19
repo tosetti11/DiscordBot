@@ -440,6 +440,11 @@ async function autoClosePendingPicks(client) {
 
 function getDateStr(dateVal) {
   if (!dateVal) return undefined;
+  // If dateVal is a plain YYYY-MM-DD string, use it directly to avoid
+  // UTC-vs-ET timezone shift (new Date('2026-03-18') = midnight UTC = Mar 17 ET)
+  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+    return dateVal.replace(/-/g, '');
+  }
   const d = new Date(dateVal);
   return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
 }

@@ -1,5 +1,7 @@
 # How to Deploy Changes to GK Bot
 
+> 📂 **Project location:** `C:\Users\toset\DiscordBot` — moved here from the D: thumb drive (which became read-only). All local work happens from this C: drive folder now.
+
 Your bot runs 24/7 on an EC2 server. You edit code locally in VS Code, then push it live. Here's exactly how.
 
 > ⚠️ **CRITICAL: Deployment runs via SSH to EC2 — NEVER run `bash scripts/deploy.sh` locally.**
