@@ -1428,11 +1428,36 @@ function buildScanSummary(data) {
   return msg;
 }
 
+// Map OCR sport values to the closest valid option in the sport-select dropdown
+function mapOcrSport(ocrSport) {
+  if (!ocrSport) return ocrSport;
+  // Check if exact match exists
+  const sportEl = document.getElementById('sport-select');
+  const options = Array.from(sportEl.options).map(o => o.value);
+  if (options.includes(ocrSport)) return ocrSport;
+  // Fallback mappings for legacy/generic OCR values
+  const fallbacks = {
+    tennis: 'tennis_atp',
+    golf: 'golf_pga',
+    soccer: 'mls',
+    football: 'nfl',
+    basketball: 'nba',
+    baseball: 'mlb',
+    hockey: 'nhl',
+    mma: 'ufc',
+  };
+  if (fallbacks[ocrSport]) return fallbacks[ocrSport];
+  // Partial match: find first option that starts with the OCR value
+  const partial = options.find(o => o.startsWith(ocrSport + '_') || o.startsWith(ocrSport));
+  if (partial) return partial;
+  return ocrSport;
+}
+
 function applySingleData(data) {
   // Sport
   if (data.sport) {
     const sportEl = document.getElementById('sport-select');
-    sportEl.value = data.sport;
+    sportEl.value = mapOcrSport(data.sport);
   }
 
   // Category
@@ -1540,7 +1565,7 @@ function applyParlayData(data) {
     // Sport
     if (leg.sport) {
       const sportEl = document.querySelector(`.leg-sport[data-leg="${i}"]`);
-      if (sportEl) sportEl.value = leg.sport;
+      if (sportEl) sportEl.value = mapOcrSport(leg.sport);
     }
 
     // Category
@@ -1573,6 +1598,10 @@ function applyParlayData(data) {
           spreadRow.classList.remove('hidden');
           ouRow.classList.remove('hidden');
           if (spreadLabel) spreadLabel.textContent = 'Total Line';
+        } else if (leg.wagerType === 'team_total') {
+          spreadRow.classList.remove('hidden');
+          ouRow.classList.remove('hidden');
+          if (spreadLabel) spreadLabel.textContent = 'Team Total Line';
         } else {
           spreadRow.classList.add('hidden');
           ouRow.classList.add('hidden');

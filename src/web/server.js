@@ -2034,7 +2034,7 @@ function createWebServer() {
       const images = imageDatas || (imageData ? [imageData] : []);
       if (!images.length) return res.status(400).json({ error: 'No image data provided' });
 
-      const validSports = ['nfl','nba','mlb','nhl','ncaa_football','ncaa_mbb','ncaa_wbb','mls','epl','la_liga','ucl','ufc','boxing','tennis','golf','nascar','wnba','esports','other'];
+      const validSports = ['nfl','nba','mlb','nhl','ncaa_football','ncaa_mbb','ncaa_wbb','mls','epl','la_liga','serie_a','bundesliga','ligue_1','ucl','liga_mx','eredivisie','primeira_liga','world_cup','europa_league','ufc','boxing','tennis_atp','tennis_wta','tennis_gs','golf_pga','golf_liv','golf_dp','golf_lpga','golf_champions','kbo','npb','cpbl','nascar','f1','wnba','rugby','cricket','olympics','cfl','xfl','afl','darts','table_tennis','esports','other'];
 
       const prompt = `You are an expert at reading sports betting slips/screenshots from sportsbooks like DraftKings, FanDuel, BetMGM, Caesars, Kalshi, ESPN Bet, etc.
 
@@ -2045,7 +2045,7 @@ For a SINGLE bet:
   "betType": "single",
   "sport": "<one of: ${validSports.join(', ')}>",
   "betCategory": "<one of: team_game, player_prop, futures>",
-  "wagerType": "<one of: moneyline, spread, total, prop, futures>",
+  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures>",
   "teamA": "<your pick team or null>",
   "teamB": "<opponent team or null>",
   "spreadValue": "<spread or total line value like -1.5, 220.5, or null>",
@@ -2073,7 +2073,7 @@ For a PARLAY (multiple legs):
     {
       "sport": "<sport value>",
       "betCategory": "<team_game, player_prop, or futures>",
-      "wagerType": "<moneyline, spread, total, prop, or futures>",
+      "wagerType": "<moneyline, spread, total, team_total, prop, or futures>",
       "teamA": "<pick team or null>",
       "teamB": "<opponent or null>",
       "spreadValue": "<spread/line or null>",
