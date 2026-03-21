@@ -311,7 +311,9 @@ async function execute(interaction) {
       moneyline: '💲 Moneyline',
       spread: '📏 Spread',
       total: '⬆️ Over/Under',
+      team_total: '🎯 Team Total',
       prop: '🏀 Player Prop',
+      futures: '🏆 Futures',
       parlay: '🎲 Parlay',
       other: '❓ Other',
     };

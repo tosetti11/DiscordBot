@@ -416,6 +416,9 @@ async function handleCategorySelect(interaction) {
   if (!session) return interaction.update({ content: 'Session expired. Use `/enterbet` again.', components: [] });
 
   session.currentCategory = interaction.values[0];
+  // Reset per-leg session state so previous leg values don't bleed over
+  session.overUnder = null;
+  session.period = null;
   betSessions.set(userId, session);
 
   // Ask sport
@@ -523,16 +526,59 @@ async function handleWagerTypeSelect(interaction) {
     });
   }
 
+  // For spread, ask period before opening modal
+  if (session.currentWagerType === 'spread') {
+    return showPeriodSelect(interaction, session);
+  }
+
   await showTeamGameModal(interaction, session);
 }
 
-// Handle over/under selection -> open team modal
+// Handle over/under selection -> ask period
 async function handleOverUnderSelect(interaction) {
   const userId = interaction.user.id;
   const session = betSessions.get(userId);
   if (!session) return interaction.update({ content: 'Session expired. Use `/enterbet` again.', components: [] });
 
   session.overUnder = interaction.values[0]; // 'Over' or 'Under'
+  betSessions.set(userId, session);
+
+  return showPeriodSelect(interaction, session);
+}
+
+// Show period selector (full game, 1st half, etc.)
+function showPeriodSelect(interaction, session) {
+  const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
+  const row = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('enterbet_period')
+      .setPlaceholder('Select period')
+      .addOptions([
+        { label: 'Full Game', value: 'full_game', emoji: '🏟️' },
+        { label: '1st Half', value: '1st_half', emoji: '1️⃣' },
+        { label: '2nd Half', value: '2nd_half', emoji: '2️⃣' },
+        { label: '1st Quarter', value: '1st_quarter', emoji: '🔢' },
+        { label: '2nd Quarter', value: '2nd_quarter', emoji: '🔢' },
+        { label: '3rd Quarter', value: '3rd_quarter', emoji: '🔢' },
+        { label: '4th Quarter', value: '4th_quarter', emoji: '🔢' },
+        { label: '1st Period', value: '1st_period', emoji: '🏒' },
+        { label: '2nd Period', value: '2nd_period', emoji: '🏒' },
+        { label: '3rd Period', value: '3rd_period', emoji: '🏒' },
+      ])
+  );
+  return interaction.update({
+    content: `⏱️ What period?${legLabel}`,
+    components: [row],
+  });
+}
+
+// Handle period selection -> open team modal
+async function handlePeriodSelect(interaction) {
+  const userId = interaction.user.id;
+  const session = betSessions.get(userId);
+  if (!session) return interaction.update({ content: 'Session expired. Use `/enterbet` again.', components: [] });
+
+  session.period = interaction.values[0]; // e.g. 'full_game', '1st_half'
   betSessions.set(userId, session);
 
   await showTeamGameModal(interaction, session);
@@ -890,8 +936,8 @@ async function handleTeamModalSubmit(interaction) {
   const wagerType = session.currentWagerType;
   let spreadValue = null;
 
-  // Parse line value for spread/total
-  if (wagerType === 'spread' || wagerType === 'total') {
+  // Parse line value for spread/total/team_total
+  if (wagerType === 'spread' || wagerType === 'total' || wagerType === 'team_total') {
     const lineRaw = interaction.fields.getTextInputValue('line_value').trim();
     spreadValue = parseFloat(lineRaw);
     if (isNaN(spreadValue)) {
@@ -928,19 +974,24 @@ async function handleTeamModalSubmit(interaction) {
   let eventStartTime = null;
   try { eventStartTime = interaction.fields.getTextInputValue('event_start_time')?.trim() || null; } catch (e) { /* no field for single bets */ }
 
+  // Period tag for pick string
+  const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P' };
+  const period = session.period || 'full_game';
+  const periodTag = period !== 'full_game' ? ` (${PERIOD_LABELS[period] || period})` : '';
+
   // Build pick string
   let pick;
   if (wagerType === 'moneyline') {
     pick = `${teamA} ML`;
   } else if (wagerType === 'spread') {
-    pick = `${teamA} ${spreadValue > 0 ? '+' : ''}${spreadValue}`;
+    pick = `${teamA} ${spreadValue > 0 ? '+' : ''}${spreadValue}${periodTag}`;
   } else if (wagerType === 'team_total') {
     const direction = session.overUnder || 'Over';
-    pick = `${teamA} ${direction} ${Math.abs(spreadValue)}`;
+    pick = `${teamA} ${direction} ${Math.abs(spreadValue)}${periodTag}`;
   } else {
     // total — use the over/under choice from session
     const direction = session.overUnder || (spreadValue > 0 ? 'Over' : 'Under');
-    pick = `${direction} ${Math.abs(spreadValue)}`;
+    pick = `${direction} ${Math.abs(spreadValue)}${periodTag}`;
   }
 
   const legData = {
@@ -954,6 +1005,7 @@ async function handleTeamModalSubmit(interaction) {
     odds_american: oddsAmerican,
     odds_decimal: oddsDecimal,
     event_start_time: eventStartTime,
+    period,
   };
 
   if (session.betType === 'parlay') {
@@ -1740,6 +1792,7 @@ module.exports = {
   handleDetailsModalSubmit,
   handleSkipDetails,
   handleRetroResult,
+  handlePeriodSelect,
   betSessions,
   handleTailPoll,
   handleTailUnitsModal,

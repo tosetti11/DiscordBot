@@ -2103,6 +2103,7 @@ Rules:
 - For player props, keep the EXACT prop description as shown on the slip. If the slip says "10+ Rebounds", use "10+ Rebounds" as propDescription (do NOT convert to "Over 10 Rebounds"). If it says "Over 25.5 Points", keep it as "Over 25.5 Points". Preserve the original format.
 - For player props, ALWAYS include teamA and teamB from the game the player is in. Look at the matchup header (e.g. "NYK Knicks @ MIL Bucks") and fill in both teams. Never leave teamA/teamB null for player props.
 - For over/under totals (team_game with wagerType "total"), the spreadValue should always end in .5 (e.g. 220.5, 45.5). If the line is a whole number, add .5.
+- TEAM TOTALS: If the bet is on a single team's score (e.g. "Duke Over 71.5", "Lakers Under 108.5", "Team Total Over 112.5"), use wagerType "team_total" (NOT "total"). Set teamA to the team whose score is being bet on. The overUnder and spreadValue work the same as regular totals. Team totals typically have lower lines than game totals (e.g. 71.5 for a team vs 141.5 for the full game).
 - For futures, set betCategory to "futures", wagerType to "futures"
 - teamA should be the team/side being bet ON (the pick). For totals, teamA is the first-listed team in the matchup.
 - If you can detect the wager/stake amount in dollars, put it in wagerAmount (just the number, no $ sign)

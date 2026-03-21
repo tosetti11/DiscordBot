@@ -456,6 +456,10 @@ async function handleSelectMenu(interaction) {
     console.log('[SelectMenu] Routing to handleOverUnderSelect');
     return enterbet.handleOverUnderSelect(interaction);
   }
+  if (id === 'enterbet_period') {
+    console.log('[SelectMenu] Routing to handlePeriodSelect');
+    return enterbet.handlePeriodSelect(interaction);
+  }
   if (id === 'closebet_select') {
     console.log('[SelectMenu] Routing to closebet.handleBetSelect');
     return closebet.handleBetSelect(interaction);
