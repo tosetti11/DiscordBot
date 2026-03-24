@@ -297,6 +297,10 @@ async function postPickToDiscord(client, aiPick, guildId) {
             .setCustomId(`aipick_fade_${aiPick.id}`)
             .setLabel('Fade (0)')
             .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setLabel('Comment')
+            .setStyle(ButtonStyle.Link)
+            .setURL(`https://discord.com/channels/${guildId}/${AI_CHANNEL_ID}/${message.id}`),
         );
         const mirrorMsg = await slipsChannel.send({
           content: '🔒 **AI LOCK OF THE DAY** 🔒',
@@ -352,19 +356,36 @@ function buildTailFadeContent(counts, header = '🔒 **AI LOCK OF THE DAY** 🔒
 
 /**
  * Update the mirror copy of a message in the other channel (best-effort)
+ * If updating the mirror (Open Slips), append a Comment link button back to original.
  */
 async function updateMirrorMessage(client, pick, clickedMessageId, content, components) {
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
   try {
-    let targetMsgId, targetChannelId;
+    let targetMsgId, targetChannelId, isUpdatingMirror;
     if (clickedMessageId === pick.message_id && pick.mirror_message_id) {
       targetMsgId = pick.mirror_message_id;
       targetChannelId = pick.mirror_channel_id;
+      isUpdatingMirror = true;
     } else if (clickedMessageId === pick.mirror_message_id && pick.message_id) {
       targetMsgId = pick.message_id;
       targetChannelId = pick.channel_id;
+      isUpdatingMirror = false;
     } else {
       return;
     }
+
+    // Add Comment link button to mirror copy pointing back to original message
+    if (isUpdatingMirror && pick.message_id && pick.channel_id) {
+      const guildId = pick.guild_id || process.env.DISCORD_GUILD_ID;
+      const commentBtn = new ButtonBuilder()
+        .setLabel('Comment')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`https://discord.com/channels/${guildId}/${pick.channel_id}/${pick.message_id}`);
+      if (components.length > 0 && components[0] instanceof ActionRowBuilder) {
+        components[0].addComponents(commentBtn);
+      }
+    }
+
     const ch = await client.channels.fetch(targetChannelId);
     if (!ch) return;
     const msg = await ch.messages.fetch(targetMsgId);
@@ -653,8 +674,24 @@ async function postResultToDiscord(client, closedPick, guildId) {
 
         if (closedPick.mirror_message_id) {
           try {
+            const mirrorDisabledRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`aipick_tail_${closedPick.id}`)
+                .setLabel(`🔒 Tail (${closedPick.tail_count || 0})`)
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(true),
+              new ButtonBuilder()
+                .setCustomId(`aipick_fade_${closedPick.id}`)
+                .setLabel(`Fade (${closedPick.fade_count || 0})`)
+                .setStyle(ButtonStyle.Danger)
+                .setDisabled(true),
+              new ButtonBuilder()
+                .setLabel('Comment')
+                .setStyle(ButtonStyle.Link)
+                .setURL(`https://discord.com/channels/${guildId}/${AI_CHANNEL_ID}/${closedPick.message_id}`),
+            );
             const mirrorMsg = await slipsChannel.messages.fetch(closedPick.mirror_message_id);
-            await mirrorMsg.edit({ components: [disabledRow] });
+            await mirrorMsg.edit({ components: [mirrorDisabledRow] });
           } catch (e) {
             console.error('[AI Pick] Failed to update mirror message:', e.message);
           }

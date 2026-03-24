@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events, PermissionsBitField } = require('discord.js');
 
 // Import commands
 const enterbet = require('./commands/betting/enterbet');
@@ -420,6 +420,37 @@ client.once(Events.ClientReady, (c) => {
       }
     }, 20_000);
   }
+
+  // ─── Lock Open Slips Channels (view + react + buttons only, no sending) ───
+  const LOCKED_CHANNELS = [
+    '1477318450618695692', // King Open Slips
+    '1477318238273802480', // Community Open Slips
+    '1485903920906895370', // AI Open Slips
+  ];
+  setTimeout(async () => {
+    try {
+      const guild = await client.guilds.fetch(process.env.DISCORD_GUILD_ID);
+      if (!guild) return;
+      for (const chId of LOCKED_CHANNELS) {
+        try {
+          const ch = await client.channels.fetch(chId);
+          if (!ch) continue;
+          await ch.permissionOverwrites.edit(guild.roles.everyone, {
+            [PermissionsBitField.Flags.ViewChannel]: true,
+            [PermissionsBitField.Flags.SendMessages]: false,
+            [PermissionsBitField.Flags.AddReactions]: true,
+            [PermissionsBitField.Flags.UseExternalEmojis]: true,
+            [PermissionsBitField.Flags.ReadMessageHistory]: true,
+          });
+          console.log(`   🔒 Locked channel ${chId} (view + react + buttons only)`);
+        } catch (e) {
+          console.error(`[Channel Lock] Error locking ${chId}:`, e.message);
+        }
+      }
+    } catch (e) {
+      console.error('[Channel Lock] Guild fetch error:', e.message);
+    }
+  }, 8000);
 
   // ─── Web Server ───
   setDiscordClient(client);
