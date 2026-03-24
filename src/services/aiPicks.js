@@ -9,6 +9,7 @@ const aiPicksDb = require('../database/aiPicks');
 const { generateAiPickCardImage, generateAiRecordImage, generateMonthlyRecapImage } = require('../utils/aiPickCardImage');
 
 const AI_CHANNEL_ID = '1483720217044713674';
+const AI_OPEN_SLIPS_CHANNEL_ID = '1485903920906895370';
 
 // Seasonal sport weighting — prefer sports that are in season
 function getSeasonalSports() {
@@ -272,6 +273,7 @@ async function postPickToDiscord(client, aiPick, guildId) {
       if (role) rolePing = `${role} `;
     }
 
+    // Post to primary AI Picks channel (with role ping)
     const message = await channel.send({
       content: `${rolePing}🔒 **AI LOCK OF THE DAY** 🔒`,
       files: [attachment],
@@ -280,6 +282,34 @@ async function postPickToDiscord(client, aiPick, guildId) {
 
     await aiPicksDb.updateAiPickMessage(aiPick.id, message.id);
     console.log(`[AI Pick] Posted pick ${aiPick.id} to channel ${AI_CHANNEL_ID}`);
+
+    // Cross-post to AI Open Slips channel (no role ping to avoid double notification)
+    try {
+      const slipsChannel = await client.channels.fetch(AI_OPEN_SLIPS_CHANNEL_ID);
+      if (slipsChannel) {
+        const mirrorImg = new AttachmentBuilder(imgBuffer, { name: 'ai-pick.png' });
+        const mirrorRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`aipick_tail_${aiPick.id}`)
+            .setLabel('🔒 Tail (0)')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`aipick_fade_${aiPick.id}`)
+            .setLabel('Fade (0)')
+            .setStyle(ButtonStyle.Danger),
+        );
+        const mirrorMsg = await slipsChannel.send({
+          content: '🔒 **AI LOCK OF THE DAY** 🔒',
+          files: [mirrorImg],
+          components: [mirrorRow],
+        });
+        await aiPicksDb.updateAiPickMirrorMessage(aiPick.id, mirrorMsg.id, AI_OPEN_SLIPS_CHANNEL_ID);
+        console.log(`[AI Pick] Cross-posted pick ${aiPick.id} to AI Open Slips`);
+      }
+    } catch (e) {
+      console.error('[AI Pick] Cross-post to AI Open Slips error:', e.message);
+    }
+
     return message;
   } catch (err) {
     console.error('[AI Pick] Discord post error:', err);
@@ -290,11 +320,12 @@ async function postPickToDiscord(client, aiPick, guildId) {
 /**
  * Build the Tail/Fade button row with current counts
  */
-function buildTailFadeRow(pickId, counts) {
+function buildTailFadeRow(pickId, counts, isGolf = false) {
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+  const emoji = isGolf ? '⛳' : '🔒';
   const tailLabel = counts.totalUnits > 0
-    ? `🔒 Tail (${counts.tails}) ${counts.totalUnits}u`
-    : `🔒 Tail (${counts.tails})`;
+    ? `${emoji} Tail (${counts.tails}) ${counts.totalUnits}u`
+    : `${emoji} Tail (${counts.tails})`;
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`aipick_tail_${pickId}`)
@@ -310,13 +341,37 @@ function buildTailFadeRow(pickId, counts) {
 /**
  * Build message content showing who is tailing/fading
  */
-function buildTailFadeContent(counts) {
-  let content = '🔒 **AI LOCK OF THE DAY** 🔒\n\n';
+function buildTailFadeContent(counts, header = '🔒 **AI LOCK OF THE DAY** 🔒') {
+  let content = `${header}\n\n`;
   const tailMentions = (counts.tailUsers || []).map(u => `<@${u.discordId}> (${u.units}u)`);
   const fadeMentions = (counts.fadeUsers || []).map(u => `<@${u.discordId}>`);
   content += `👍 **Tailing (${counts.tails}):** ${tailMentions.length ? tailMentions.join(', ') : 'None'}\n`;
   content += `👎 **Fading (${counts.fades}):** ${fadeMentions.length ? fadeMentions.join(', ') : 'None'}`;
   return content;
+}
+
+/**
+ * Update the mirror copy of a message in the other channel (best-effort)
+ */
+async function updateMirrorMessage(client, pick, clickedMessageId, content, components) {
+  try {
+    let targetMsgId, targetChannelId;
+    if (clickedMessageId === pick.message_id && pick.mirror_message_id) {
+      targetMsgId = pick.mirror_message_id;
+      targetChannelId = pick.mirror_channel_id;
+    } else if (clickedMessageId === pick.mirror_message_id && pick.message_id) {
+      targetMsgId = pick.message_id;
+      targetChannelId = pick.channel_id;
+    } else {
+      return;
+    }
+    const ch = await client.channels.fetch(targetChannelId);
+    if (!ch) return;
+    const msg = await ch.messages.fetch(targetMsgId);
+    await msg.edit({ content, components });
+  } catch (e) {
+    // Mirror update is best-effort — don't crash if the message is gone
+  }
 }
 
 /**
@@ -330,6 +385,11 @@ async function handleTailFade(interaction) {
   const pickId = parts.slice(2).join('_');
 
   try {
+    // Fetch pick to determine type (daily vs golf) and mirror info
+    const pick = await aiPicksDb.getAiPick(pickId);
+    const isGolf = pick?.pick_type === 'golf_round';
+    const header = isGolf ? '⛳ **GOLF ROUND TOTAL** ⛳' : '🔒 **AI LOCK OF THE DAY** 🔒';
+
     // Check if user already has an action on this pick
     const existing = await aiPicksDb.getUserTailFade(pickId, interaction.user.id);
 
@@ -341,7 +401,10 @@ async function handleTailFade(interaction) {
         await aiPicksDb.removeTailFade(pickId, interaction.user.id);
         const counts = await aiPicksDb.getTailFadeCounts(pickId);
         await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-        await interaction.message.edit({ content: buildTailFadeContent(counts), components: [buildTailFadeRow(pickId, counts)] });
+        const content = buildTailFadeContent(counts, header);
+        const components = [buildTailFadeRow(pickId, counts, isGolf)];
+        await interaction.message.edit({ content, components });
+        await updateMirrorMessage(interaction.client, pick, interaction.message.id, content, components);
         await interaction.followUp({ content: '🔓 Tail removed.', ephemeral: true });
         return;
       }
@@ -369,14 +432,20 @@ async function handleTailFade(interaction) {
       await aiPicksDb.removeTailFade(pickId, interaction.user.id);
       const counts = await aiPicksDb.getTailFadeCounts(pickId);
       await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-      await interaction.message.edit({ content: buildTailFadeContent(counts), components: [buildTailFadeRow(pickId, counts)] });
+      const content = buildTailFadeContent(counts, header);
+      const components = [buildTailFadeRow(pickId, counts, isGolf)];
+      await interaction.message.edit({ content, components });
+      await updateMirrorMessage(interaction.client, pick, interaction.message.id, content, components);
       await interaction.followUp({ content: '↩️ Fade removed.', ephemeral: true });
     } else {
       // Not fading (or was tailing) → switch to fade
       await aiPicksDb.recordTailFade(pickId, interaction.user.id, 'fade', 0);
       const counts = await aiPicksDb.getTailFadeCounts(pickId);
       await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-      await interaction.message.edit({ content: buildTailFadeContent(counts), components: [buildTailFadeRow(pickId, counts)] });
+      const content = buildTailFadeContent(counts, header);
+      const components = [buildTailFadeRow(pickId, counts, isGolf)];
+      await interaction.message.edit({ content, components });
+      await updateMirrorMessage(interaction.client, pick, interaction.message.id, content, components);
       await interaction.followUp({ content: '🚫 Fade locked in.', ephemeral: true });
     }
   } catch (err) {
@@ -396,11 +465,18 @@ async function handleTailUnitsModal(interaction) {
       return interaction.reply({ content: '❌ Enter a number between 1 and 5.', ephemeral: true });
     }
 
+    const pick = await aiPicksDb.getAiPick(pickId);
+    const isGolf = pick?.pick_type === 'golf_round';
+    const header = isGolf ? '⛳ **GOLF ROUND TOTAL** ⛳' : '🔒 **AI LOCK OF THE DAY** 🔒';
+
     await interaction.deferUpdate();
     await aiPicksDb.recordTailFade(pickId, interaction.user.id, 'tail', units);
     const counts = await aiPicksDb.getTailFadeCounts(pickId);
     await aiPicksDb.updateAiPickTailCount(pickId, counts.tails, counts.fades);
-    await interaction.message.edit({ content: buildTailFadeContent(counts), components: [buildTailFadeRow(pickId, counts)] });
+    const content = buildTailFadeContent(counts, header);
+    const components = [buildTailFadeRow(pickId, counts, isGolf)];
+    await interaction.message.edit({ content, components });
+    await updateMirrorMessage(interaction.client, pick, interaction.message.id, content, components);
     await interaction.followUp({ content: `🔒 Tailing **${units}u** — locked in!`, ephemeral: true });
   } catch (err) {
     console.error('[AI Pick] Tail units modal error:', err);
@@ -534,32 +610,58 @@ async function postResultToDiscord(client, closedPick, guildId) {
 
     const emoji = closedPick.status === 'win' ? '✅' : closedPick.status === 'loss' ? '❌' : '🔄';
     const statusText = closedPick.status === 'win' ? 'WIN' : closedPick.status === 'loss' ? 'LOSS' : 'PUSH';
+    const resultContent = `${emoji} **AI PICK RESULT: ${statusText}** ${emoji}\n${closedPick.result_note || ''}\n📊 Record: **${record.wins}-${record.losses}-${record.pushes}** | Units: **${totalUnits >= 0 ? '+' : ''}${totalUnits}u**`;
 
     await channel.send({
-      content: `${emoji} **AI PICK RESULT: ${statusText}** ${emoji}\n${closedPick.result_note || ''}\n📊 Record: **${record.wins}-${record.losses}-${record.pushes}** | Units: **${totalUnits >= 0 ? '+' : ''}${totalUnits}u**`,
+      content: resultContent,
       files: [attachment],
     });
 
-    // Update the original message to disable buttons
+    // Build disabled button row
+    const disabledRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`aipick_tail_${closedPick.id}`)
+        .setLabel(`🔒 Tail (${closedPick.tail_count || 0})`)
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId(`aipick_fade_${closedPick.id}`)
+        .setLabel(`Fade (${closedPick.fade_count || 0})`)
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(true),
+    );
+
+    // Disable buttons on original message
     if (closedPick.message_id) {
       try {
         const origMsg = await channel.messages.fetch(closedPick.message_id);
-        const disabledRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`aipick_tail_${closedPick.id}`)
-            .setLabel(`🔒 Tail (${closedPick.tail_count || 0})`)
-            .setStyle(ButtonStyle.Success)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId(`aipick_fade_${closedPick.id}`)
-            .setLabel(`Fade (${closedPick.fade_count || 0})`)
-            .setStyle(ButtonStyle.Danger)
-            .setDisabled(true),
-        );
         await origMsg.edit({ components: [disabledRow] });
       } catch (e) {
         console.error('[AI Pick] Failed to update original message:', e.message);
       }
+    }
+
+    // Cross-post result to AI Open Slips + disable mirror buttons
+    try {
+      const slipsChannel = await client.channels.fetch(AI_OPEN_SLIPS_CHANNEL_ID);
+      if (slipsChannel) {
+        const mirrorImg = new AttachmentBuilder(imgBuffer, { name: 'ai-result.png' });
+        await slipsChannel.send({
+          content: resultContent,
+          files: [mirrorImg],
+        });
+
+        if (closedPick.mirror_message_id) {
+          try {
+            const mirrorMsg = await slipsChannel.messages.fetch(closedPick.mirror_message_id);
+            await mirrorMsg.edit({ components: [disabledRow] });
+          } catch (e) {
+            console.error('[AI Pick] Failed to update mirror message:', e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[AI Pick] Cross-post result error:', e.message);
     }
   } catch (err) {
     console.error('[AI Pick] Result post error:', err);
@@ -613,6 +715,7 @@ async function postTeaser(client) {
 
 module.exports = {
   AI_CHANNEL_ID,
+  AI_OPEN_SLIPS_CHANNEL_ID,
   generateDailyPick,
   postPickToDiscord,
   handleTailFade,

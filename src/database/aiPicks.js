@@ -58,6 +58,14 @@ async function updateAiPickMessage(pickId, messageId) {
   if (error) throw error;
 }
 
+async function updateAiPickMirrorMessage(pickId, mirrorMessageId, mirrorChannelId) {
+  const { error } = await supabase
+    .from('ai_picks')
+    .update({ mirror_message_id: mirrorMessageId, mirror_channel_id: mirrorChannelId })
+    .eq('id', pickId);
+  if (error) throw error;
+}
+
 async function updateAiPickTailCount(pickId, tailCount, fadeCount) {
   const { error } = await supabase
     .from('ai_picks')
@@ -344,6 +352,7 @@ module.exports = {
   getPendingAiPicks,
   closeAiPick,
   updateAiPickMessage,
+  updateAiPickMirrorMessage,
   updateAiPickTailCount,
   getAiPickRecord,
   getAiPickFullRecord,
