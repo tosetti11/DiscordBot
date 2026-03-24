@@ -117,6 +117,8 @@ async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
   // Player + prop description
   if (pick.player_name) y += 22;
   if (pick.prop_description) y += 20;
+  y += 6;
+  y += 16; // AI-Generated Line label
   y += 8;
 
   // Odds box
@@ -275,6 +277,13 @@ async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
     ctx.fillText(pick.prop_description, PAD + 5, curY + 13);
     curY += 20;
   }
+  curY += 6;
+
+  // AI-Generated Line label
+  ctx.font = `600 10px ${FF}`;
+  ctx.fillStyle = C.muted;
+  ctx.fillText('⚡ AI-Generated Line  •  Based on ESPN scoring data + GPT-4o analysis', PAD + 5, curY + 10);
+  curY += 16;
   curY += 8;
 
   // ── Odds box ──
