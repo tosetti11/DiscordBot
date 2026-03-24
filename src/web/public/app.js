@@ -273,7 +273,7 @@ function showApp() {
   }
 
   // Navigate to page from URL hash (e.g. #stats, #leaderboard) or default to slip
-  const validPages = ['slip', 'stats', 'bets', 'closebets', 'leaderboard', 'following', 'reminders', 'tools', 'install', 'analytics', 'announce', 'scoreboard'];
+  const validPages = ['slip', 'stats', 'bets', 'closebets', 'leaderboard', 'following', 'reminders', 'tools', 'install', 'analytics', 'announce', 'scoreboard', 'props', 'game-picks', 'profile', 'ai-picks'];
   const hashPage = window.location.hash.replace('#', '');
   if (hashPage && validPages.includes(hashPage)) {
     switchPage(hashPage);
@@ -282,7 +282,7 @@ function showApp() {
   // Listen for hash changes (back/forward nav)
   window.addEventListener('hashchange', () => {
     const hp = window.location.hash.replace('#', '');
-    if (hp && validPages.includes(hp)) switchPage(hp);
+    if (hp) switchPage(hp);
   });
 
   // Fetch online members count for chat dot
@@ -1180,6 +1180,10 @@ function resetForm() {
     const el = document.getElementById(id);
     if (el) el.required = true;
   });
+
+  // Re-select guild for single-guild users (autoSelectGuild hides it,
+  // but form.reset() clears the value — leaving a hidden required empty field)
+  autoSelectGuild(document.getElementById('guild-select'));
 }
 
 // ═══════════════════════════════════════════════
