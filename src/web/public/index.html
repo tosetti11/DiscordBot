@@ -72,6 +72,9 @@
         <a href="javascript:void(0)" class="sidebar-link" data-page="stats" onclick="switchPage('stats')">
           <span class="sidebar-icon">📊</span> Stats
         </a>
+        <a href="javascript:void(0)" class="sidebar-link" data-page="ai-picks" onclick="switchPage('ai-picks')">
+          <span class="sidebar-icon">🤖</span> AI Picks
+        </a>
         <a href="javascript:void(0)" class="sidebar-link" data-page="leaderboard" onclick="switchPage('leaderboard')">
           <span class="sidebar-icon">🏆</span> Rankings
         </a>
@@ -81,12 +84,10 @@
         <a href="javascript:void(0)" class="sidebar-link" data-page="tools" onclick="switchPage('tools')">
           <span class="sidebar-icon">🔧</span> Tools
         </a>
-        <a href="javascript:void(0)" class="sidebar-link" data-page="ai-picks" onclick="switchPage('ai-picks')">
-          <span class="sidebar-icon">🤖</span> AI Picks
-        </a>
-        <a href="/bracket.html" class="sidebar-link" target="_blank">
+        <!-- [TOURNAMENT ARCHIVED] Bracket challenge dormant. To re-enable, uncomment below. -->
+        <!-- <a href="/bracket.html" class="sidebar-link" target="_blank">
           <span class="sidebar-icon">🏀</span> Tournament
-        </a>
+        </a> -->
         <!-- [SCOREBOARD DISABLED] Sidebar link hidden — feature dormant. To re-enable, uncomment below. -->
         <!-- <a href="javascript:void(0)" class="sidebar-link" data-page="scoreboard" onclick="switchPage('scoreboard')">
           <span class="sidebar-icon">📡</span> Live Scores
@@ -94,8 +95,25 @@
         <a href="javascript:void(0)" class="sidebar-link" data-page="install" onclick="switchPage('install')">
           <span class="sidebar-icon">📱</span> App
         </a>
+        <!-- Models Section (owner-only) -->
+        <div class="sidebar-divider hidden" id="models-divider"></div>
+        <div class="sidebar-models hidden" id="sidebar-models">
+          <button class="sidebar-admin-toggle" onclick="toggleModelsMenu()">
+            <span class="sidebar-icon">🧠</span> Models
+            <span class="sidebar-chevron" id="models-chevron">▸</span>
+          </button>
+          <div class="sidebar-admin-items hidden" id="models-items">
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub" data-page="props" id="nav-props" onclick="switchPage('props')">
+              <span class="sidebar-icon">🎯</span> Props
+            </a>
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub" data-page="game-picks" id="nav-game-picks" onclick="switchPage('game-picks')">
+              <span class="sidebar-icon">🏀</span> Games
+            </a>
+          </div>
+        </div>
+
         <!-- Admin Section -->
-        <div class="sidebar-divider"></div>
+        <div class="sidebar-divider hidden" id="admin-divider"></div>
         <div class="sidebar-admin hidden" id="sidebar-admin">
           <button class="sidebar-admin-toggle" onclick="toggleAdminMenu()">
             <span class="sidebar-icon">🛡️</span> Admin
@@ -104,12 +122,6 @@
           <div class="sidebar-admin-items hidden" id="admin-items">
             <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="reminders" id="nav-reminders" onclick="switchPage('reminders')">
               <span class="sidebar-icon">⏰</span> Reminders
-            </a>
-            <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="props" id="nav-props" onclick="switchPage('props')">
-              <span class="sidebar-icon">�</span> Props
-            </a>
-            <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="game-picks" id="nav-game-picks" onclick="switchPage('game-picks')">
-              <span class="sidebar-icon">🏀</span> Games
             </a>
             <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="analytics" id="nav-analytics" onclick="switchPage('analytics')">
               <span class="sidebar-icon">📈</span> Analytics

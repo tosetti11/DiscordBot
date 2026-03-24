@@ -1744,6 +1744,11 @@ function toggleAdminMenu() {
   document.getElementById('admin-chevron').classList.toggle('expanded');
 }
 
+function toggleModelsMenu() {
+  document.getElementById('models-items').classList.toggle('hidden');
+  document.getElementById('models-chevron').classList.toggle('expanded');
+}
+
 // ═══════════════════════════════════════════════
 //  Floating Chat Panel (Discord Widgetbot)
 // ═══════════════════════════════════════════════
@@ -6020,16 +6025,17 @@ async function gpCheckResults() {
 // ═══════════════════════════════════════════════
 
 async function checkOwnerFeatures() {
-  // Analytics + Props: owner-only (try the endpoint)
+  // Analytics + Models: owner-only (try the endpoint)
   try {
     const res = await fetch('/api/analytics');
     if (res.ok) {
       const navLink = document.getElementById('nav-analytics');
       if (navLink) navLink.classList.remove('hidden');
-      const propsLink = document.getElementById('nav-props');
-      if (propsLink) propsLink.classList.remove('hidden');
-      const gamePicksLink = document.getElementById('nav-game-picks');
-      if (gamePicksLink) gamePicksLink.classList.remove('hidden');
+      // Show Models section (Props + Games)
+      const modelsSection = document.getElementById('sidebar-models');
+      const modelsDivider = document.getElementById('models-divider');
+      if (modelsSection) modelsSection.classList.remove('hidden');
+      if (modelsDivider) modelsDivider.classList.remove('hidden');
     }
   } catch (e) {}
 
@@ -6049,9 +6055,13 @@ async function checkOwnerFeatures() {
 
   // Show admin section if any admin link is visible
   const adminSection = document.getElementById('sidebar-admin');
+  const adminDivider = document.getElementById('admin-divider');
   const adminLinks = document.querySelectorAll('#admin-items .sidebar-link');
   const anyVisible = [...adminLinks].some(l => !l.classList.contains('hidden'));
-  if (anyVisible && adminSection) adminSection.classList.remove('hidden');
+  if (anyVisible && adminSection) {
+    adminSection.classList.remove('hidden');
+    if (adminDivider) adminDivider.classList.remove('hidden');
+  }
 }
 
 let analyticsInitialized = false;
