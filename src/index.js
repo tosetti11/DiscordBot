@@ -354,10 +354,15 @@ client.once(Events.ClientReady, (c) => {
 
     console.log('   🤖 AI Pick of the Day scheduler started');
 
-    // Fire today's pick on startup if none exists yet (15s delay for connections)
+    // Fire today's pick on startup if none exists yet (only after 10 AM ET)
     setTimeout(async () => {
       try {
-        await aiPickService.generateDailyPick(client, AI_GUILD_ID);
+        const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        if (nowET.getHours() >= 10) {
+          await aiPickService.generateDailyPick(client, AI_GUILD_ID);
+        } else {
+          console.log('[AI Picks] Startup skipped — before 10 AM ET, will wait for scheduled time.');
+        }
       } catch (e) {
         console.error('[AI Picks] Startup pick error:', e.message);
       }
