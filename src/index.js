@@ -27,6 +27,7 @@ const { createWebServer, setDiscordClient } = require('./web/server');
 const { startBracketUpdater } = require('./services/bracketUpdater');
 const roleManager = require('./services/roleManager');
 const aiPickService = require('./services/aiPicks');
+const golfService = require('./services/golfRoundTotals');
 
 // ── Scoreboard helpers ──
 function findPlayer(players, playerName) {
@@ -361,6 +362,63 @@ client.once(Events.ClientReady, (c) => {
         console.error('[AI Picks] Startup pick error:', e.message);
       }
     }, 15_000);
+
+    // ─── Golf Round Totals Scheduler (Thu-Sun) ───
+    // Generate golf picks at 7:00 AM ET on tournament days
+    setTimeout(() => {
+      (async () => {
+        try {
+          if (golfService.isTournamentDay()) {
+            await golfService.generateGolfPicks(client, AI_GUILD_ID);
+          }
+        } catch (e) { console.error('[Golf Picks] Initial generation error:', e.message); }
+      })();
+      setInterval(async () => {
+        try {
+          if (golfService.isTournamentDay()) {
+            await golfService.generateGolfPicks(client, AI_GUILD_ID);
+          }
+        } catch (e) { console.error('[Golf Picks] Generation error:', e.message); }
+      }, 24 * 60 * 60_000);
+    }, msUntilET(7, 0));
+
+    // Auto-close golf picks every 10 minutes
+    setInterval(async () => {
+      try {
+        await golfService.autoCloseGolfPicks(client);
+      } catch (e) { console.error('[Golf Picks] Auto-close error:', e.message); }
+    }, 10 * 60_000);
+
+    // Evening round recap at 8:00 PM ET
+    setTimeout(() => {
+      (async () => {
+        try {
+          if (golfService.isTournamentDay()) {
+            await golfService.postRoundRecap(client, AI_GUILD_ID);
+          }
+        } catch (e) { console.error('[Golf Picks] Recap error:', e.message); }
+      })();
+      setInterval(async () => {
+        try {
+          if (golfService.isTournamentDay()) {
+            await golfService.postRoundRecap(client, AI_GUILD_ID);
+          }
+        } catch (e) { console.error('[Golf Picks] Recap error:', e.message); }
+      }, 24 * 60 * 60_000);
+    }, msUntilET(20, 0));
+
+    console.log('   ⛳ Golf Round Totals scheduler started');
+
+    // Fire golf picks on startup if tournament day (20s delay)
+    setTimeout(async () => {
+      try {
+        if (golfService.isTournamentDay()) {
+          await golfService.generateGolfPicks(client, AI_GUILD_ID);
+        }
+      } catch (e) {
+        console.error('[Golf Picks] Startup error:', e.message);
+      }
+    }, 20_000);
   }
 
   // ─── Web Server ───

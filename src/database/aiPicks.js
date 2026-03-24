@@ -283,6 +283,61 @@ async function getMonthlyRecap(guildId, year, month) {
   return { record, bestPick, worstPick, sportBreakdown, maxStreak, picks };
 }
 
+// ── Golf-specific queries ──
+
+async function getTodaysGolfPicks(guildId) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const { data, error } = await supabase
+    .from('ai_picks')
+    .select('*')
+    .eq('guild_id', guildId)
+    .eq('pick_type', 'golf_round')
+    .eq('pick_date', today)
+    .order('confidence', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function getPendingGolfPicks() {
+  const { data, error } = await supabase
+    .from('ai_picks')
+    .select('*')
+    .eq('pick_type', 'golf_round')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function getGolfRecord(guildId) {
+  const { data, error } = await supabase
+    .from('ai_picks')
+    .select('status')
+    .eq('guild_id', guildId)
+    .eq('pick_type', 'golf_round')
+    .in('status', ['win', 'loss', 'push']);
+  if (error) throw error;
+  const record = { wins: 0, losses: 0, pushes: 0 };
+  for (const p of (data || [])) {
+    if (p.status === 'win') record.wins++;
+    else if (p.status === 'loss') record.losses++;
+    else if (p.status === 'push') record.pushes++;
+  }
+  return record;
+}
+
+async function getGolfPicksByDate(guildId, dateStr) {
+  const { data, error } = await supabase
+    .from('ai_picks')
+    .select('*')
+    .eq('guild_id', guildId)
+    .eq('pick_type', 'golf_round')
+    .eq('pick_date', dateStr)
+    .order('confidence', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
 module.exports = {
   createAiPick,
   getAiPick,
@@ -302,4 +357,9 @@ module.exports = {
   getTailFadeCounts,
   getTailLeaderboard,
   getMonthlyRecap,
+  // Golf-specific
+  getTodaysGolfPicks,
+  getPendingGolfPicks,
+  getGolfRecord,
+  getGolfPicksByDate,
 };
