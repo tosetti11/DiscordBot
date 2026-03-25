@@ -662,43 +662,18 @@ async function postResultToDiscord(client, closedPick, guildId) {
       }
     }
 
-    // Cross-post result to AI Open Slips + disable mirror buttons
-    try {
-      const slipsChannel = await client.channels.fetch(AI_OPEN_SLIPS_CHANNEL_ID);
-      if (slipsChannel) {
-        const mirrorImg = new AttachmentBuilder(imgBuffer, { name: 'ai-result.png' });
-        await slipsChannel.send({
-          content: resultContent,
-          files: [mirrorImg],
-        });
-
-        if (closedPick.mirror_message_id) {
-          try {
-            const mirrorDisabledRow = new ActionRowBuilder().addComponents(
-              new ButtonBuilder()
-                .setCustomId(`aipick_tail_${closedPick.id}`)
-                .setLabel(`🔒 Tail (${closedPick.tail_count || 0})`)
-                .setStyle(ButtonStyle.Success)
-                .setDisabled(true),
-              new ButtonBuilder()
-                .setCustomId(`aipick_fade_${closedPick.id}`)
-                .setLabel(`Fade (${closedPick.fade_count || 0})`)
-                .setStyle(ButtonStyle.Danger)
-                .setDisabled(true),
-              new ButtonBuilder()
-                .setLabel('Comment')
-                .setStyle(ButtonStyle.Link)
-                .setURL(`https://discord.com/channels/${guildId}/${AI_CHANNEL_ID}/${closedPick.message_id}`),
-            );
-            const mirrorMsg = await slipsChannel.messages.fetch(closedPick.mirror_message_id);
-            await mirrorMsg.edit({ components: [mirrorDisabledRow] });
-          } catch (e) {
-            console.error('[AI Pick] Failed to update mirror message:', e.message);
-          }
+    // Delete mirror message from AI Open Slips (open slips only — no results there)
+    if (closedPick.mirror_message_id) {
+      try {
+        const slipsChannel = await client.channels.fetch(AI_OPEN_SLIPS_CHANNEL_ID);
+        if (slipsChannel) {
+          const mirrorMsg = await slipsChannel.messages.fetch(closedPick.mirror_message_id);
+          await mirrorMsg.delete();
+          console.log(`[AI Pick] Deleted mirror message ${closedPick.mirror_message_id} from AI Open Slips`);
         }
+      } catch (e) {
+        console.error('[AI Pick] Failed to delete mirror message:', e.message);
       }
-    } catch (e) {
-      console.error('[AI Pick] Cross-post result error:', e.message);
     }
   } catch (err) {
     console.error('[AI Pick] Result post error:', err);

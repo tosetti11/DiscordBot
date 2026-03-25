@@ -420,30 +420,14 @@ async function postGolfResultToDiscord(client, closedPick, guildId) {
     const emoji = closedPick.status === 'win' ? '✅' : closedPick.status === 'loss' ? '❌' : '🔄';
     const statusText = closedPick.status === 'win' ? 'WIN' : closedPick.status === 'loss' ? 'LOSS' : 'PUSH';
 
-    await channel.send({
-      content: `${emoji} **GOLF PICK RESULT: ${statusText}** ${emoji}\n${closedPick.result_note || ''}\n📊 Golf Record: **${record.wins}-${record.losses}-${record.pushes}**`,
-      files: [attachment],
-    });
-
-    // Disable buttons on original message
+    // Delete the open slip message from AI Open Slips (open slips only — no results there)
     if (closedPick.message_id) {
       try {
         const origMsg = await channel.messages.fetch(closedPick.message_id);
-        const disabledRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`aipick_tail_${closedPick.id}`)
-            .setLabel(`⛳ Tail (${closedPick.tail_count || 0})`)
-            .setStyle(ButtonStyle.Success)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId(`aipick_fade_${closedPick.id}`)
-            .setLabel(`Fade (${closedPick.fade_count || 0})`)
-            .setStyle(ButtonStyle.Danger)
-            .setDisabled(true),
-        );
-        await origMsg.edit({ components: [disabledRow] });
+        await origMsg.delete();
+        console.log(`[Golf] Deleted closed pick message ${closedPick.message_id} from AI Open Slips`);
       } catch (e) {
-        console.error('[Golf] Failed to update original message:', e.message);
+        console.error('[Golf] Failed to delete original message:', e.message);
       }
     }
   } catch (err) {
