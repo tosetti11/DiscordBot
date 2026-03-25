@@ -299,7 +299,7 @@ async function getTodaysGolfPicks(guildId) {
     .from('ai_picks')
     .select('*')
     .eq('guild_id', guildId)
-    .eq('pick_type', 'golf_round')
+    .eq('pick_type', 'golf_matchup')
     .eq('pick_date', today)
     .order('confidence', { ascending: false });
   if (error) throw error;
@@ -310,7 +310,7 @@ async function getPendingGolfPicks() {
   const { data, error } = await supabase
     .from('ai_picks')
     .select('*')
-    .eq('pick_type', 'golf_round')
+    .eq('pick_type', 'golf_matchup')
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -322,7 +322,7 @@ async function getGolfRecord(guildId) {
     .from('ai_picks')
     .select('status')
     .eq('guild_id', guildId)
-    .eq('pick_type', 'golf_round')
+    .eq('pick_type', 'golf_matchup')
     .in('status', ['win', 'loss', 'push']);
   if (error) throw error;
   const record = { wins: 0, losses: 0, pushes: 0 };
@@ -339,9 +339,21 @@ async function getGolfPicksByDate(guildId, dateStr) {
     .from('ai_picks')
     .select('*')
     .eq('guild_id', guildId)
-    .eq('pick_type', 'golf_round')
+    .eq('pick_type', 'golf_matchup')
     .eq('pick_date', dateStr)
     .order('confidence', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function getGolfPicksSince(guildId, dateStr) {
+  const { data, error } = await supabase
+    .from('ai_picks')
+    .select('*')
+    .eq('guild_id', guildId)
+    .eq('pick_type', 'golf_matchup')
+    .gte('pick_date', dateStr)
+    .order('pick_date', { ascending: true });
   if (error) throw error;
   return data || [];
 }
@@ -371,4 +383,5 @@ module.exports = {
   getPendingGolfPicks,
   getGolfRecord,
   getGolfPicksByDate,
+  getGolfPicksSince,
 };

@@ -1,6 +1,6 @@
 /**
- * Golf Pick Card Image Generator
- * Green accent theme for golf round total picks, result cards, and round recaps.
+ * Golf H2H Matchup Card Image Generator
+ * Green accent theme for golf tournament matchup picks, result cards, and weekly recaps.
  */
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
@@ -82,7 +82,7 @@ function getBrandLogo() {
 }
 
 /**
- * Generate a golf round total pick card (green theme)
+ * Generate a golf H2H matchup pick card (green theme)
  */
 async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
   const brandLogo = await getBrandLogo();
@@ -101,24 +101,19 @@ async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
 
   // Title section
   y += 16;
-  y += 28; // "GOLF ROUND TOTAL"
+  y += 28; // "GOLF H2H MATCHUP"
   y += 8;
 
-  // Pills (tournament + round)
+  // Pills (tournament + bookmaker)
   y += 24;
   y += 12;
 
-  // Pick text (player + O/U line)
-  tempCtx.font = `800 24px ${FF}`;
-  const pickLines = wrapText(tempCtx, pick.pick || '—', INNER);
-  y += pickLines.length * 32;
-  y += 6;
+  // Matchup display: "PLAYER A  vs  PLAYER B"
+  y += 52; // matchup box
+  y += 12;
 
-  // Player + prop description
-  if (pick.player_name) y += 22;
-  if (pick.prop_description) y += 20;
-  y += 6;
-  y += 16; // AI-Generated Line label
+  // Pick highlight — "Picking: PLAYER_NAME"
+  y += 32;
   y += 8;
 
   // Odds box
@@ -232,58 +227,80 @@ async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
   // ── Body ──
   curY += 16;
 
-  // "⛳ GOLF ROUND TOTAL"
+  // "\u26f3 GOLF H2H MATCHUP"
   ctx.font = `900 20px ${FF}`;
   ctx.fillStyle = C.white;
-  ctx.fillText('⛳ GOLF ROUND TOTAL', PAD + 5, curY + 22);
+  ctx.fillText('\u26f3 GOLF H2H MATCHUP', PAD + 5, curY + 22);
   curY += 28;
   curY += 8;
 
-  // Tournament + Round pills
+  // Tournament + Bookmaker pills
   let tagX = PAD + 5;
   if (pick.tournament_name) {
     const tw = drawPill(ctx, tagX, curY, pick.tournament_name.toUpperCase(), C.fairwayGreenFaint, C.fairwayGreen, 10, 8, 3);
     tagX += tw + 8;
   }
-  if (pick.round_number) {
-    const rw = drawPill(ctx, tagX, curY, `ROUND ${pick.round_number}`, C.greenFaint, C.green, 10, 8, 3);
-    tagX += rw + 8;
+  if (pick.prop_description) {
+    // Extract bookmaker from prop_description (e.g. "Tournament Matchup \u2022 DraftKings")
+    const bkMatch = pick.prop_description.match(/\u2022\s*(.+)/);
+    if (bkMatch) {
+      const rw = drawPill(ctx, tagX, curY, bkMatch[1].toUpperCase(), C.greenFaint, C.green, 10, 8, 3);
+      tagX += rw + 8;
+    }
   }
-
   curY += 24;
   curY += 12;
 
-  // ── Pick text (big bold) ──
-  ctx.font = `800 24px ${FF}`;
-  ctx.fillStyle = C.white;
-  for (const line of pickLines) {
-    ctx.fillText(line, PAD + 5, curY + 22);
-    curY += 32;
-  }
-  curY += 6;
+  // ── Matchup Box: "PLAYER A  vs  PLAYER B" ──
+  roundRect(ctx, PAD, curY, INNER, 52, 8);
+  ctx.fillStyle = 'rgba(63, 185, 80, 0.06)';
+  ctx.fill();
+  roundRect(ctx, PAD, curY, INNER, 52, 8);
+  ctx.strokeStyle = C.greenBorder;
+  ctx.lineWidth = 1;
+  ctx.stroke();
 
-  // Player name
-  if (pick.player_name) {
-    ctx.font = `600 14px ${FF}`;
-    ctx.fillStyle = C.gray;
-    ctx.fillText(`🏌️ ${pick.player_name}`, PAD + 5, curY + 14);
-    curY += 22;
-  }
+  const playerA = pick.team_a || pick.player_name || '—';
+  const playerB = pick.team_b || '—';
+  const vsText = 'vs';
 
-  // Prop description
-  if (pick.prop_description) {
-    ctx.font = `500 13px ${FF}`;
-    ctx.fillStyle = C.muted;
-    ctx.fillText(pick.prop_description, PAD + 5, curY + 13);
-    curY += 20;
-  }
-  curY += 6;
+  ctx.font = `800 16px ${FF}`;
+  const aWidth = ctx.measureText(playerA).width;
+  ctx.font = `600 12px ${FF}`;
+  const vsWidth = ctx.measureText(vsText).width;
+  ctx.font = `800 16px ${FF}`;
+  const bWidth = ctx.measureText(playerB).width;
 
-  // AI-Generated Line label
-  ctx.font = `600 10px ${FF}`;
+  const totalTextW = aWidth + vsWidth + bWidth + 24; // 12px gap each side of "vs"
+  let textStartX = PAD + (INNER - totalTextW) / 2;
+
+  const boxCenterY = curY + 30;
+
+  // Player A (the pick) — highlighted green
+  ctx.font = `800 16px ${FF}`;
+  ctx.fillStyle = C.green;
+  ctx.fillText(playerA, textStartX, boxCenterY);
+  textStartX += aWidth + 12;
+
+  // "vs"
+  ctx.font = `600 12px ${FF}`;
   ctx.fillStyle = C.muted;
-  ctx.fillText('⚡ AI-Generated Line  •  Based on ESPN scoring data + GPT-4o analysis', PAD + 5, curY + 10);
-  curY += 16;
+  ctx.fillText(vsText, textStartX, boxCenterY);
+  textStartX += vsWidth + 12;
+
+  // Player B
+  ctx.font = `800 16px ${FF}`;
+  ctx.fillStyle = C.gray;
+  ctx.fillText(playerB, textStartX, boxCenterY);
+
+  curY += 52;
+  curY += 12;
+
+  // ── Pick highlight ──
+  ctx.font = `700 14px ${FF}`;
+  ctx.fillStyle = C.green;
+  ctx.fillText(`\ud83c\udfc6 Picking: ${pick.player_name || '—'}`, PAD + 5, curY + 18);
+  curY += 32;
   curY += 8;
 
   // ── Odds box ──
@@ -296,19 +313,17 @@ async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
   ctx.stroke();
 
   // Odds value (left)
-  const oddsStr = pick.odds_american ? formatOdds(pick.odds_american) : '—';
+  const oddsStr = pick.odds_american ? formatOdds(pick.odds_american) : '\u2014';
   ctx.font = `900 22px ${FF}`;
   ctx.fillStyle = C.green;
   ctx.fillText(oddsStr, PAD + 16, curY + 32);
 
-  // Direction label (right)
-  const dirLabel = (pick.over_under || '').toUpperCase();
-  if (dirLabel) {
-    ctx.font = `800 14px ${FF}`;
-    ctx.fillStyle = dirLabel === 'UNDER' ? C.green : C.gold;
-    const dlW = ctx.measureText(dirLabel).width;
-    ctx.fillText(dirLabel, W - PAD - 16 - dlW, curY + 30);
-  }
+  // "MONEYLINE" label (right)
+  ctx.font = `800 12px ${FF}`;
+  ctx.fillStyle = C.muted;
+  const mlLabel = 'MONEYLINE';
+  const mlW = ctx.measureText(mlLabel).width;
+  ctx.fillText(mlLabel, W - PAD - 16 - mlW, curY + 30);
 
   curY += 48;
   curY += 12;
@@ -317,7 +332,7 @@ async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
   ctx.font = `700 11px ${FF}`;
   ctx.fillStyle = C.gray;
   ctx.fillText('CONFIDENCE', PAD + 5, curY + 12);
-  const confPct = pick.confidence || 85;
+  const confPct = pick.confidence || 80;
   ctx.fillStyle = C.white;
   ctx.font = `800 11px ${FF}`;
   const pctStr = `${confPct}%`;
@@ -415,7 +430,7 @@ async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
   ctx.font = `500 10px ${FF}`;
   ctx.fillStyle = C.muted;
   ctx.fillText('1u flat bet per pick', PAD + 5, curY + 22);
-  const poweredStr = 'Powered by GPT-4o';
+  const poweredStr = 'Powered by GPT-4o \u2022 Real DK/FD Odds';
   const pwW = ctx.measureText(poweredStr).width;
   ctx.fillText(poweredStr, W - PAD - pwW, curY + 22);
 
@@ -423,7 +438,7 @@ async function generateGolfPickCardImage(pick, record, pickNum, totalPicks) {
 }
 
 /**
- * Generate result card for a closed golf pick
+ * Generate result card for a closed golf H2H pick
  */
 async function generateGolfRecapImage(closedPick, record) {
   const W = 520;
@@ -463,17 +478,17 @@ async function generateGolfRecapImage(closedPick, record) {
   let curY = 20;
 
   // Result header
-  const statusEmoji = isWin ? '✅' : isPush ? '🔄' : '❌';
+  const statusEmoji = isWin ? '\u2705' : isPush ? '\ud83d\udd04' : '\u274c';
   const statusText = isWin ? 'WIN' : isPush ? 'PUSH' : 'LOSS';
   ctx.font = `900 20px ${FF}`;
   ctx.fillStyle = isWin ? C.green : isPush ? C.gold : C.red;
-  ctx.fillText(`${statusEmoji} GOLF PICK: ${statusText}`, PAD + 5, curY + 20);
+  ctx.fillText(`${statusEmoji} GOLF H2H: ${statusText}`, PAD + 5, curY + 20);
   curY += 32;
 
   // Pick text
   ctx.font = `700 16px ${FF}`;
   ctx.fillStyle = C.white;
-  ctx.fillText(closedPick.pick || '—', PAD + 5, curY + 16);
+  ctx.fillText(closedPick.pick || '\u2014', PAD + 5, curY + 16);
   curY += 24;
 
   // Result note
@@ -484,7 +499,7 @@ async function generateGolfRecapImage(closedPick, record) {
     curY += 22;
   }
 
-  // Final score
+  // Final score (matchup info)
   if (closedPick.final_score) {
     ctx.font = `600 13px ${FF}`;
     ctx.fillStyle = C.muted;
@@ -526,7 +541,7 @@ async function generateGolfRecapImage(closedPick, record) {
   // Footer
   ctx.font = `500 10px ${FF}`;
   ctx.fillStyle = C.muted;
-  const poweredStr = 'The Gambling King • Golf Picks';
+  const poweredStr = 'The Gambling King \u2022 Golf H2H Picks';
   const pwW = ctx.measureText(poweredStr).width;
   ctx.fillText(poweredStr, (W - pwW) / 2, H - 14);
 
@@ -534,9 +549,9 @@ async function generateGolfRecapImage(closedPick, record) {
 }
 
 /**
- * Generate round/tournament recap image
+ * Generate weekly tournament recap image
  */
-async function generateGolfTournamentRecapImage(picks, tournament, record) {
+async function generateGolfTournamentRecapImage(picks, tournamentName, record) {
   const W = 520;
   const PAD = 24;
   const INNER = W - PAD * 2;
@@ -573,12 +588,11 @@ async function generateGolfTournamentRecapImage(picks, tournament, record) {
   // Title
   ctx.font = `900 18px ${FF}`;
   ctx.fillStyle = C.green;
-  const roundNum = picks[0]?.round_number || '?';
-  ctx.fillText(`⛳ ROUND ${roundNum} RECAP`, PAD, curY + 18);
+  ctx.fillText('\u26f3 WEEKLY RECAP', PAD, curY + 18);
   curY += 26;
   ctx.font = `600 13px ${FF}`;
   ctx.fillStyle = C.gray;
-  ctx.fillText(tournament?.name || 'PGA Tournament', PAD, curY + 13);
+  ctx.fillText(tournamentName || 'PGA Tournament', PAD, curY + 13);
   curY += 24;
 
   // Divider
@@ -591,13 +605,13 @@ async function generateGolfTournamentRecapImage(picks, tournament, record) {
   ctx.setLineDash([]);
   curY += 12;
 
-  // Today's results summary
+  // This week's results summary
   const wins = picks.filter(p => p.status === 'win').length;
   const losses = picks.filter(p => p.status === 'loss').length;
   const pushes = picks.filter(p => p.status === 'push').length;
 
   const colW = INNER / 3;
-  const summaryLabels = ['TODAY', 'WINS', 'LOSSES'];
+  const summaryLabels = ['THIS WEEK', 'WINS', 'LOSSES'];
   const summaryValues = [`${wins}-${losses}-${pushes}`, String(wins), String(losses)];
   const sColors = [C.white, C.green, C.red];
 
@@ -626,7 +640,7 @@ async function generateGolfTournamentRecapImage(picks, tournament, record) {
 
   // Individual pick results
   for (const pick of picks) {
-    const emoji = pick.status === 'win' ? '✅' : pick.status === 'loss' ? '❌' : '🔄';
+    const emoji = pick.status === 'win' ? '\u2705' : pick.status === 'loss' ? '\u274c' : '\ud83d\udd04';
     const statusColor = pick.status === 'win' ? C.green : pick.status === 'loss' ? C.red : C.gold;
 
     ctx.font = `600 13px ${FF}`;
@@ -634,7 +648,7 @@ async function generateGolfTournamentRecapImage(picks, tournament, record) {
     ctx.fillText(emoji, PAD + 5, curY + 13);
 
     ctx.fillStyle = C.white;
-    ctx.fillText(pick.pick || '—', PAD + 28, curY + 13);
+    ctx.fillText(pick.pick || '\u2014', PAD + 28, curY + 13);
 
     if (pick.final_score) {
       ctx.font = `500 11px ${FF}`;
@@ -670,7 +684,7 @@ async function generateGolfTournamentRecapImage(picks, tournament, record) {
   // Footer
   ctx.font = `500 10px ${FF}`;
   ctx.fillStyle = C.muted;
-  const poweredStr = 'The Gambling King • Golf Picks';
+  const poweredStr = 'The Gambling King \u2022 Golf H2H Picks';
   const pwW = ctx.measureText(poweredStr).width;
   ctx.fillText(poweredStr, (W - pwW) / 2, H - 14);
 

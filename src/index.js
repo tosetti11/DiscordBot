@@ -368,60 +368,60 @@ client.once(Events.ClientReady, (c) => {
       }
     }, 15_000);
 
-    // ─── Golf Round Totals Scheduler (Thu-Sun) ───
-    // Generate golf picks at 7:00 AM ET on tournament days
+    // ─── Golf H2H Matchup Scheduler (Wed 8 PM picks, Sun recap) ───
+    // Generate golf picks at 8:00 PM ET on Wednesdays
     setTimeout(() => {
       (async () => {
         try {
-          if (golfService.isTournamentDay()) {
+          if (golfService.isGolfPickDay()) {
             await golfService.generateGolfPicks(client, AI_GUILD_ID);
           }
-        } catch (e) { console.error('[Golf Picks] Initial generation error:', e.message); }
+        } catch (e) { console.error('[Golf H2H] Initial generation error:', e.message); }
       })();
       setInterval(async () => {
         try {
-          if (golfService.isTournamentDay()) {
+          if (golfService.isGolfPickDay()) {
             await golfService.generateGolfPicks(client, AI_GUILD_ID);
           }
-        } catch (e) { console.error('[Golf Picks] Generation error:', e.message); }
-      }, 24 * 60 * 60_000);
-    }, msUntilET(7, 0));
-
-    // Auto-close golf picks every 10 minutes
-    setInterval(async () => {
-      try {
-        await golfService.autoCloseGolfPicks(client);
-      } catch (e) { console.error('[Golf Picks] Auto-close error:', e.message); }
-    }, 10 * 60_000);
-
-    // Evening round recap at 8:00 PM ET
-    setTimeout(() => {
-      (async () => {
-        try {
-          if (golfService.isTournamentDay()) {
-            await golfService.postRoundRecap(client, AI_GUILD_ID);
-          }
-        } catch (e) { console.error('[Golf Picks] Recap error:', e.message); }
-      })();
-      setInterval(async () => {
-        try {
-          if (golfService.isTournamentDay()) {
-            await golfService.postRoundRecap(client, AI_GUILD_ID);
-          }
-        } catch (e) { console.error('[Golf Picks] Recap error:', e.message); }
+        } catch (e) { console.error('[Golf H2H] Generation error:', e.message); }
       }, 24 * 60 * 60_000);
     }, msUntilET(20, 0));
 
-    console.log('   ⛳ Golf Round Totals scheduler started');
+    // Auto-close golf picks every 30 minutes
+    setInterval(async () => {
+      try {
+        await golfService.autoCloseGolfPicks(client);
+      } catch (e) { console.error('[Golf H2H] Auto-close error:', e.message); }
+    }, 30 * 60_000);
 
-    // Fire golf picks on startup if tournament day (20s delay)
+    // Sunday weekly recap at 7:00 PM ET
+    setTimeout(() => {
+      (async () => {
+        try {
+          if (golfService.isSunday()) {
+            await golfService.postWeeklyRecap(client, AI_GUILD_ID);
+          }
+        } catch (e) { console.error('[Golf H2H] Recap error:', e.message); }
+      })();
+      setInterval(async () => {
+        try {
+          if (golfService.isSunday()) {
+            await golfService.postWeeklyRecap(client, AI_GUILD_ID);
+          }
+        } catch (e) { console.error('[Golf H2H] Recap error:', e.message); }
+      }, 24 * 60 * 60_000);
+    }, msUntilET(19, 0));
+
+    console.log('   ⛳ Golf H2H Matchup scheduler started');
+
+    // Fire golf picks on startup if pick day (20s delay)
     setTimeout(async () => {
       try {
-        if (golfService.isTournamentDay()) {
+        if (golfService.isGolfPickDay()) {
           await golfService.generateGolfPicks(client, AI_GUILD_ID);
         }
       } catch (e) {
-        console.error('[Golf Picks] Startup error:', e.message);
+        console.error('[Golf H2H] Startup error:', e.message);
       }
     }, 20_000);
   }
