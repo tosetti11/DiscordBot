@@ -7509,6 +7509,8 @@ async function fetchAiLeaderboard() {
 let golfAdminInitialized = false;
 let golfScreenshots = []; // { file, dataUrl }
 let golfAnalyzedPicks = null;
+let golfSelectedPicks = new Set(); // indices of selected picks
+let golfHistoryLoaded = false;
 
 function initGolfAdminPage() {
   if (golfAdminInitialized) return;
@@ -7527,6 +7529,16 @@ function initGolfAdminPage() {
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
     if (files.length) golfAddFiles(files);
   });
+}
+
+function golfSwitchTab(tab) {
+  document.querySelectorAll('.golf-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('golf-tab-analyze').classList.toggle('hidden', tab !== 'analyze');
+  document.getElementById('golf-tab-history').classList.toggle('hidden', tab !== 'history');
+  if (tab === 'history' && !golfHistoryLoaded) {
+    golfHistoryLoaded = true;
+    golfLoadTournaments();
+  }
 }
 
 function golfCompressImage(file) {
@@ -7563,7 +7575,7 @@ function golfCompressImage(file) {
 async function golfHandleFiles(e) {
   const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
   if (files.length) await golfAddFiles(files);
-  e.target.value = ''; // reset so same files can be re-selected
+  e.target.value = '';
 }
 
 async function golfAddFiles(files) {
@@ -7573,12 +7585,10 @@ async function golfAddFiles(files) {
     showToast('Maximum 10 screenshots allowed.', 3000);
     return;
   }
-
   for (const file of toAdd) {
     const dataUrl = await golfCompressImage(file);
     golfScreenshots.push({ file, dataUrl });
   }
-
   golfRenderPreviews();
 }
 
@@ -7619,12 +7629,12 @@ function golfClearScreenshots() {
 }
 
 async function golfAnalyzeScreenshots() {
-  const tournament = document.getElementById('golf-tournament').value.trim();
-  const round = document.getElementById('golf-round').value;
+  const tournament = document.getElementById('golf-admin-tournament').value.trim();
+  const round = document.getElementById('golf-admin-round').value;
 
   if (!tournament) {
     showToast('Enter a tournament name first.', 3000);
-    document.getElementById('golf-tournament').focus();
+    document.getElementById('golf-admin-tournament').focus();
     return;
   }
   if (golfScreenshots.length === 0) {
@@ -7654,7 +7664,10 @@ async function golfAnalyzeScreenshots() {
     }
 
     golfAnalyzedPicks = { picks: data.picks, tournament, round };
+    // Select all by default
+    golfSelectedPicks = new Set(data.picks.map((_, i) => i));
     golfRenderPicks(data.picks);
+    golfUpdateSelectedCount();
 
     // Switch to review step
     document.getElementById('golf-step-upload').classList.add('hidden');
@@ -7676,8 +7689,10 @@ function golfRenderPicks(picks) {
     const isOver = (p.pick_side || '').toLowerCase().startsWith('over');
     const sideClass = isOver ? 'over' : 'under';
     const oddsStr = p.odds_american > 0 ? `+${p.odds_american}` : String(p.odds_american);
+    const selected = golfSelectedPicks.has(i);
     return `
-      <div class="golf-pick-card">
+      <div class="golf-pick-card ${selected ? '' : 'deselected'}" onclick="golfTogglePick(${i})" data-pick-idx="${i}">
+        <div class="golf-pick-checkbox">${selected ? '✓' : ''}</div>
         <div class="golf-pick-header">
           <span class="golf-pick-rank">${i + 1}</span>
           <span class="golf-pick-player">${esc(p.player_name)}</span>
@@ -7698,6 +7713,45 @@ function golfRenderPicks(picks) {
   }).join('');
 }
 
+function golfTogglePick(idx) {
+  if (golfSelectedPicks.has(idx)) {
+    golfSelectedPicks.delete(idx);
+  } else {
+    golfSelectedPicks.add(idx);
+  }
+  const card = document.querySelector(`.golf-pick-card[data-pick-idx="${idx}"]`);
+  if (card) {
+    card.classList.toggle('deselected', !golfSelectedPicks.has(idx));
+    card.querySelector('.golf-pick-checkbox').textContent = golfSelectedPicks.has(idx) ? '✓' : '';
+  }
+  golfUpdateSelectedCount();
+}
+
+function golfSelectAll() {
+  if (!golfAnalyzedPicks) return;
+  golfSelectedPicks = new Set(golfAnalyzedPicks.picks.map((_, i) => i));
+  document.querySelectorAll('.golf-pick-card').forEach(c => {
+    c.classList.remove('deselected');
+    c.querySelector('.golf-pick-checkbox').textContent = '✓';
+  });
+  golfUpdateSelectedCount();
+}
+
+function golfDeselectAll() {
+  golfSelectedPicks.clear();
+  document.querySelectorAll('.golf-pick-card').forEach(c => {
+    c.classList.add('deselected');
+    c.querySelector('.golf-pick-checkbox').textContent = '';
+  });
+  golfUpdateSelectedCount();
+}
+
+function golfUpdateSelectedCount() {
+  const count = golfSelectedPicks.size;
+  document.getElementById('golf-selected-count').textContent = count;
+  document.getElementById('golf-post-btn').disabled = count === 0;
+}
+
 function golfBackToUpload() {
   document.getElementById('golf-step-review').classList.add('hidden');
   document.getElementById('golf-step-upload').classList.remove('hidden');
@@ -7705,11 +7759,12 @@ function golfBackToUpload() {
 }
 
 async function golfPostToDiscord() {
-  if (!golfAnalyzedPicks) return;
+  if (!golfAnalyzedPicks || golfSelectedPicks.size === 0) return;
+
+  const selectedPicks = golfAnalyzedPicks.picks.filter((_, i) => golfSelectedPicks.has(i));
 
   const postBtn = document.getElementById('golf-post-btn');
   const status = document.getElementById('golf-post-status');
-  const statusText = document.getElementById('golf-post-status-text');
   postBtn.disabled = true;
   status.classList.remove('hidden');
 
@@ -7717,7 +7772,11 @@ async function golfPostToDiscord() {
     const res = await fetch('/api/golf/post', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(golfAnalyzedPicks),
+      body: JSON.stringify({
+        picks: selectedPicks,
+        tournament: golfAnalyzedPicks.tournament,
+        round: golfAnalyzedPicks.round,
+      }),
     });
 
     const data = await res.json();
@@ -7725,13 +7784,15 @@ async function golfPostToDiscord() {
       throw new Error(data.error || 'Failed to post');
     }
 
-    // Switch to done step
     document.getElementById('golf-step-review').classList.add('hidden');
     document.getElementById('golf-step-done').classList.remove('hidden');
     document.getElementById('golf-done-msg').innerHTML = `
-      <p>\u2705 <strong>${data.posted.length} picks</strong> posted to AI Picks + AI Open Slips!</p>
+      <p>\u2705 <strong>${data.posted.length} picks</strong> posted to the Golf channel!</p>
       <p style="color:var(--text-muted);font-size:13px;margin-top:8px">Tournament: ${esc(golfAnalyzedPicks.tournament)} \u2022 ${esc(golfAnalyzedPicks.round)}</p>
     `;
+
+    // Refresh history if it was loaded
+    golfHistoryLoaded = false;
 
     showToast(`\u26f3 ${data.posted.length} golf picks posted to Discord!`, 5000);
   } catch (err) {
@@ -7746,12 +7807,82 @@ async function golfPostToDiscord() {
 function golfReset() {
   golfScreenshots = [];
   golfAnalyzedPicks = null;
+  golfSelectedPicks.clear();
   golfRenderPreviews();
-  document.getElementById('golf-tournament').value = '';
-  document.getElementById('golf-round').value = 'Round 1';
+  document.getElementById('golf-admin-tournament').value = '';
+  document.getElementById('golf-admin-round').value = 'Round 1';
   document.getElementById('golf-analyze-btn').disabled = true;
-  document.getElementById('golf-post-btn').disabled = false;
+  document.getElementById('golf-post-btn').disabled = true;
   document.getElementById('golf-step-done').classList.add('hidden');
   document.getElementById('golf-step-review').classList.add('hidden');
   document.getElementById('golf-step-upload').classList.remove('hidden');
+}
+
+// ── Golf History ──
+async function golfLoadTournaments() {
+  try {
+    const res = await fetch('/api/golf/history');
+    const data = await res.json();
+    if (!data.success) return;
+    const sel = document.getElementById('golf-hist-tournament');
+    const tournaments = [...new Set(data.picks.map(p => p.tournament_name).filter(Boolean))];
+    sel.innerHTML = '<option value="">All Tournaments</option>' +
+      tournaments.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    // Cache the data for filtering
+    window._golfHistoryData = data.picks;
+    golfRenderHistory(data.picks);
+  } catch (e) {
+    console.error('Golf history error:', e);
+  }
+}
+
+function golfLoadHistory() {
+  const picks = window._golfHistoryData || [];
+  const tournament = document.getElementById('golf-hist-tournament').value;
+  const round = document.getElementById('golf-hist-round').value;
+  const status = document.getElementById('golf-hist-status').value;
+
+  let filtered = picks;
+  if (tournament) filtered = filtered.filter(p => p.tournament_name === tournament);
+  if (round) filtered = filtered.filter(p => p.round_number === parseInt(round));
+  if (status) filtered = filtered.filter(p => p.status === status);
+  golfRenderHistory(filtered);
+}
+
+function golfRenderHistory(picks) {
+  // Summary
+  const wins = picks.filter(p => p.status === 'win').length;
+  const losses = picks.filter(p => p.status === 'loss').length;
+  const pushes = picks.filter(p => p.status === 'push').length;
+  const pending = picks.filter(p => p.status === 'pending').length;
+  const total = wins + losses;
+  const pct = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0';
+
+  document.getElementById('golf-history-summary').innerHTML = `
+    <div class="golf-hist-stat wins"><span class="golf-hist-stat-val">${wins}</span><span class="golf-hist-stat-label">Hits</span></div>
+    <div class="golf-hist-stat losses"><span class="golf-hist-stat-val">${losses}</span><span class="golf-hist-stat-label">Misses</span></div>
+    <div class="golf-hist-stat"><span class="golf-hist-stat-val">${pushes}</span><span class="golf-hist-stat-label">Pushes</span></div>
+    <div class="golf-hist-stat"><span class="golf-hist-stat-val">${pending}</span><span class="golf-hist-stat-label">Pending</span></div>
+    <div class="golf-hist-stat"><span class="golf-hist-stat-val">${pct}%</span><span class="golf-hist-stat-label">Hit Rate</span></div>
+  `;
+
+  // List
+  const list = document.getElementById('golf-history-list');
+  if (picks.length === 0) {
+    list.innerHTML = '<p class="golf-history-empty">No picks found for this filter.</p>';
+    return;
+  }
+
+  const statusIcons = { win: '✅', loss: '❌', push: '➖', pending: '⏳' };
+  list.innerHTML = picks.map(p => {
+    const date = p.pick_date ? new Date(p.pick_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    return `
+      <div class="golf-hist-row">
+        <div class="golf-hist-status ${p.status}">${statusIcons[p.status] || '?'}</div>
+        <span class="golf-hist-pick">${esc(p.pick)}</span>
+        <span class="golf-hist-tournament">${esc(p.tournament_name || '')} R${p.round_number || '?'}</span>
+        <span class="golf-hist-date">${date}</span>
+      </div>
+    `;
+  }).join('');
 }

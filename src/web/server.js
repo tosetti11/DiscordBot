@@ -3022,8 +3022,7 @@ Rules:
   const golfJsonParser = express.json({ limit: '50mb' });
   const { generateGolfRoundOUCardImage } = require('../utils/golfPickCardImage');
 
-  const GOLF_CHANNEL_ID = '1485903920906895370'; // AI Open Slips
-  const GOLF_AI_PICKS_CHANNEL_ID = '1483720217044713674'; // AI Picks (main)
+  const GOLF_CHANNEL_ID = '1484034324217987112'; // Golf channel (primary posting target)
 
   // Analyze screenshots with GPT-4o Vision
   app.post('/api/golf/analyze', authMiddleware, golfJsonParser, ownerMiddleware, async (req, res) => {
@@ -3046,7 +3045,8 @@ Rules:
 TASK:
 1. Extract ALL player round score over/under lines visible in these screenshots
 2. From all the lines, select the TOP 10 best bets ranked by confidence (highest confidence first)
-3. For each pick, include a DETAILED analysis paragraph
+3. Include BOTH Overs AND Unders — do NOT bias toward one side. Pick whichever side (Over or Under) is the sharper play for each player.
+4. For each pick, include a DETAILED analysis paragraph
 
 For your analysis of each pick, include:
 - Course analysis (how the course layout, conditions, length, and setup favor/disfavor this player's game)
@@ -3069,6 +3069,7 @@ Return a JSON array with exactly 10 picks, ranked by confidence (highest first):
 
 IMPORTANT RULES:
 - Return ONLY valid JSON array. No markdown, no explanation outside the JSON.
+- Include a MIX of Over and Under picks — aim for roughly balanced recommendations
 - Extract the exact odds shown in the screenshots (convert to American if shown as decimal)
 - Player names must match exactly as displayed in the screenshots
 - Confidence must range from 70-95 (no pick should be below 70 or above 95)
@@ -3118,7 +3119,7 @@ IMPORTANT RULES:
     }
   });
 
-  // Post analyzed picks to Discord
+  // Post analyzed picks to Discord Golf channel
   app.post('/api/golf/post', authMiddleware, ownerMiddleware, postLimiter, async (req, res) => {
     try {
       const { picks, tournament, round } = req.body;
@@ -3127,12 +3128,12 @@ IMPORTANT RULES:
 
       const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
 
-      const channel = await discordClient.channels.fetch(GOLF_AI_PICKS_CHANNEL_ID);
-      if (!channel) return res.status(503).json({ error: 'AI Picks channel not found' });
+      const channel = await discordClient.channels.fetch(GOLF_CHANNEL_ID);
+      if (!channel) return res.status(503).json({ error: 'Golf channel not found' });
 
       const guildId = channel.guildId;
       const golfAiPicksDb = require('../database/aiPicks');
-      const record = await golfAiPicksDb.getGolfRecord(guildId);
+      const record = await golfAiPicksDb.getGolfRoundRecord(guildId);
 
       const totalPicks = picks.length;
       const posted = [];
@@ -3143,7 +3144,7 @@ IMPORTANT RULES:
 
         const aiPick = await golfAiPicksDb.createAiPick({
           guild_id: guildId,
-          channel_id: GOLF_AI_PICKS_CHANNEL_ID,
+          channel_id: GOLF_CHANNEL_ID,
           sport: 'golf_pga',
           bet_category: 'total',
           wager_type: 'over_under',
@@ -3205,48 +3206,29 @@ IMPORTANT RULES:
         });
 
         await golfAiPicksDb.updateAiPickMessage(aiPick.id, message.id);
-
-        // Cross-post to AI Open Slips
-        try {
-          const slipsChannel = await discordClient.channels.fetch(GOLF_CHANNEL_ID);
-          if (slipsChannel) {
-            const mirrorImg = new AttachmentBuilder(imgBuffer, { name: `golf-pick-${i + 1}.png` });
-            const mirrorRow = new ActionRowBuilder().addComponents(
-              new ButtonBuilder()
-                .setCustomId(`aipick_tail_${aiPick.id}`)
-                .setLabel('\u26f3 Tail (0)')
-                .setStyle(ButtonStyle.Success),
-              new ButtonBuilder()
-                .setCustomId(`aipick_fade_${aiPick.id}`)
-                .setLabel('Fade (0)')
-                .setStyle(ButtonStyle.Danger),
-              new ButtonBuilder()
-                .setLabel('Comment')
-                .setStyle(ButtonStyle.Link)
-                .setURL(`https://discord.com/channels/${guildId}/${GOLF_AI_PICKS_CHANNEL_ID}/${message.id}`),
-            );
-            const mirrorMsg = await slipsChannel.send({
-              content: `\u26f3 **GOLF ROUND TOTALS** \u2014 Pick ${i + 1}/${totalPicks}`,
-              files: [mirrorImg],
-              components: [mirrorRow],
-            });
-            await golfAiPicksDb.updateAiPickMirrorMessage(aiPick.id, mirrorMsg.id, GOLF_CHANNEL_ID);
-          }
-        } catch (e) {
-          console.error('[Golf] Cross-post error:', e.message);
-        }
-
         posted.push({ id: aiPick.id, pick: pickStr });
 
         // Rate limit pause between posts
         if (i < totalPicks - 1) await new Promise(r => setTimeout(r, 1500));
       }
 
-      console.log(`[Golf] Posted ${posted.length} picks to Discord for ${tournament}`);
+      console.log(`[Golf] Posted ${posted.length} picks to Discord Golf channel for ${tournament}`);
       res.json({ success: true, posted });
     } catch (err) {
       console.error('[Golf] Post error:', err);
       res.status(500).json({ error: 'Failed to post picks to Discord' });
+    }
+  });
+
+  // Golf history — all golf_round picks
+  app.get('/api/golf/history', authMiddleware, ownerMiddleware, async (req, res) => {
+    try {
+      const golfAiPicksDb = require('../database/aiPicks');
+      const picks = await golfAiPicksDb.getGolfRoundHistory();
+      res.json({ success: true, picks });
+    } catch (err) {
+      console.error('[Golf] History error:', err);
+      res.status(500).json({ error: 'Failed to fetch golf history' });
     }
   });
 
