@@ -6488,11 +6488,18 @@ textarea {
    Golf Admin Page
    ═══════════════════════════════════════════════ */
 
+/* Compact the shared containers for golf page */
+#golf-admin-page { padding: 12px 10px 60px; }
+#golf-admin-page .tools-container { padding: 0 12px; }
+#golf-admin-page .tools-header { margin-bottom: 8px; }
+#golf-admin-page .tools-header h2 { font-size: 20px; margin: 0; }
+#golf-admin-page .tools-header .slip-subtitle { font-size: 12px; margin: 2px 0 0; }
+
 /* Tabs */
 .golf-tabs {
   display: flex;
   gap: 2px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   background: var(--bg-secondary);
   border-radius: 10px;
   padding: 3px;
@@ -6515,13 +6522,13 @@ textarea {
 }
 .golf-tab:hover:not(.active) { color: var(--text-primary); }
 
-.golf-admin-card { padding: 20px; }
+.golf-admin-card { padding: 14px; }
 .golf-step { margin-bottom: 0; }
 .golf-step-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 .golf-step-header h4 { margin: 0; font-size: 16px; font-weight: 700; flex: 1; }
 .golf-select-controls { display: flex; gap: 6px; }
@@ -6547,10 +6554,10 @@ textarea {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px;
+  padding: 10px;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 13px;
   transition: color 0.2s;
   justify-content: center;
 }
@@ -6611,9 +6618,11 @@ textarea {
 .golf-config {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
+.golf-config .form-group label { font-size: 12px; margin-bottom: 2px; }
+.golf-config .form-input { padding: 6px 10px; font-size: 13px; }
 
 /* Analyze status */
 .golf-analyze-status {
