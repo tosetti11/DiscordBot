@@ -109,6 +109,9 @@
             <a href="javascript:void(0)" class="sidebar-link sidebar-sub" data-page="game-picks" id="nav-game-picks" onclick="switchPage('game-picks')">
               <span class="sidebar-icon">🏀</span> Games
             </a>
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub" data-page="golf-admin" id="nav-golf-admin" onclick="switchPage('golf-admin')">
+              <span class="sidebar-icon">⛳</span> Golf
+            </a>
           </div>
         </div>
 
@@ -1885,6 +1888,93 @@
 
   </div>
 
+  <!-- Golf Admin Page (owner only) -->
+  <main id="golf-admin-page" class="main-content hidden">
+    <div class="tools-container">
+      <div class="tools-header">
+        <h2>⛳ Golf Round Totals</h2>
+        <p class="slip-subtitle">Upload DraftKings round score O/U screenshots, analyze with GPT-4o, review ranked picks, then post to Discord.</p>
+      </div>
+
+      <div class="tool-card golf-admin-card">
+        <!-- Step 1: Upload Screenshots -->
+        <div class="golf-step" id="golf-step-upload">
+          <div class="golf-step-header">
+            <span class="golf-step-num">1</span>
+            <h4>Upload Screenshots</h4>
+          </div>
+          <p class="golf-step-desc">Select up to 10 DraftKings round score over/under screenshots. Supports JPG, PNG, WebP.</p>
+          <div class="golf-upload-zone" id="golf-upload-zone">
+            <input type="file" id="golf-file-input" accept="image/*" multiple hidden>
+            <div class="golf-upload-prompt" id="golf-upload-prompt" onclick="document.getElementById('golf-file-input').click()">
+              <span class="golf-upload-icon">📸</span>
+              <span>Click to select screenshots (max 10)</span>
+            </div>
+            <div class="golf-previews" id="golf-previews"></div>
+          </div>
+          <div class="golf-upload-actions" id="golf-upload-actions" style="display:none">
+            <button class="btn btn-secondary btn-sm" onclick="golfClearScreenshots()">Clear All</button>
+            <span class="golf-file-count" id="golf-file-count">0 files</span>
+          </div>
+          <div class="golf-config">
+            <div class="form-group">
+              <label for="golf-tournament">Tournament Name</label>
+              <input type="text" id="golf-tournament" placeholder="e.g. Cognizant Classic" class="form-input">
+            </div>
+            <div class="form-group">
+              <label for="golf-round">Round</label>
+              <select id="golf-round" class="form-input">
+                <option value="Round 1">Round 1</option>
+                <option value="Round 2">Round 2</option>
+                <option value="Round 3">Round 3</option>
+                <option value="Round 4">Round 4</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-accent golf-analyze-btn" id="golf-analyze-btn" onclick="golfAnalyzeScreenshots()" disabled>
+            🤖 Analyze with GPT-4o
+          </button>
+          <div class="golf-analyze-status hidden" id="golf-analyze-status">
+            <div class="scan-spinner"></div>
+            <span>Analyzing screenshots... extracting lines and generating picks (30-60s)</span>
+          </div>
+        </div>
+
+        <!-- Step 2: Review Ranked Picks -->
+        <div class="golf-step hidden" id="golf-step-review">
+          <div class="golf-step-header">
+            <span class="golf-step-num">2</span>
+            <h4>Review Ranked Picks</h4>
+            <button class="btn btn-secondary btn-sm" onclick="golfBackToUpload()">← Back</button>
+          </div>
+          <p class="golf-step-desc">Top 10 picks ranked by confidence. Review the analysis, then post to Discord when ready.</p>
+          <div class="golf-picks-list" id="golf-picks-list"></div>
+          <div class="golf-post-actions" id="golf-post-actions">
+            <button class="btn btn-accent golf-post-btn" id="golf-post-btn" onclick="golfPostToDiscord()">
+              🚀 Post All Picks to Discord
+            </button>
+            <div class="golf-post-status hidden" id="golf-post-status">
+              <div class="scan-spinner"></div>
+              <span id="golf-post-status-text">Posting picks to Discord...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Done -->
+        <div class="golf-step hidden" id="golf-step-done">
+          <div class="golf-step-header">
+            <span class="golf-step-num">✓</span>
+            <h4>Picks Posted!</h4>
+          </div>
+          <div class="golf-done-msg" id="golf-done-msg">
+            <p>✅ All picks have been posted to the golf channel.</p>
+          </div>
+          <button class="btn btn-accent" onclick="golfReset()">⛳ Start New Analysis</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
   <!-- Floating Chat Panel -->
   <div id="chat-fab" class="chat-fab" onclick="toggleChatPanel()">
     <span class="chat-fab-icon">💬</span>
@@ -2009,6 +2099,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="/app.js?v=62"></script>
+  <script src="/app.js?v=63"></script>
 </body>
 </html>

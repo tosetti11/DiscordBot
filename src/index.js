@@ -368,62 +368,9 @@ client.once(Events.ClientReady, (c) => {
       }
     }, 15_000);
 
-    // ─── Golf H2H Matchup Scheduler (Wed 8 PM picks, Sun recap) ───
-    // Generate golf picks at 8:00 PM ET on Wednesdays
-    setTimeout(() => {
-      (async () => {
-        try {
-          if (golfService.isGolfPickDay()) {
-            await golfService.generateGolfPicks(client, AI_GUILD_ID);
-          }
-        } catch (e) { console.error('[Golf H2H] Initial generation error:', e.message); }
-      })();
-      setInterval(async () => {
-        try {
-          if (golfService.isGolfPickDay()) {
-            await golfService.generateGolfPicks(client, AI_GUILD_ID);
-          }
-        } catch (e) { console.error('[Golf H2H] Generation error:', e.message); }
-      }, 24 * 60 * 60_000);
-    }, msUntilET(20, 0));
-
-    // Auto-close golf picks every 30 minutes
-    setInterval(async () => {
-      try {
-        await golfService.autoCloseGolfPicks(client);
-      } catch (e) { console.error('[Golf H2H] Auto-close error:', e.message); }
-    }, 30 * 60_000);
-
-    // Sunday weekly recap at 7:00 PM ET
-    setTimeout(() => {
-      (async () => {
-        try {
-          if (golfService.isSunday()) {
-            await golfService.postWeeklyRecap(client, AI_GUILD_ID);
-          }
-        } catch (e) { console.error('[Golf H2H] Recap error:', e.message); }
-      })();
-      setInterval(async () => {
-        try {
-          if (golfService.isSunday()) {
-            await golfService.postWeeklyRecap(client, AI_GUILD_ID);
-          }
-        } catch (e) { console.error('[Golf H2H] Recap error:', e.message); }
-      }, 24 * 60 * 60_000);
-    }, msUntilET(19, 0));
-
-    console.log('   ⛳ Golf H2H Matchup scheduler started');
-
-    // Fire golf picks on startup if pick day (20s delay)
-    setTimeout(async () => {
-      try {
-        if (golfService.isGolfPickDay()) {
-          await golfService.generateGolfPicks(client, AI_GUILD_ID);
-        }
-      } catch (e) {
-        console.error('[Golf H2H] Startup error:', e.message);
-      }
-    }, 20_000);
+    // ─── Golf H2H Matchup Scheduler (PAUSED — waiting on odds source) ───
+    // TODO: Re-enable once we have a working golf odds API
+    console.log('   ⛳ Golf H2H Matchup scheduler PAUSED (odds source TBD)');
   }
 
   // ─── Lock Open Slips Channels (view + react + buttons only, no sending) ───

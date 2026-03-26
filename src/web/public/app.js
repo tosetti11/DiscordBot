@@ -1860,6 +1860,7 @@ function switchPage(page) {
     announce: document.getElementById('announce-page'),
     props: document.getElementById('props-page'),
     'game-picks': document.getElementById('game-picks-page'),
+    'golf-admin': document.getElementById('golf-admin-page'),
     scoreboard: document.getElementById('scoreboard-page'),
     profile: document.getElementById('profile-page'),
     'ai-picks': document.getElementById('ai-picks-page'),
@@ -1884,6 +1885,7 @@ function switchPage(page) {
   if (page === 'scoreboard') initScoreboardPage();
   if (page === 'props') initPropsIfNeeded();
   if (page === 'game-picks') initGamePicksPage();
+  if (page === 'golf-admin') initGolfAdminPage();
   if (page === 'profile') loadProfilePage();
   if (page === 'ai-picks') initAiPicksPage();
 }
@@ -7498,4 +7500,258 @@ async function fetchAiLeaderboard() {
     console.error('AI leaderboard error:', err);
     list.innerHTML = '<p class="muted-text">Failed to load leaderboard.</p>';
   }
+}
+
+// ═══════════════════════════════════════════════
+//  Golf Admin (Screenshot → GPT-4o → Discord)
+// ═══════════════════════════════════════════════
+
+let golfAdminInitialized = false;
+let golfScreenshots = []; // { file, dataUrl }
+let golfAnalyzedPicks = null;
+
+function initGolfAdminPage() {
+  if (golfAdminInitialized) return;
+  golfAdminInitialized = true;
+
+  const fileInput = document.getElementById('golf-file-input');
+  fileInput.addEventListener('change', golfHandleFiles);
+
+  // Drag and drop
+  const zone = document.getElementById('golf-upload-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length) golfAddFiles(files);
+  });
+}
+
+function golfCompressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 2048;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        const ratio = Math.min(MAX / w, MAX / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read image'));
+      reader.readAsDataURL(file);
+    };
+    img.src = url;
+  });
+}
+
+async function golfHandleFiles(e) {
+  const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
+  if (files.length) await golfAddFiles(files);
+  e.target.value = ''; // reset so same files can be re-selected
+}
+
+async function golfAddFiles(files) {
+  const remaining = 10 - golfScreenshots.length;
+  const toAdd = files.slice(0, remaining);
+  if (toAdd.length === 0) {
+    showToast('Maximum 10 screenshots allowed.', 3000);
+    return;
+  }
+
+  for (const file of toAdd) {
+    const dataUrl = await golfCompressImage(file);
+    golfScreenshots.push({ file, dataUrl });
+  }
+
+  golfRenderPreviews();
+}
+
+function golfRenderPreviews() {
+  const container = document.getElementById('golf-previews');
+  const prompt = document.getElementById('golf-upload-prompt');
+  const actions = document.getElementById('golf-upload-actions');
+  const analyzeBtn = document.getElementById('golf-analyze-btn');
+  const countEl = document.getElementById('golf-file-count');
+
+  container.innerHTML = golfScreenshots.map((s, i) => `
+    <div class="golf-preview-thumb">
+      <img src="${s.dataUrl}" alt="Screenshot ${i + 1}">
+      <button class="golf-preview-remove" onclick="golfRemoveScreenshot(${i})">✕</button>
+    </div>
+  `).join('');
+
+  if (golfScreenshots.length > 0) {
+    prompt.style.display = 'none';
+    actions.style.display = 'flex';
+    analyzeBtn.disabled = false;
+    countEl.textContent = `${golfScreenshots.length} file${golfScreenshots.length > 1 ? 's' : ''}`;
+  } else {
+    prompt.style.display = '';
+    actions.style.display = 'none';
+    analyzeBtn.disabled = true;
+  }
+}
+
+function golfRemoveScreenshot(idx) {
+  golfScreenshots.splice(idx, 1);
+  golfRenderPreviews();
+}
+
+function golfClearScreenshots() {
+  golfScreenshots = [];
+  golfRenderPreviews();
+}
+
+async function golfAnalyzeScreenshots() {
+  const tournament = document.getElementById('golf-tournament').value.trim();
+  const round = document.getElementById('golf-round').value;
+
+  if (!tournament) {
+    showToast('Enter a tournament name first.', 3000);
+    document.getElementById('golf-tournament').focus();
+    return;
+  }
+  if (golfScreenshots.length === 0) {
+    showToast('Upload at least one screenshot.', 3000);
+    return;
+  }
+
+  const analyzeBtn = document.getElementById('golf-analyze-btn');
+  const status = document.getElementById('golf-analyze-status');
+  analyzeBtn.disabled = true;
+  status.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/golf/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        images: golfScreenshots.map(s => s.dataUrl),
+        tournament,
+        round,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Analysis failed');
+    }
+
+    golfAnalyzedPicks = { picks: data.picks, tournament, round };
+    golfRenderPicks(data.picks);
+
+    // Switch to review step
+    document.getElementById('golf-step-upload').classList.add('hidden');
+    document.getElementById('golf-step-review').classList.remove('hidden');
+
+    showToast(`\u2705 ${data.picks.length} picks analyzed!`, 3000);
+  } catch (err) {
+    console.error('Golf analyze error:', err);
+    showToast(`\u274c ${err.message}`, 5000);
+    analyzeBtn.disabled = false;
+  } finally {
+    status.classList.add('hidden');
+  }
+}
+
+function golfRenderPicks(picks) {
+  const list = document.getElementById('golf-picks-list');
+  list.innerHTML = picks.map((p, i) => {
+    const isOver = (p.pick_side || '').toLowerCase().startsWith('over');
+    const sideClass = isOver ? 'over' : 'under';
+    const oddsStr = p.odds_american > 0 ? `+${p.odds_american}` : String(p.odds_american);
+    return `
+      <div class="golf-pick-card">
+        <div class="golf-pick-header">
+          <span class="golf-pick-rank">${i + 1}</span>
+          <span class="golf-pick-player">${esc(p.player_name)}</span>
+          <span class="golf-pick-side ${sideClass}">${esc(p.pick_side)}</span>
+        </div>
+        <div class="golf-pick-meta">
+          <span class="golf-line">Line: ${p.line}</span>
+          <span class="golf-odds">Odds: ${oddsStr}</span>
+        </div>
+        <div class="golf-pick-confidence">
+          <label>Confidence</label>
+          <div class="golf-conf-bar"><div class="golf-conf-fill" style="width:${p.confidence}%"></div></div>
+          <span class="golf-conf-pct">${p.confidence}%</span>
+        </div>
+        <div class="golf-pick-reasoning">${esc(p.reasoning)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function golfBackToUpload() {
+  document.getElementById('golf-step-review').classList.add('hidden');
+  document.getElementById('golf-step-upload').classList.remove('hidden');
+  document.getElementById('golf-analyze-btn').disabled = false;
+}
+
+async function golfPostToDiscord() {
+  if (!golfAnalyzedPicks) return;
+
+  const postBtn = document.getElementById('golf-post-btn');
+  const status = document.getElementById('golf-post-status');
+  const statusText = document.getElementById('golf-post-status-text');
+  postBtn.disabled = true;
+  status.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/golf/post', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(golfAnalyzedPicks),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to post');
+    }
+
+    // Switch to done step
+    document.getElementById('golf-step-review').classList.add('hidden');
+    document.getElementById('golf-step-done').classList.remove('hidden');
+    document.getElementById('golf-done-msg').innerHTML = `
+      <p>\u2705 <strong>${data.posted.length} picks</strong> posted to AI Picks + AI Open Slips!</p>
+      <p style="color:var(--text-muted);font-size:13px;margin-top:8px">Tournament: ${esc(golfAnalyzedPicks.tournament)} \u2022 ${esc(golfAnalyzedPicks.round)}</p>
+    `;
+
+    showToast(`\u26f3 ${data.posted.length} golf picks posted to Discord!`, 5000);
+  } catch (err) {
+    console.error('Golf post error:', err);
+    showToast(`\u274c ${err.message}`, 5000);
+    postBtn.disabled = false;
+  } finally {
+    status.classList.add('hidden');
+  }
+}
+
+function golfReset() {
+  golfScreenshots = [];
+  golfAnalyzedPicks = null;
+  golfRenderPreviews();
+  document.getElementById('golf-tournament').value = '';
+  document.getElementById('golf-round').value = 'Round 1';
+  document.getElementById('golf-analyze-btn').disabled = true;
+  document.getElementById('golf-post-btn').disabled = false;
+  document.getElementById('golf-step-done').classList.add('hidden');
+  document.getElementById('golf-step-review').classList.add('hidden');
+  document.getElementById('golf-step-upload').classList.remove('hidden');
 }
