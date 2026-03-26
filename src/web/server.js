@@ -123,7 +123,7 @@ function createWebServer() {
   // Global JSON parser – skip the share endpoint so its own larger parser handles it
   const globalJsonParser = express.json({ limit: '100kb' });
   app.use((req, res, next) => {
-    if (req.path === '/api/share-to-discord' || req.path === '/api/ocr-slip') return next();
+    if (req.path === '/api/share-to-discord' || req.path === '/api/ocr-slip' || req.path === '/api/golf/analyze') return next();
     globalJsonParser(req, res, next);
   });
 
