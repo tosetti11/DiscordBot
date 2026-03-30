@@ -491,6 +491,8 @@ async function handleSportSelect(interaction) {
           { label: 'Team Total', value: 'team_total', description: 'Single team over/under', emoji: '🎯' },
           { label: 'NRFI', value: 'nrfi', description: 'No Run First Inning', emoji: '⚾' },
           { label: 'YRFI', value: 'yrfi', description: 'Yes Run First Inning', emoji: '⚾' },
+          { label: 'Double Chance', value: 'double_chance', description: 'Team wins or draw (soccer)', emoji: '⚽' },
+          { label: 'Draw No Bet', value: 'draw_no_bet', description: 'Void if draw (soccer)', emoji: '⚽' },
         ])
     );
 
@@ -533,7 +535,7 @@ async function handleWagerTypeSelect(interaction) {
     return showPeriodSelect(interaction, session);
   }
 
-  // NRFI/YRFI skip Over/Under and period — go straight to modal
+  // NRFI/YRFI/Double Chance/Draw No Bet skip Over/Under and period — go straight to modal
   await showTeamGameModal(interaction, session);
 }
 
@@ -598,7 +600,7 @@ async function showTeamGameModal(interaction, session) {
   const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
   const wagerType = session.currentWagerType;
 
-  const wagerLabels = { moneyline: 'Moneyline', spread: 'Spread', total: 'Over/Under', team_total: 'Team Total', nrfi: 'NRFI', yrfi: 'YRFI' };
+  const wagerLabels = { moneyline: 'Moneyline', spread: 'Spread', total: 'Over/Under', team_total: 'Team Total', nrfi: 'NRFI', yrfi: 'YRFI', double_chance: 'Double Chance', draw_no_bet: 'Draw No Bet' };
   const modal = new ModalBuilder()
     .setCustomId('enterbet_team_modal')
     .setTitle(`${wagerLabels[wagerType]} Bet${legLabel}`);
@@ -1001,6 +1003,10 @@ async function handleTeamModalSubmit(interaction) {
     pick = `NRFI ${teamA} vs ${teamB}`;
   } else if (wagerType === 'yrfi') {
     pick = `YRFI ${teamA} vs ${teamB}`;
+  } else if (wagerType === 'double_chance') {
+    pick = `Double Chance: ${teamA} or Draw`;
+  } else if (wagerType === 'draw_no_bet') {
+    pick = `Draw No Bet: ${teamA}`;
   } else {
     // total — use the over/under choice from session
     const direction = session.overUnder || (spreadValue > 0 ? 'Over' : 'Under');

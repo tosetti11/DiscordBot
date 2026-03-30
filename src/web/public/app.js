@@ -444,6 +444,32 @@ function setupEventListeners() {
     });
   });
 
+  // Prop type quick-select: fills prop description from template
+  document.getElementById('prop-type').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    const template = opt.dataset.template || '';
+    const isGameProp = opt.dataset.gameprop === 'true';
+    const noLine = opt.dataset.noline === 'true';
+    const propDesc = document.getElementById('prop-desc');
+    const playerRow = document.getElementById('prop-player-row');
+    if (template) {
+      propDesc.value = template;
+      if (!noLine) {
+        propDesc.focus();
+        // Select the __ placeholder so user can type the line
+        const idx = template.indexOf('__');
+        if (idx !== -1) propDesc.setSelectionRange(idx, idx + 2);
+      }
+    }
+    // Hide player name for game props (First to Score, Race to X, etc.)
+    if (isGameProp) {
+      playerRow.classList.add('hidden');
+      document.getElementById('player-name').value = '';
+    } else {
+      playerRow.classList.remove('hidden');
+    }
+  });
+
   // Single bet datetime picker
   const singlePicker = document.getElementById('event-time-picker');
   singlePicker.addEventListener('change', () => {
@@ -474,6 +500,9 @@ function updateCategoryFields(category) {
     document.getElementById('wager-type').required = false;
     document.getElementById('over-under-row').classList.add('hidden');
     document.getElementById('spread-line-row').classList.add('hidden');
+    // Reset prop type dropdown and show player name row
+    document.getElementById('prop-type').value = '';
+    document.getElementById('prop-player-row').classList.remove('hidden');
   } else if (category === 'futures') {
     document.getElementById('futures-fields').classList.remove('hidden');
     wagerGroup.classList.add('hidden');
@@ -507,7 +536,7 @@ function updateWagerFields(wager) {
     periodRow.classList.remove('hidden');
     spreadLabel.textContent = 'Team Total Line';
     document.getElementById('spread-value').placeholder = 'e.g. 112.5, 3.5, 24.5';
-  } else if (wager === 'nrfi' || wager === 'yrfi') {
+  } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'double_chance' || wager === 'draw_no_bet') {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
     periodRow.classList.add('hidden');
@@ -580,6 +609,8 @@ function buildParlayLegs() {
             <option value="team_total">🎯 Team Total</option>
             <option value="nrfi">⚾ NRFI (No Run 1st)</option>
             <option value="yrfi">⚾ YRFI (Yes Run 1st)</option>
+            <option value="double_chance">⚽ Double Chance</option>
+            <option value="draw_no_bet">⚽ Draw No Bet</option>
           </select>
         </div>
       </div>
@@ -644,6 +675,69 @@ function buildParlayLegs() {
       <!-- Prop fields -->
       <div class="leg-prop-fields-${i} hidden">
         <div class="form-row">
+          <div class="form-group full-width">
+            <label>Common Props <span class="optional">(or type custom)</span></label>
+            <select class="leg-prop-type" data-leg="${i}">
+              <option value="" selected>Custom / Type Your Own</option>
+              <optgroup label="⚾ Baseball">
+                <option value="Strikeouts" data-template="Over __ Strikeouts">Strikeouts (K)</option>
+                <option value="Home Runs" data-template="Over __ Home Runs">Home Runs</option>
+                <option value="To Hit a Home Run" data-template="To Hit a Home Run" data-noline="true">To Hit a Home Run</option>
+                <option value="Total Bases" data-template="Over __ Total Bases">Total Bases</option>
+                <option value="Hits+Runs+RBIs" data-template="Over __ Hits+Runs+RBIs">Hits+Runs+RBIs</option>
+                <option value="Hits" data-template="Over __ Hits">Hits</option>
+                <option value="RBIs" data-template="Over __ RBIs">RBIs</option>
+                <option value="Stolen Bases" data-template="Over __ Stolen Bases">Stolen Bases</option>
+                <option value="Outs Recorded" data-template="Over __ Outs Recorded">Outs Recorded (Pitcher)</option>
+                <option value="Earned Runs" data-template="Under __ Earned Runs">Earned Runs Allowed</option>
+                <option value="First Team to Score" data-template="First Team to Score" data-gameprop="true" data-noline="true">First Team to Score</option>
+                <option value="Race to Runs" data-template="Race to __ Runs" data-gameprop="true">Race to X Runs</option>
+              </optgroup>
+              <optgroup label="🏀 Basketball (NBA)">
+                <option value="Points" data-template="Over __ Points">Points</option>
+                <option value="Rebounds" data-template="Over __ Rebounds">Rebounds</option>
+                <option value="Assists" data-template="Over __ Assists">Assists</option>
+                <option value="PTS+REB+AST" data-template="Over __ PTS+REB+AST">PTS+REB+AST</option>
+                <option value="PTS+REB" data-template="Over __ PTS+REB">PTS+REB</option>
+                <option value="PTS+AST" data-template="Over __ PTS+AST">PTS+AST</option>
+                <option value="REB+AST" data-template="Over __ REB+AST">REB+AST</option>
+                <option value="3-Pointers Made" data-template="Over __ 3-Pointers Made">3-Pointers Made</option>
+                <option value="Steals" data-template="Over __ Steals">Steals</option>
+                <option value="Blocks" data-template="Over __ Blocks">Blocks</option>
+                <option value="Turnovers" data-template="Over __ Turnovers">Turnovers</option>
+                <option value="Race to Points" data-template="Race to __ Points" data-gameprop="true">Race to X Points</option>
+                <option value="First Team to Score" data-template="First Team to Score" data-gameprop="true" data-noline="true">First Team to Score</option>
+              </optgroup>
+              <optgroup label="🏒 Hockey">
+                <option value="Goals" data-template="Over __ Goals">Goals</option>
+                <option value="Anytime Goal Scorer" data-template="Anytime Goal Scorer" data-noline="true">Anytime Goal Scorer</option>
+                <option value="First Goal Scorer" data-template="First Goal Scorer" data-noline="true">First Goal Scorer</option>
+                <option value="2+ Goals" data-template="2+ Goals" data-noline="true">Multiple Goals (2+)</option>
+                <option value="Assists" data-template="Over __ Assists">Assists</option>
+                <option value="Points" data-template="Over __ Points">Points (G+A)</option>
+                <option value="Shots on Goal" data-template="Over __ Shots on Goal">Shots on Goal</option>
+                <option value="Saves" data-template="Over __ Saves">Saves (Goalie)</option>
+              </optgroup>
+              <optgroup label="⚽ Soccer">
+                <option value="Anytime Goal Scorer" data-template="Anytime Goal Scorer" data-noline="true">Anytime Goal Scorer</option>
+                <option value="Shots on Target" data-template="Over __ Shots on Target">Shots on Target</option>
+                <option value="Goals" data-template="Over __ Goals">Goals</option>
+                <option value="Assists" data-template="Over __ Assists">Assists</option>
+              </optgroup>
+              <optgroup label="🏈 Football">
+                <option value="Passing Yards" data-template="Over __ Passing Yards">Passing Yards</option>
+                <option value="Rushing Yards" data-template="Over __ Rushing Yards">Rushing Yards</option>
+                <option value="Receiving Yards" data-template="Over __ Receiving Yards">Receiving Yards</option>
+                <option value="Touchdowns" data-template="Over __ Touchdowns">Touchdowns</option>
+                <option value="Anytime TD Scorer" data-template="Anytime TD Scorer" data-noline="true">Anytime TD Scorer</option>
+                <option value="Completions" data-template="Over __ Completions">Completions</option>
+                <option value="Interceptions" data-template="Over __ Interceptions">Interceptions</option>
+                <option value="Receptions" data-template="Over __ Receptions">Receptions</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div class="form-row leg-player-row-${i}">
           <div class="form-group">
             <label>Player Name</label>
             <input type="text" class="leg-player-name" data-leg="${i}" placeholder="e.g. LeBron James" maxlength="100">
@@ -800,7 +894,7 @@ function buildParlayLegs() {
         ouRow.classList.remove('hidden');
         periodRow.classList.remove('hidden');
         spreadLabel.textContent = 'Team Total Line';
-      } else if (wager === 'nrfi' || wager === 'yrfi') {
+      } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'double_chance' || wager === 'draw_no_bet') {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
         periodRow.classList.add('hidden');
@@ -831,6 +925,33 @@ function buildParlayLegs() {
       legPicker.value = '';
       legPicker.blur();
     });
+
+    // Wire up prop type quick-select for this leg
+    const legPropType = card.querySelector(`.leg-prop-type[data-leg="${i}"]`);
+    if (legPropType) {
+      legPropType.addEventListener('change', function() {
+        const opt = this.options[this.selectedIndex];
+        const template = opt.dataset.template || '';
+        const isGameProp = opt.dataset.gameprop === 'true';
+        const noLine = opt.dataset.noline === 'true';
+        const legDesc = card.querySelector(`.leg-prop-desc[data-leg="${i}"]`);
+        const playerRow = card.querySelector(`.leg-player-row-${i}`);
+        if (template) {
+          legDesc.value = template;
+          if (!noLine) {
+            legDesc.focus();
+            const idx = template.indexOf('__');
+            if (idx !== -1) legDesc.setSelectionRange(idx, idx + 2);
+          }
+        }
+        if (isGameProp) {
+          playerRow.classList.add('hidden');
+          card.querySelector(`.leg-player-name[data-leg="${i}"]`).value = '';
+        } else {
+          playerRow.classList.remove('hidden');
+        }
+      });
+    }
   }
 }
 
@@ -901,7 +1022,10 @@ async function handleSubmit(e) {
           leg.wagerType = 'prop';
           leg.playerName = document.querySelector(`.leg-player-name[data-leg="${i}"]`)?.value;
           leg.propDescription = document.querySelector(`.leg-prop-desc[data-leg="${i}"]`)?.value;
-          if (!leg.playerName || !leg.propDescription) throw new Error(`Leg ${i}: Enter player name and prop`);
+          const legPropSel = document.querySelector(`.leg-prop-type[data-leg="${i}"]`);
+          const isLegGameProp = legPropSel?.options[legPropSel.selectedIndex]?.dataset?.gameprop === 'true';
+          if (!isLegGameProp && !leg.playerName) throw new Error(`Leg ${i}: Enter player name`);
+          if (!leg.propDescription) throw new Error(`Leg ${i}: Enter prop description`);
           // Include teams from prop team fields or fallback to team-game fields (populated by OCR)
           const propTeamA = document.querySelector(`.leg-prop-team-a[data-leg="${i}"]`)?.value || document.querySelector(`.leg-team-a[data-leg="${i}"]`)?.value;
           const propTeamB = document.querySelector(`.leg-prop-team-b[data-leg="${i}"]`)?.value || document.querySelector(`.leg-team-b[data-leg="${i}"]`)?.value;
@@ -994,7 +1118,9 @@ async function handleSubmit(e) {
         body.wagerType = 'prop';
         body.playerName = document.getElementById('player-name').value;
         body.propDescription = document.getElementById('prop-desc').value;
-        if (!body.playerName || !body.propDescription) throw new Error('Enter player name and prop');
+        const isGameProp = document.getElementById('prop-type')?.options[document.getElementById('prop-type').selectedIndex]?.dataset?.gameprop === 'true';
+        if (!isGameProp && !body.playerName) throw new Error('Enter player name');
+        if (!body.propDescription) throw new Error('Enter prop description');
         // Include teams from prop team fields or fallback to team-game fields (populated by OCR)
         const propTeamA = document.getElementById('prop-team-a')?.value || document.getElementById('team-a')?.value;
         const propTeamB = document.getElementById('prop-team-b')?.value || document.getElementById('team-b')?.value;

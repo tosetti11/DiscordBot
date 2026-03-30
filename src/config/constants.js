@@ -114,6 +114,8 @@ module.exports = {
     futures: 'Futures',
     nrfi: 'NRFI',
     yrfi: 'YRFI',
+    double_chance: 'Double Chance',
+    draw_no_bet: 'Draw No Bet',
   },
 
   // Period options for totals/spreads

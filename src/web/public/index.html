@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=52">
+  <link rel="stylesheet" href="/style.css?v=53">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -243,6 +243,8 @@
                   <option value="team_total">🎯 Team Total</option>
                   <option value="nrfi">⚾ NRFI (No Run 1st)</option>
                   <option value="yrfi">⚾ YRFI (Yes Run 1st)</option>
+                  <option value="double_chance">⚽ Double Chance</option>
+                  <option value="draw_no_bet">⚽ Draw No Bet</option>
                 </select>
               </div>
             </div>
@@ -307,6 +309,69 @@
             <!-- Player Prop fields -->
             <div id="prop-fields" class="dynamic-fields hidden">
               <div class="form-row">
+                <div class="form-group full-width">
+                  <label for="prop-type">Common Props <span class="optional">(or type custom below)</span></label>
+                  <select id="prop-type">
+                    <option value="" selected>Custom / Type Your Own</option>
+                    <optgroup label="⚾ Baseball">
+                      <option value="Strikeouts" data-template="Over __ Strikeouts">Strikeouts (K)</option>
+                      <option value="Home Runs" data-template="Over __ Home Runs">Home Runs</option>
+                      <option value="To Hit a Home Run" data-template="To Hit a Home Run" data-noline="true">To Hit a Home Run</option>
+                      <option value="Total Bases" data-template="Over __ Total Bases">Total Bases</option>
+                      <option value="Hits+Runs+RBIs" data-template="Over __ Hits+Runs+RBIs">Hits+Runs+RBIs</option>
+                      <option value="Hits" data-template="Over __ Hits">Hits</option>
+                      <option value="RBIs" data-template="Over __ RBIs">RBIs</option>
+                      <option value="Stolen Bases" data-template="Over __ Stolen Bases">Stolen Bases</option>
+                      <option value="Outs Recorded" data-template="Over __ Outs Recorded">Outs Recorded (Pitcher)</option>
+                      <option value="Earned Runs" data-template="Under __ Earned Runs">Earned Runs Allowed</option>
+                      <option value="First Team to Score" data-template="First Team to Score" data-gameprop="true" data-noline="true">First Team to Score</option>
+                      <option value="Race to Runs" data-template="Race to __ Runs" data-gameprop="true">Race to X Runs</option>
+                    </optgroup>
+                    <optgroup label="🏀 Basketball (NBA)">
+                      <option value="Points" data-template="Over __ Points">Points</option>
+                      <option value="Rebounds" data-template="Over __ Rebounds">Rebounds</option>
+                      <option value="Assists" data-template="Over __ Assists">Assists</option>
+                      <option value="PTS+REB+AST" data-template="Over __ PTS+REB+AST">PTS+REB+AST</option>
+                      <option value="PTS+REB" data-template="Over __ PTS+REB">PTS+REB</option>
+                      <option value="PTS+AST" data-template="Over __ PTS+AST">PTS+AST</option>
+                      <option value="REB+AST" data-template="Over __ REB+AST">REB+AST</option>
+                      <option value="3-Pointers Made" data-template="Over __ 3-Pointers Made">3-Pointers Made</option>
+                      <option value="Steals" data-template="Over __ Steals">Steals</option>
+                      <option value="Blocks" data-template="Over __ Blocks">Blocks</option>
+                      <option value="Turnovers" data-template="Over __ Turnovers">Turnovers</option>
+                      <option value="Race to Points" data-template="Race to __ Points" data-gameprop="true">Race to X Points</option>
+                      <option value="First Team to Score" data-template="First Team to Score" data-gameprop="true" data-noline="true">First Team to Score</option>
+                    </optgroup>
+                    <optgroup label="🏒 Hockey">
+                      <option value="Goals" data-template="Over __ Goals">Goals</option>
+                      <option value="Anytime Goal Scorer" data-template="Anytime Goal Scorer" data-noline="true">Anytime Goal Scorer</option>
+                      <option value="First Goal Scorer" data-template="First Goal Scorer" data-noline="true">First Goal Scorer</option>
+                      <option value="2+ Goals" data-template="2+ Goals" data-noline="true">Multiple Goals (2+)</option>
+                      <option value="Assists" data-template="Over __ Assists">Assists</option>
+                      <option value="Points" data-template="Over __ Points">Points (G+A)</option>
+                      <option value="Shots on Goal" data-template="Over __ Shots on Goal">Shots on Goal</option>
+                      <option value="Saves" data-template="Over __ Saves">Saves (Goalie)</option>
+                    </optgroup>
+                    <optgroup label="⚽ Soccer">
+                      <option value="Anytime Goal Scorer" data-template="Anytime Goal Scorer" data-noline="true">Anytime Goal Scorer</option>
+                      <option value="Shots on Target" data-template="Over __ Shots on Target">Shots on Target</option>
+                      <option value="Goals" data-template="Over __ Goals">Goals</option>
+                      <option value="Assists" data-template="Over __ Assists">Assists</option>
+                    </optgroup>
+                    <optgroup label="🏈 Football">
+                      <option value="Passing Yards" data-template="Over __ Passing Yards">Passing Yards</option>
+                      <option value="Rushing Yards" data-template="Over __ Rushing Yards">Rushing Yards</option>
+                      <option value="Receiving Yards" data-template="Over __ Receiving Yards">Receiving Yards</option>
+                      <option value="Touchdowns" data-template="Over __ Touchdowns">Touchdowns</option>
+                      <option value="Anytime TD Scorer" data-template="Anytime TD Scorer" data-noline="true">Anytime TD Scorer</option>
+                      <option value="Completions" data-template="Over __ Completions">Completions</option>
+                      <option value="Interceptions" data-template="Over __ Interceptions">Interceptions</option>
+                      <option value="Receptions" data-template="Over __ Receptions">Receptions</option>
+                    </optgroup>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row" id="prop-player-row">
                 <div class="form-group">
                   <label for="player-name">Player Name</label>
                   <input type="text" id="player-name" placeholder="e.g. LeBron James" maxlength="100">
@@ -2133,6 +2198,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="/app.js?v=70"></script>
+  <script src="/app.js?v=71"></script>
 </body>
 </html>

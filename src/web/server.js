@@ -1791,6 +1791,10 @@ function createWebServer() {
             fields.pick = `NRFI ${mergedBet.team_a || ''} vs ${mergedBet.team_b || ''}`.trim();
           } else if (wt === 'yrfi') {
             fields.pick = `YRFI ${mergedBet.team_a || ''} vs ${mergedBet.team_b || ''}`.trim();
+          } else if (wt === 'double_chance') {
+            fields.pick = `Double Chance: ${mergedBet.team_a || ''} or Draw`;
+          } else if (wt === 'draw_no_bet') {
+            fields.pick = `Draw No Bet: ${mergedBet.team_a || ''}`;
           }
         } else if (cat === 'player_prop') {
           fields.pick = mergedBet.prop_description || mergedBet.pick || bet.pick;
@@ -1859,6 +1863,10 @@ function createWebServer() {
               legFields.pick = `NRFI ${lTeamA} vs ${leg.teamB || ''}`.trim();
             } else if (lWt === 'yrfi') {
               legFields.pick = `YRFI ${lTeamA} vs ${leg.teamB || ''}`.trim();
+            } else if (lWt === 'double_chance') {
+              legFields.pick = `Double Chance: ${lTeamA} or Draw`;
+            } else if (lWt === 'draw_no_bet') {
+              legFields.pick = `Draw No Bet: ${lTeamA}`;
             }
           } else if (lCat === 'player_prop') {
             legFields.pick = leg.propDescription || '';
@@ -2073,7 +2081,7 @@ For a SINGLE bet:
   "betType": "single",
   "sport": "<one of: ${validSports.join(', ')}>",
   "betCategory": "<one of: team_game, player_prop, futures>",
-  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures, nrfi, yrfi>",
+  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet>",
   "teamA": "<your pick team or null>",
   "teamB": "<opponent team or null>",
   "spreadValue": "<spread or total line value like -1.5, 220.5, or null>",
@@ -2101,7 +2109,7 @@ For a PARLAY (multiple legs):
     {
       "sport": "<sport value>",
       "betCategory": "<team_game, player_prop, or futures>",
-      "wagerType": "<moneyline, spread, total, team_total, prop, futures, nrfi, or yrfi>",
+      "wagerType": "<moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, or draw_no_bet>",
       "teamA": "<pick team or null>",
       "teamB": "<opponent or null>",
       "spreadValue": "<spread/line or null>",
@@ -2134,6 +2142,9 @@ Rules:
 - TEAM TOTALS: If the bet is on a single team's score (e.g. "Duke Over 71.5", "Lakers Under 108.5", "Team Total Over 112.5"), use wagerType "team_total" (NOT "total"). Set teamA to the team whose score is being bet on. The overUnder and spreadValue work the same as regular totals. Team totals typically have lower lines than game totals (e.g. 71.5 for a team vs 141.5 for the full game).
 - NRFI/YRFI (Baseball): If the bet is "No Run First Inning" or "NRFI", set wagerType to "nrfi". If it's "Yes Run First Inning" or "YRFI", set wagerType to "yrfi". Set betCategory to "team_game". Set teamA and teamB to the two teams in the matchup. No spreadValue or overUnder needed. These are common MLB bets.
 - BASEBALL INNINGS: For bets on specific innings (e.g. "1st Inning Over 0.5", "First 5 Innings"), use the appropriate period value: "first_5" for First 5 Innings (F5), "1st_inning" through "5th_inning" for individual innings. Strikeout props, home run props, and hit props for baseball are player props — use betCategory "player_prop" and wagerType "prop".
+- SOCCER BETS: "Double Chance" (e.g. "Team A or Draw", "1X", "X2") use wagerType "double_chance". "Draw No Bet" use wagerType "draw_no_bet" with teamA as the team you're backing. For 3-way moneyline where you bet on a draw, use wagerType "moneyline" with teamA set to "Draw". All soccer props (goals, assists, shots) use betCategory "player_prop", wagerType "prop".
+- HOCKEY BETS: Anytime goal scorer, first goal scorer, multiple goals, assists, saves, shots on goal, and points are all player props — use betCategory "player_prop" and wagerType "prop". Keep the prop description exactly as shown on the slip.
+- COMBO PROPS: For combination stat props like "PTS+REB+AST", "PTS+REB", "REB+AST", "Hits+Runs+RBIs", keep the full stat combo in propDescription (e.g. "Over 45.5 PTS+REB+AST"). These are player props.
 - For futures, set betCategory to "futures", wagerType to "futures"
 - teamA should be the team/side being bet ON (the pick). For totals, teamA is the first-listed team in the matchup.
 - If you can detect the wager/stake amount in dollars, put it in wagerAmount (just the number, no $ sign)
@@ -3398,6 +3409,14 @@ IMPORTANT RULES:
             } else if (leg.wagerType === 'team_total') {
               const sv = parseFloat(leg.spreadValue);
               legPick = `${truncate(leg.teamA, 200)} ${leg.overUnder || 'Over'} ${Math.abs(sv)}${legPeriod}`;
+            } else if (leg.wagerType === 'nrfi') {
+              legPick = `NRFI ${truncate(leg.teamA, 200)} vs ${truncate(leg.teamB, 200)}`;
+            } else if (leg.wagerType === 'yrfi') {
+              legPick = `YRFI ${truncate(leg.teamA, 200)} vs ${truncate(leg.teamB, 200)}`;
+            } else if (leg.wagerType === 'double_chance') {
+              legPick = `Double Chance: ${truncate(leg.teamA, 200)} or Draw`;
+            } else if (leg.wagerType === 'draw_no_bet') {
+              legPick = `Draw No Bet: ${truncate(leg.teamA, 200)}`;
             }
           } else {
             legPick = truncate(leg.propDescription) || truncate(leg.pick);
@@ -3524,6 +3543,10 @@ IMPORTANT RULES:
             finalPick = `NRFI ${safeTeamA} vs ${safeTeamB}`;
           } else if (wagerType === 'yrfi') {
             finalPick = `YRFI ${safeTeamA} vs ${safeTeamB}`;
+          } else if (wagerType === 'double_chance') {
+            finalPick = `Double Chance: ${safeTeamA} or Draw`;
+          } else if (wagerType === 'draw_no_bet') {
+            finalPick = `Draw No Bet: ${safeTeamA}`;
           }
         } else {
           finalPick = safePropDesc || safePick;
