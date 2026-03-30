@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=50">
+  <link rel="stylesheet" href="/style.css?v=51">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -1887,17 +1887,22 @@
   </main>
 
   <!-- Golf Admin Page (owner only) -->
-  <main id="golf-admin-page" class="hidden">
-    <div class="golf-admin-wrap">
-      <!-- Tab bar with title -->
-      <div class="golf-tabs">
-        <span class="golf-tabs-title">⛳ Golf</span>
-        <button class="golf-tab active" data-tab="analyze" onclick="golfSwitchTab('analyze')">📸 Analyze</button>
-        <button class="golf-tab" data-tab="history" onclick="golfSwitchTab('history')">📊 History</button>
+  <main id="golf-admin-page" class="main-content hidden">
+    <div class="tools-container">
+      <div class="tools-header">
+        <h2>⛳ Golf Round O/U Analyzer</h2>
+        <p class="slip-subtitle">Upload DraftKings screenshots for GPT-4o analysis. Select your best picks and post them to the golf channel.</p>
       </div>
 
-      <!-- ═══ ANALYZE TAB ═══ -->
-      <div class="golf-admin-card" id="golf-tab-analyze">
+      <div class="tool-card">
+        <!-- Tab bar -->
+        <div class="golf-tabs">
+          <button class="golf-tab active" data-tab="analyze" onclick="golfSwitchTab('analyze')">📸 Analyze</button>
+          <button class="golf-tab" data-tab="history" onclick="golfSwitchTab('history')">📊 History</button>
+        </div>
+
+        <!-- ═══ ANALYZE TAB ═══ -->
+        <div id="golf-tab-analyze">
         <!-- Step 1: Upload Screenshots -->
         <div class="golf-step" id="golf-step-upload">
           <div class="golf-config">
@@ -1965,7 +1970,7 @@
       </div>
 
       <!-- ═══ HISTORY TAB ═══ -->
-      <div class="golf-admin-card hidden" id="golf-tab-history">
+      <div class="hidden" id="golf-tab-history">
         <div class="golf-history-filters">
           <select id="golf-hist-tournament" onchange="golfLoadHistory()">
             <option value="">All Tournaments</option>
@@ -1989,6 +1994,7 @@
         <div class="golf-history-list" id="golf-history-list">
           <p class="golf-history-empty">Loading...</p>
         </div>
+      </div>
       </div>
     </div>
   </main>
@@ -2119,6 +2125,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="/app.js?v=68"></script>
+  <script src="/app.js?v=69"></script>
 </body>
 </html>

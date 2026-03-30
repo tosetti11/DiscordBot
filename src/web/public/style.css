@@ -6485,30 +6485,21 @@ textarea {
 }
 
 /* ═══════════════════════════════════════════════
-   Golf Admin Page — fully self-contained, no inherited bloat
+   Golf Admin Page
    ═══════════════════════════════════════════════ */
-#golf-admin-page { display: block; padding: 4px 6px 32px; }
-.golf-admin-wrap { max-width: 680px; margin: 0 auto; }
 
-/* Tab bar with inline title */
+/* Tab bar */
 .golf-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: 6px;
+  margin-bottom: 16px;
   background: var(--bg-secondary);
   border-radius: 8px;
-  padding: 3px 8px;
-}
-.golf-tabs-title {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin-right: auto;
-  white-space: nowrap;
+  padding: 4px 8px;
 }
 .golf-tab {
-  padding: 7px 14px;
+  padding: 8px 16px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -6521,40 +6512,33 @@ textarea {
 .golf-tab.active { background: var(--accent); color: #000; }
 .golf-tab:hover:not(.active) { color: var(--text-primary); }
 
-/* Card wrapper */
-.golf-admin-card {
-  background: var(--bg-card);
-  border: 1px solid rgba(255,255,255,0.04);
-  border-radius: 10px;
-  padding: 8px 10px;
-}
 .golf-step { margin-bottom: 0; }
 
 /* Config — tournament + round inline */
 .golf-config {
   display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 .golf-config-field { flex: 1; display: flex; flex-direction: column; }
-.golf-config-field:last-child { flex: 0 0 70px; }
+.golf-config-field:last-child { flex: 0 0 80px; }
 .golf-config-field label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-secondary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
   letter-spacing: 0.3px;
 }
 .golf-config-field input,
 .golf-config-field select {
   background: var(--bg-input);
   border: 2px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 13px;
-  padding: 5px 8px;
+  font-size: 14px;
+  padding: 8px 12px;
   outline: none;
   width: 100%;
 }
@@ -6564,9 +6548,9 @@ textarea {
 /* Upload zone */
 .golf-upload-zone {
   border: 2px dashed rgba(255,255,255,0.15);
-  border-radius: 8px;
-  padding: 6px;
-  margin-bottom: 4px;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
   transition: border-color 0.2s, background 0.2s;
 }
 .golf-upload-zone.drag-over {
@@ -6576,18 +6560,18 @@ textarea {
 .golf-upload-prompt {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px;
+  gap: 8px;
+  padding: 16px;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   justify-content: center;
 }
 .golf-upload-prompt:hover { color: var(--accent); }
 .golf-previews {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
 }
 .golf-preview-thumb {
   position: relative;
@@ -6614,8 +6598,8 @@ textarea {
 .golf-upload-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 .golf-file-count { color: var(--text-muted); font-size: 12px; }
 .golf-analyze-inline-btn {
@@ -6651,12 +6635,12 @@ textarea {
 .btn-xs { padding: 3px 8px; font-size: 11px; border-radius: 5px; }
 
 /* Pick cards */
-.golf-picks-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.golf-picks-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .golf-pick-card {
   background: var(--bg-secondary);
   border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 10px;
+  padding: 14px;
   border-left: 4px solid var(--accent);
   cursor: pointer;
   position: relative;
@@ -6721,21 +6705,21 @@ textarea {
 
 /* ── History tab ── */
 .golf-history-filters {
-  display: flex; gap: 6px; margin-bottom: 10px;
+  display: flex; gap: 8px; margin-bottom: 12px;
 }
 .golf-history-filters select {
   flex: 1;
   background: var(--bg-input);
   border: 2px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 12px;
-  padding: 5px 6px;
+  font-size: 13px;
+  padding: 8px 10px;
   outline: none;
 }
 .golf-history-filters select:focus { border-color: var(--accent); }
-.golf-history-summary { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.golf-history-summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .golf-hist-stat {
   background: var(--bg-secondary);
   border: 1px solid rgba(255,255,255,0.08);
@@ -6749,7 +6733,7 @@ textarea {
 .golf-hist-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
 .golf-hist-stat.wins .golf-hist-stat-val { color: #1db954; }
 .golf-hist-stat.losses .golf-hist-stat-val { color: #f85149; }
-.golf-history-list { display: flex; flex-direction: column; gap: 4px; }
+.golf-history-list { display: flex; flex-direction: column; gap: 6px; }
 .golf-history-empty { text-align: center; padding: 20px; color: var(--text-muted); font-size: 13px; }
 .golf-hist-row {
   display: flex; align-items: center; gap: 8px;
@@ -6772,8 +6756,8 @@ textarea {
 .golf-hist-date { color: var(--text-muted); font-size: 11px; min-width: 50px; text-align: right; }
 
 @media (max-width: 640px) {
-  .golf-config-field:last-child { flex: 0 0 55px; }
-  .golf-previews { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); }
+  .golf-config-field:last-child { flex: 0 0 65px; }
+  .golf-previews { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
   .golf-history-filters { flex-wrap: wrap; }
   .golf-step-header { flex-wrap: wrap; }
 }
