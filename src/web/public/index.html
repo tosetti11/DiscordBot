@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GamblingKing">
   <link rel="apple-touch-icon" href="/TheGamblingKing.jpg">
-  <link rel="stylesheet" href="/style.css?v=47">
+  <link rel="stylesheet" href="/style.css?v=48">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 </head>
@@ -1890,74 +1890,69 @@
 
   <!-- Golf Admin Page (owner only) -->
   <main id="golf-admin-page" class="main-content hidden">
-    <div class="tools-container">
-      <div class="tools-header">
-        <h2>⛳ Golf Round Totals</h2>
-        <p class="slip-subtitle">Upload DraftKings round score O/U screenshots, analyze with GPT-4o, select your picks, then post to Discord.</p>
-      </div>
-
-      <!-- Tab bar -->
+    <div class="golf-admin-wrap">
+      <!-- Tab bar with title -->
       <div class="golf-tabs">
+        <span class="golf-tabs-title">⛳ Golf</span>
         <button class="golf-tab active" data-tab="analyze" onclick="golfSwitchTab('analyze')">📸 Analyze</button>
         <button class="golf-tab" data-tab="history" onclick="golfSwitchTab('history')">📊 History</button>
       </div>
 
       <!-- ═══ ANALYZE TAB ═══ -->
-      <div class="tool-card golf-admin-card" id="golf-tab-analyze">
+      <div class="golf-admin-card" id="golf-tab-analyze">
         <!-- Step 1: Upload Screenshots -->
         <div class="golf-step" id="golf-step-upload">
           <div class="golf-config">
-            <div class="form-group">
-              <label for="golf-admin-tournament">Tournament Name</label>
-              <input type="text" id="golf-admin-tournament" placeholder="e.g. Cognizant Classic" class="form-input">
+            <div class="golf-config-field">
+              <label for="golf-admin-tournament">Tournament</label>
+              <input type="text" id="golf-admin-tournament" placeholder="e.g. Cognizant Classic">
             </div>
-            <div class="form-group">
+            <div class="golf-config-field">
               <label for="golf-admin-round">Round</label>
-              <select id="golf-admin-round" class="form-input">
-                <option value="Round 1">Round 1</option>
-                <option value="Round 2">Round 2</option>
-                <option value="Round 3">Round 3</option>
-                <option value="Round 4">Round 4</option>
+              <select id="golf-admin-round">
+                <option value="Round 1">R1</option>
+                <option value="Round 2">R2</option>
+                <option value="Round 3">R3</option>
+                <option value="Round 4">R4</option>
               </select>
             </div>
           </div>
           <div class="golf-upload-zone" id="golf-upload-zone">
             <input type="file" id="golf-file-input" accept="image/*" multiple hidden>
             <div class="golf-upload-prompt" id="golf-upload-prompt" onclick="document.getElementById('golf-file-input').click()">
-              <span class="golf-upload-icon">📸</span>
-              <span>Click to select screenshots (max 10)</span>
+              📸 <span>Tap to select screenshots (max 10)</span>
             </div>
             <div class="golf-previews" id="golf-previews"></div>
           </div>
           <div class="golf-upload-actions" id="golf-upload-actions" style="display:none">
             <button class="btn btn-secondary btn-sm" onclick="golfClearScreenshots()">Clear All</button>
             <span class="golf-file-count" id="golf-file-count">0 files</span>
-            <button class="btn btn-accent btn-sm golf-analyze-inline-btn" id="golf-analyze-btn" onclick="golfAnalyzeScreenshots()" disabled>🤖 Analyze with GPT-4o</button>
+            <button class="btn btn-accent btn-sm golf-analyze-inline-btn" id="golf-analyze-btn" onclick="golfAnalyzeScreenshots()" disabled>🤖 Analyze</button>
           </div>
           <div class="golf-analyze-status hidden" id="golf-analyze-status">
             <div class="scan-spinner"></div>
-            <span>Analyzing screenshots... extracting lines and generating picks (30-60s)</span>
+            <span>Analyzing... (30-60s)</span>
           </div>
         </div>
 
         <!-- Step 2: Review & Select Picks -->
         <div class="golf-step hidden" id="golf-step-review">
           <div class="golf-step-header">
-            <button class="btn btn-secondary btn-sm" onclick="golfBackToUpload()">← Back</button>
-            <h4>Select Picks to Post</h4>
+            <button class="btn btn-secondary btn-xs" onclick="golfBackToUpload()">← Back</button>
+            <h4>Select Picks</h4>
             <div class="golf-select-controls">
-              <button class="btn btn-secondary btn-xs" onclick="golfSelectAll()">Select All</button>
-              <button class="btn btn-secondary btn-xs" onclick="golfDeselectAll()">Deselect All</button>
+              <button class="btn btn-secondary btn-xs" onclick="golfSelectAll()">All</button>
+              <button class="btn btn-secondary btn-xs" onclick="golfDeselectAll()">None</button>
             </div>
           </div>
           <div class="golf-picks-list" id="golf-picks-list"></div>
           <div class="golf-post-actions" id="golf-post-actions">
             <button class="btn btn-accent golf-post-btn" id="golf-post-btn" onclick="golfPostToDiscord()" disabled>
-              🚀 Post Selected (<span id="golf-selected-count">0</span>) to Discord
+              🚀 Post (<span id="golf-selected-count">0</span>) to Discord
             </button>
             <div class="golf-post-status hidden" id="golf-post-status">
               <div class="scan-spinner"></div>
-              <span id="golf-post-status-text">Posting picks to Discord...</span>
+              <span id="golf-post-status-text">Posting...</span>
             </div>
           </div>
         </div>
@@ -1965,45 +1960,36 @@
         <!-- Step 3: Done -->
         <div class="golf-step hidden" id="golf-step-done">
           <div class="golf-done-msg" id="golf-done-msg">
-            <p>✅ All picks have been posted to the golf channel.</p>
+            <p>✅ Picks posted to the golf channel.</p>
           </div>
-          <button class="btn btn-accent" onclick="golfReset()">⛳ Start New Analysis</button>
+          <button class="btn btn-accent btn-sm" onclick="golfReset()">⛳ New Analysis</button>
         </div>
       </div>
 
       <!-- ═══ HISTORY TAB ═══ -->
-      <div class="tool-card golf-admin-card hidden" id="golf-tab-history">
+      <div class="golf-admin-card hidden" id="golf-tab-history">
         <div class="golf-history-filters">
-          <div class="form-group">
-            <label for="golf-hist-tournament">Tournament</label>
-            <select id="golf-hist-tournament" class="form-input" onchange="golfLoadHistory()">
-              <option value="">All Tournaments</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="golf-hist-round">Round</label>
-            <select id="golf-hist-round" class="form-input" onchange="golfLoadHistory()">
-              <option value="">All Rounds</option>
-              <option value="1">Round 1</option>
-              <option value="2">Round 2</option>
-              <option value="3">Round 3</option>
-              <option value="4">Round 4</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="golf-hist-status">Result</label>
-            <select id="golf-hist-status" class="form-input" onchange="golfLoadHistory()">
-              <option value="">All</option>
-              <option value="pending">Pending</option>
-              <option value="win">Hits ✅</option>
-              <option value="loss">Misses ❌</option>
-              <option value="push">Push ➖</option>
-            </select>
-          </div>
+          <select id="golf-hist-tournament" onchange="golfLoadHistory()">
+            <option value="">All Tournaments</option>
+          </select>
+          <select id="golf-hist-round" onchange="golfLoadHistory()">
+            <option value="">All Rounds</option>
+            <option value="1">R1</option>
+            <option value="2">R2</option>
+            <option value="3">R3</option>
+            <option value="4">R4</option>
+          </select>
+          <select id="golf-hist-status" onchange="golfLoadHistory()">
+            <option value="">All</option>
+            <option value="pending">Pending</option>
+            <option value="win">Hits ✅</option>
+            <option value="loss">Misses ❌</option>
+            <option value="push">Push ➖</option>
+          </select>
         </div>
         <div class="golf-history-summary" id="golf-history-summary"></div>
         <div class="golf-history-list" id="golf-history-list">
-          <p class="golf-history-empty">Loading history...</p>
+          <p class="golf-history-empty">Loading...</p>
         </div>
       </div>
     </div>
@@ -2133,6 +2119,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="/app.js?v=65"></script>
+  <script src="/app.js?v=66"></script>
 </body>
 </html>
