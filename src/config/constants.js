@@ -112,6 +112,8 @@ module.exports = {
     team_total: 'Team Total',
     prop: 'Player Prop',
     futures: 'Futures',
+    nrfi: 'NRFI',
+    yrfi: 'YRFI',
   },
 
   // Period options for totals/spreads
@@ -127,6 +129,12 @@ module.exports = {
     '3rd_quarter': '3rd Quarter',
     '4th_quarter': '4th Quarter',
     '1st_set': '1st Set',
+    'first_5': 'First 5 Innings',
+    '1st_inning': '1st Inning',
+    '2nd_inning': '2nd Inning',
+    '3rd_inning': '3rd Inning',
+    '4th_inning': '4th Inning',
+    '5th_inning': '5th Inning',
   },
 
   // Fight methods for MMA/Boxing

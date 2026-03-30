@@ -507,6 +507,10 @@ function updateWagerFields(wager) {
     periodRow.classList.remove('hidden');
     spreadLabel.textContent = 'Team Total Line';
     document.getElementById('spread-value').placeholder = 'e.g. 112.5, 3.5, 24.5';
+  } else if (wager === 'nrfi' || wager === 'yrfi') {
+    spreadRow.classList.add('hidden');
+    ouRow.classList.add('hidden');
+    periodRow.classList.add('hidden');
   } else {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
@@ -574,6 +578,8 @@ function buildParlayLegs() {
             <option value="spread">📊 Spread</option>
             <option value="total">🔢 Over/Under</option>
             <option value="team_total">🎯 Team Total</option>
+            <option value="nrfi">⚾ NRFI (No Run 1st)</option>
+            <option value="yrfi">⚾ YRFI (Yes Run 1st)</option>
           </select>
         </div>
       </div>
@@ -605,6 +611,12 @@ function buildParlayLegs() {
             <option value="2nd_period">2nd Period</option>
             <option value="3rd_period">3rd Period</option>
             <option value="1st_set">1st Set</option>
+            <option value="first_5">First 5 Innings (F5)</option>
+            <option value="1st_inning">1st Inning</option>
+            <option value="2nd_inning">2nd Inning</option>
+            <option value="3rd_inning">3rd Inning</option>
+            <option value="4th_inning">4th Inning</option>
+            <option value="5th_inning">5th Inning</option>
           </select>
         </div>
       </div>
@@ -788,6 +800,10 @@ function buildParlayLegs() {
         ouRow.classList.remove('hidden');
         periodRow.classList.remove('hidden');
         spreadLabel.textContent = 'Team Total Line';
+      } else if (wager === 'nrfi' || wager === 'yrfi') {
+        spreadRow.classList.add('hidden');
+        ouRow.classList.add('hidden');
+        periodRow.classList.add('hidden');
       } else {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
@@ -973,6 +989,7 @@ async function handleSubmit(e) {
           const activeOU = document.querySelector('#over-under-row .toggle-btn.active');
           body.overUnder = activeOU ? activeOU.dataset.value : 'Over';
         }
+        // NRFI/YRFI don't need spread/period — they're standalone
       } else if (category === 'player_prop') {
         body.wagerType = 'prop';
         body.playerName = document.getElementById('player-name').value;
@@ -3523,6 +3540,13 @@ async function fetchBetForEdit(betId) {
               if (teamBEl) teamBEl.value = leg.teamB || '';
               const spreadEl = document.querySelector(`.leg-spread-value[data-leg="${idx}"]`);
               if (spreadEl && leg.spreadValue) spreadEl.value = leg.spreadValue;
+
+              // Set Over/Under toggle for parlay leg
+              if (leg.overUnder && (leg.wagerType === 'total' || leg.wagerType === 'team_total')) {
+                document.querySelectorAll(`.leg-ou-btn[data-leg="${idx}"]`).forEach(btn => {
+                  btn.classList.toggle('active', btn.dataset.value === leg.overUnder);
+                });
+              }
             } else if (cat === 'player_prop') {
               const playerEl = document.querySelector(`.leg-player-name[data-leg="${idx}"]`);
               const propEl = document.querySelector(`.leg-prop-desc[data-leg="${idx}"]`);
@@ -3611,11 +3635,17 @@ async function fetchBetForEdit(betId) {
         if (bet.wagerType === 'spread') {
           document.getElementById('spread-line-row').classList.remove('hidden');
           document.getElementById('spread-value').value = bet.spreadValue || '';
-        } else if (bet.wagerType === 'total') {
+        } else if (bet.wagerType === 'total' || bet.wagerType === 'team_total') {
           document.getElementById('spread-line-row').classList.remove('hidden');
           document.getElementById('over-under-row').classList.remove('hidden');
           document.getElementById('spread-value').value = bet.spreadValue || '';
-          document.getElementById('spread-label').textContent = 'Total Line';
+          document.getElementById('spread-label').textContent = bet.wagerType === 'team_total' ? 'Team Total Line' : 'Total Line';
+          // Set Over/Under toggle
+          if (bet.overUnder) {
+            document.querySelectorAll('#over-under-row .toggle-btn').forEach(btn => {
+              btn.classList.toggle('active', btn.dataset.value === bet.overUnder);
+            });
+          }
         }
       } else if (cat === 'player_prop') {
         document.getElementById('prop-fields').classList.remove('hidden');

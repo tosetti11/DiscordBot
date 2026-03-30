@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS bets (
   player_name TEXT,
   prop_description TEXT,
   pick TEXT,                  -- e.g. "Duke -1.5" or "LeBron Over 25.5 pts"
-  wager_type TEXT CHECK (wager_type IN ('moneyline', 'spread', 'total', 'team_total', 'prop', 'futures')),
+  wager_type TEXT CHECK (wager_type IN ('moneyline', 'spread', 'total', 'team_total', 'prop', 'futures', 'nrfi', 'yrfi')),
   spread_value DECIMAL(5,1),
   odds_american INTEGER,     -- e.g. -110, +150
   odds_decimal DECIMAL(6,3), -- e.g. 1.909, 2.500
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS parlay_legs (
   player_name TEXT,
   prop_description TEXT,
   pick TEXT,
-  wager_type TEXT CHECK (wager_type IN ('moneyline', 'spread', 'total', 'team_total', 'prop', 'futures')),
+  wager_type TEXT CHECK (wager_type IN ('moneyline', 'spread', 'total', 'team_total', 'prop', 'futures', 'nrfi', 'yrfi')),
   spread_value DECIMAL(5,1),
   odds_american INTEGER,
   odds_decimal DECIMAL(6,3),

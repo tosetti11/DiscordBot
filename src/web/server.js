@@ -1375,6 +1375,12 @@ function createWebServer() {
   });
 
   function formatBetForApi(bet, displayName) {
+    // Derive overUnder from the pick text for total/team_total bets
+    let overUnder = null;
+    if ((bet.wager_type === 'total' || bet.wager_type === 'team_total') && bet.pick) {
+      if (bet.pick.includes('Under')) overUnder = 'Under';
+      else if (bet.pick.includes('Over')) overUnder = 'Over';
+    }
     return {
       id: bet.id,
       slipNumber: bet.slip_number,
@@ -1409,28 +1415,37 @@ function createWebServer() {
       fightMethod: bet.fight_method || null,
       golfHole: bet.golf_hole || null,
       golfRound: bet.golf_round || null,
-      legs: (bet.parlay_legs || []).map(l => ({
-        id: l.id,
-        legNumber: l.leg_number,
-        sport: l.sport,
-        sportName: SPORT_NAMES[l.sport] || l.sport,
-        betCategory: l.bet_category,
-        wagerType: l.wager_type,
-        teamA: l.team_a,
-        teamB: l.team_b,
-        playerName: l.player_name,
-        propDescription: l.prop_description,
-        pick: l.pick,
-        oddsAmerican: l.odds_american,
-        spreadValue: l.spread_value,
-        status: l.status,
-        eventStartTime: l.event_start_time,
-        period: l.period || 'full_game',
-        fightRound: l.fight_round || null,
-        fightMethod: l.fight_method || null,
-        golfHole: l.golf_hole || null,
-        golfRound: l.golf_round || null,
-      })),
+      overUnder,
+      legs: (bet.parlay_legs || []).map(l => {
+        let legOU = null;
+        if ((l.wager_type === 'total' || l.wager_type === 'team_total') && l.pick) {
+          if (l.pick.includes('Under')) legOU = 'Under';
+          else if (l.pick.includes('Over')) legOU = 'Over';
+        }
+        return {
+          id: l.id,
+          legNumber: l.leg_number,
+          sport: l.sport,
+          sportName: SPORT_NAMES[l.sport] || l.sport,
+          betCategory: l.bet_category,
+          wagerType: l.wager_type,
+          teamA: l.team_a,
+          teamB: l.team_b,
+          playerName: l.player_name,
+          propDescription: l.prop_description,
+          pick: l.pick,
+          oddsAmerican: l.odds_american,
+          spreadValue: l.spread_value,
+          status: l.status,
+          eventStartTime: l.event_start_time,
+          period: l.period || 'full_game',
+          fightRound: l.fight_round || null,
+          fightMethod: l.fight_method || null,
+          golfHole: l.golf_hole || null,
+          golfRound: l.golf_round || null,
+          overUnder: legOU,
+        };
+      }),
     };
   }
 
@@ -1752,7 +1767,7 @@ function createWebServer() {
         const mergedBet = { ...bet, ...fields };
         const cat = mergedBet.bet_category || bet.bet_category;
         const wt = mergedBet.wager_type || bet.wager_type;
-        const EDIT_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S' };
+        const EDIT_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
         const EDIT_FIGHT_METHOD_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
         const editPeriod = mergedBet.period && mergedBet.period !== 'full_game' ? ` (${EDIT_PERIOD_LABELS[mergedBet.period] || mergedBet.period})` : '';
         if (cat === 'futures') {
@@ -1766,7 +1781,16 @@ function createWebServer() {
             fields.pick = `${tA} ${sv > 0 ? '+' : ''}${sv}${editPeriod}`;
           } else if (wt === 'total') {
             const sv = parseFloat(mergedBet.spread_value || 0);
-            fields.pick = `Over ${Math.abs(sv)}${editPeriod}`;
+            const ou = req.body.overUnder || (bet.pick?.includes('Under') ? 'Under' : 'Over');
+            fields.pick = `${ou} ${Math.abs(sv)}${editPeriod}`;
+          } else if (wt === 'team_total') {
+            const sv = parseFloat(mergedBet.spread_value || 0);
+            const ou = req.body.overUnder || (bet.pick?.includes('Under') ? 'Under' : 'Over');
+            fields.pick = `${mergedBet.team_a || ''} ${ou} ${Math.abs(sv)}${editPeriod}`;
+          } else if (wt === 'nrfi') {
+            fields.pick = `NRFI ${mergedBet.team_a || ''} vs ${mergedBet.team_b || ''}`.trim();
+          } else if (wt === 'yrfi') {
+            fields.pick = `YRFI ${mergedBet.team_a || ''} vs ${mergedBet.team_b || ''}`.trim();
           }
         } else if (cat === 'player_prop') {
           fields.pick = mergedBet.prop_description || mergedBet.pick || bet.pick;
@@ -1813,7 +1837,7 @@ function createWebServer() {
           // Reconstruct leg pick
           const lCat = leg.betCategory || 'team_game';
           const lWt = leg.wagerType || 'moneyline';
-          const LEG_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S' };
+          const LEG_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
           const LEG_FIGHT_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
           const lPeriod = leg.period && leg.period !== 'full_game' ? ` (${LEG_PERIOD_LABELS[leg.period] || leg.period})` : '';
           if (lCat === 'futures') {
@@ -1831,6 +1855,10 @@ function createWebServer() {
             } else if (lWt === 'team_total') {
               const sv = parseFloat(leg.spreadValue || 0);
               legFields.pick = `${lTeamA} ${leg.overUnder || 'Over'} ${Math.abs(sv)}${lPeriod}`;
+            } else if (lWt === 'nrfi') {
+              legFields.pick = `NRFI ${lTeamA} vs ${leg.teamB || ''}`.trim();
+            } else if (lWt === 'yrfi') {
+              legFields.pick = `YRFI ${lTeamA} vs ${leg.teamB || ''}`.trim();
             }
           } else if (lCat === 'player_prop') {
             legFields.pick = leg.propDescription || '';
@@ -2045,7 +2073,7 @@ For a SINGLE bet:
   "betType": "single",
   "sport": "<one of: ${validSports.join(', ')}>",
   "betCategory": "<one of: team_game, player_prop, futures>",
-  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures>",
+  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures, nrfi, yrfi>",
   "teamA": "<your pick team or null>",
   "teamB": "<opponent team or null>",
   "spreadValue": "<spread or total line value like -1.5, 220.5, or null>",
@@ -2057,7 +2085,7 @@ For a SINGLE bet:
   "oddsAmerican": "<American odds like -110, +150>",
   "wagerAmount": "<dollar wager/stake amount as a number, or null if not visible>",
   "eventStartTime": "<game date and time in format like 'Thu Mar 5 7:00 PM ET', or null>",
-  "period": "<one of: full_game, 1st_half, 2nd_half, 1st_quarter, 2nd_quarter, 3rd_quarter, 4th_quarter, 1st_period, 2nd_period, 3rd_period, 1st_set — default full_game>",
+  "period": "<one of: full_game, 1st_half, 2nd_half, 1st_quarter, 2nd_quarter, 3rd_quarter, 4th_quarter, 1st_period, 2nd_period, 3rd_period, 1st_set, first_5, 1st_inning, 2nd_inning, 3rd_inning, 4th_inning, 5th_inning — default full_game>",
   "fightRound": "<round number 1-12 for UFC/Boxing bets, or null>",
   "fightMethod": "<one of: ko_tko, submission, decision, unanimous_decision, split_decision, dq, points — or null>",
   "golfRound": "<tournament round 1-4 for golf bets, or null>",
@@ -2073,7 +2101,7 @@ For a PARLAY (multiple legs):
     {
       "sport": "<sport value>",
       "betCategory": "<team_game, player_prop, or futures>",
-      "wagerType": "<moneyline, spread, total, team_total, prop, or futures>",
+      "wagerType": "<moneyline, spread, total, team_total, prop, futures, nrfi, or yrfi>",
       "teamA": "<pick team or null>",
       "teamB": "<opponent or null>",
       "spreadValue": "<spread/line or null>",
@@ -2104,6 +2132,8 @@ Rules:
 - For player props, ALWAYS include teamA and teamB from the game the player is in. Look at the matchup header (e.g. "NYK Knicks @ MIL Bucks") and fill in both teams. Never leave teamA/teamB null for player props.
 - For over/under totals (team_game with wagerType "total"), the spreadValue should always end in .5 (e.g. 220.5, 45.5). If the line is a whole number, add .5.
 - TEAM TOTALS: If the bet is on a single team's score (e.g. "Duke Over 71.5", "Lakers Under 108.5", "Team Total Over 112.5"), use wagerType "team_total" (NOT "total"). Set teamA to the team whose score is being bet on. The overUnder and spreadValue work the same as regular totals. Team totals typically have lower lines than game totals (e.g. 71.5 for a team vs 141.5 for the full game).
+- NRFI/YRFI (Baseball): If the bet is "No Run First Inning" or "NRFI", set wagerType to "nrfi". If it's "Yes Run First Inning" or "YRFI", set wagerType to "yrfi". Set betCategory to "team_game". Set teamA and teamB to the two teams in the matchup. No spreadValue or overUnder needed. These are common MLB bets.
+- BASEBALL INNINGS: For bets on specific innings (e.g. "1st Inning Over 0.5", "First 5 Innings"), use the appropriate period value: "first_5" for First 5 Innings (F5), "1st_inning" through "5th_inning" for individual innings. Strikeout props, home run props, and hit props for baseball are player props — use betCategory "player_prop" and wagerType "prop".
 - For futures, set betCategory to "futures", wagerType to "futures"
 - teamA should be the team/side being bet ON (the pick). For totals, teamA is the first-listed team in the matchup.
 - If you can detect the wager/stake amount in dollars, put it in wagerAmount (just the number, no $ sign)
@@ -2111,7 +2141,7 @@ Rules:
 - Map the sport to the closest value from the valid sports list
 - For eventStartTime, ALWAYS format as "Day Mon DD H:MM AM/PM ET" (e.g. "Thu Mar 5 7:00 PM ET"). If only a time is visible (e.g. "7:00 PM"), assume today's date and use the full format. If no time is visible, use null.
 - IMPORTANT: Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}. Games on betting slips are almost always within the next 1-7 days from today. Use the CURRENT month and year when constructing dates. Do NOT guess old or future months — the event is happening very soon.
-- PERIOD DETECTION: If the bet is for a specific half, quarter, or period (e.g. "1st Half Over 110.5", "3rd Period ML", "1Q Spread -2.5"), set the period field accordingly. Look for indicators like "1H", "2H", "1st Half", "2nd Half", "1Q", "2Q", "3Q", "4Q", "1st Quarter", "1st Period", "2P", "3P", "1st Set". Default to "full_game" if no period is specified.
+- PERIOD DETECTION: If the bet is for a specific half, quarter, period, or inning (e.g. "1st Half Over 110.5", "3rd Period ML", "1Q Spread -2.5", "First 5 Innings Over 4.5", "1st Inning Under 0.5"), set the period field accordingly. Look for indicators like "1H", "2H", "1st Half", "2nd Half", "1Q", "2Q", "3Q", "4Q", "1st Quarter", "1st Period", "2P", "3P", "1st Set", "F5", "First 5", "1st Inning", "2nd Inning", etc. Default to "full_game" if no period is specified.
 - FIGHT BETS (UFC/Boxing): If the bet mentions a specific round (e.g. "Round 3", "Rd 1-2", "goes the distance"), extract fightRound as the round number. If a method of victory is specified (e.g. "by KO/TKO", "by Submission", "by Decision", "by Points"), set fightMethod to the matching value (ko_tko, submission, decision, unanimous_decision, split_decision, dq, points).
 - GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds.
 - Return ONLY valid JSON, no markdown or explanation`;
@@ -3471,7 +3501,7 @@ IMPORTANT RULES:
 
       } else {
         // ── Single bet ──
-        const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S' };
+        const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
         const FIGHT_METHOD_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
         const periodTag = period && period !== 'full_game' ? ` (${PERIOD_LABELS[period] || period})` : '';
 
@@ -3490,6 +3520,10 @@ IMPORTANT RULES:
           } else if (wagerType === 'team_total') {
             const sv = parseFloat(spreadValue);
             finalPick = `${safeTeamA} ${overUnder || 'Over'} ${Math.abs(sv)}${periodTag}`;
+          } else if (wagerType === 'nrfi') {
+            finalPick = `NRFI ${safeTeamA} vs ${safeTeamB}`;
+          } else if (wagerType === 'yrfi') {
+            finalPick = `YRFI ${safeTeamA} vs ${safeTeamB}`;
           }
         } else {
           finalPick = safePropDesc || safePick;

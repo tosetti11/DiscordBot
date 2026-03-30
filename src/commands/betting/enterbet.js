@@ -489,6 +489,8 @@ async function handleSportSelect(interaction) {
           { label: 'Spread', value: 'spread', description: 'Point spread bet', emoji: '📊' },
           { label: 'Over/Under', value: 'total', description: 'Total points line', emoji: '🔢' },
           { label: 'Team Total', value: 'team_total', description: 'Single team over/under', emoji: '🎯' },
+          { label: 'NRFI', value: 'nrfi', description: 'No Run First Inning', emoji: '⚾' },
+          { label: 'YRFI', value: 'yrfi', description: 'Yes Run First Inning', emoji: '⚾' },
         ])
     );
 
@@ -531,6 +533,7 @@ async function handleWagerTypeSelect(interaction) {
     return showPeriodSelect(interaction, session);
   }
 
+  // NRFI/YRFI skip Over/Under and period — go straight to modal
   await showTeamGameModal(interaction, session);
 }
 
@@ -564,6 +567,12 @@ function showPeriodSelect(interaction, session) {
         { label: '1st Period', value: '1st_period', emoji: '🏒' },
         { label: '2nd Period', value: '2nd_period', emoji: '🏒' },
         { label: '3rd Period', value: '3rd_period', emoji: '🏒' },
+        { label: 'First 5 Innings', value: 'first_5', emoji: '⚾' },
+        { label: '1st Inning', value: '1st_inning', emoji: '⚾' },
+        { label: '2nd Inning', value: '2nd_inning', emoji: '⚾' },
+        { label: '3rd Inning', value: '3rd_inning', emoji: '⚾' },
+        { label: '4th Inning', value: '4th_inning', emoji: '⚾' },
+        { label: '5th Inning', value: '5th_inning', emoji: '⚾' },
       ])
   );
   return interaction.update({
@@ -589,7 +598,7 @@ async function showTeamGameModal(interaction, session) {
   const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
   const wagerType = session.currentWagerType;
 
-  const wagerLabels = { moneyline: 'Moneyline', spread: 'Spread', total: 'Over/Under', team_total: 'Team Total' };
+  const wagerLabels = { moneyline: 'Moneyline', spread: 'Spread', total: 'Over/Under', team_total: 'Team Total', nrfi: 'NRFI', yrfi: 'YRFI' };
   const modal = new ModalBuilder()
     .setCustomId('enterbet_team_modal')
     .setTitle(`${wagerLabels[wagerType]} Bet${legLabel}`);
@@ -975,7 +984,7 @@ async function handleTeamModalSubmit(interaction) {
   try { eventStartTime = interaction.fields.getTextInputValue('event_start_time')?.trim() || null; } catch (e) { /* no field for single bets */ }
 
   // Period tag for pick string
-  const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P' };
+  const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
   const period = session.period || 'full_game';
   const periodTag = period !== 'full_game' ? ` (${PERIOD_LABELS[period] || period})` : '';
 
@@ -988,6 +997,10 @@ async function handleTeamModalSubmit(interaction) {
   } else if (wagerType === 'team_total') {
     const direction = session.overUnder || 'Over';
     pick = `${teamA} ${direction} ${Math.abs(spreadValue)}${periodTag}`;
+  } else if (wagerType === 'nrfi') {
+    pick = `NRFI ${teamA} vs ${teamB}`;
+  } else if (wagerType === 'yrfi') {
+    pick = `YRFI ${teamA} vs ${teamB}`;
   } else {
     // total — use the over/under choice from session
     const direction = session.overUnder || (spreadValue > 0 ? 'Over' : 'Under');
