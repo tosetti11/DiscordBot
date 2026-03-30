@@ -6487,7 +6487,7 @@ textarea {
 /* ═══════════════════════════════════════════════
    Golf Admin Page — fully self-contained, no inherited bloat
    ═══════════════════════════════════════════════ */
-#golf-admin-page { padding: 4px 6px 32px !important; }
+#golf-admin-page { display: block; padding: 4px 6px 32px; }
 .golf-admin-wrap { max-width: 680px; margin: 0 auto; }
 
 /* Tab bar with inline title */
