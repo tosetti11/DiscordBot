@@ -6488,18 +6488,22 @@ textarea {
    Golf Admin Page
    ═══════════════════════════════════════════════ */
 
-/* Compact the shared containers for golf page */
-#golf-admin-page { padding: 12px 10px 60px; }
-#golf-admin-page .tools-container { padding: 0 12px; }
-#golf-admin-page .tools-header { margin-bottom: 8px; }
-#golf-admin-page .tools-header h2 { font-size: 20px; margin: 0; }
-#golf-admin-page .tools-header .slip-subtitle { font-size: 12px; margin: 2px 0 0; }
+/* Compact the shared containers for golf page — kill all inherited spacing */
+#golf-admin-page { padding: 8px 8px 40px; }
+#golf-admin-page .tools-container { padding: 0 4px; max-width: 720px; }
+#golf-admin-page .tools-header { margin-bottom: 4px; }
+#golf-admin-page .tools-header h2 { font-size: 18px; margin: 0; line-height: 1.2; }
+#golf-admin-page .tools-header .slip-subtitle { font-size: 11px; margin: 0; display: none; }
+#golf-admin-page .tool-card { padding: 10px 12px; }
+#golf-admin-page .form-group label { font-size: 11px; margin-bottom: 2px; }
+#golf-admin-page input,
+#golf-admin-page select { padding: 6px 10px; font-size: 13px; }
 
 /* Tabs */
 .golf-tabs {
   display: flex;
   gap: 2px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   background: var(--bg-secondary);
   border-radius: 10px;
   padding: 3px;
@@ -6522,7 +6526,7 @@ textarea {
 }
 .golf-tab:hover:not(.active) { color: var(--text-primary); }
 
-.golf-admin-card { padding: 14px; }
+.golf-admin-card { padding: 10px 12px; }
 .golf-step { margin-bottom: 0; }
 .golf-step-header {
   display: flex;
@@ -6541,9 +6545,9 @@ textarea {
 /* Upload zone — compact */
 .golf-upload-zone {
   border: 2px dashed rgba(255,255,255,0.15);
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 10px;
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 6px;
   transition: border-color 0.2s, background 0.2s;
 }
 .golf-upload-zone.drag-over {
@@ -6553,8 +6557,8 @@ textarea {
 .golf-upload-prompt {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
+  gap: 8px;
+  padding: 8px;
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 13px;
@@ -6562,7 +6566,7 @@ textarea {
   justify-content: center;
 }
 .golf-upload-prompt:hover { color: var(--accent); }
-.golf-upload-icon { font-size: 24px; }
+.golf-upload-icon { font-size: 20px; }
 .golf-previews {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
@@ -6600,8 +6604,8 @@ textarea {
 .golf-upload-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 .golf-file-count {
   color: var(--text-muted);
@@ -6618,11 +6622,9 @@ textarea {
 .golf-config {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
-.golf-config .form-group label { font-size: 12px; margin-bottom: 2px; }
-.golf-config .form-input { padding: 6px 10px; font-size: 13px; }
 
 /* Analyze status */
 .golf-analyze-status {
