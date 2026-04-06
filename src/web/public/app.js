@@ -2173,8 +2173,18 @@ function initStatsPage() {
     loadStats();
   });
 
-  document.getElementById('stats-period').addEventListener('change', loadStats);
+  document.getElementById('stats-period').addEventListener('change', () => {
+    const customRow = document.getElementById('custom-date-row');
+    if (document.getElementById('stats-period').value === 'custom') {
+      customRow.classList.remove('hidden');
+      // Don't auto-load; wait for Apply click
+    } else {
+      customRow.classList.add('hidden');
+      loadStats();
+    }
+  });
   document.getElementById('stats-user').addEventListener('change', loadStats);
+  document.getElementById('apply-custom-dates').addEventListener('click', loadStats);
 
   // Auto-select and hide if single guild, otherwise select first
   if (currentUser.guilds.length === 1) {
@@ -2215,6 +2225,19 @@ async function loadStats() {
   try {
     const params = new URLSearchParams({ period });
     if (userId) params.set('userId', userId);
+
+    // Custom date range
+    if (period === 'custom') {
+      const startDate = document.getElementById('stats-start-date').value;
+      const endDate = document.getElementById('stats-end-date').value;
+      if (!startDate) {
+        document.getElementById('stats-loading').classList.add('hidden');
+        showToast('Please select a start date');
+        return;
+      }
+      params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+    }
 
     const res = await fetch(`/api/guilds/${guildId}/stats?${params}`);
     const data = await res.json();

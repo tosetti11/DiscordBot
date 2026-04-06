@@ -604,18 +604,49 @@ function createWebServer() {
     map[key].netUnits = Math.round(map[key].netUnits * 100) / 100;
   }
 
+  // All date calculations use America/New_York (EST/EDT)
+  const EST_TZ = 'America/New_York';
+
+  function nowInEST() {
+    // Get current time expressed in EST
+    const nowStr = new Date().toLocaleString('en-US', { timeZone: EST_TZ });
+    return new Date(nowStr);
+  }
+
+  function estMidnightToUTC(year, month, day) {
+    // Build an ISO string for midnight EST, then find the UTC equivalent
+    // month is 0-indexed
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    // Create a date string and use Intl to resolve the UTC offset for that date
+    const estDate = new Date(`${year}-${mm}-${dd}T00:00:00`);
+    const utcStr = new Date(estDate.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const estStr = new Date(estDate.toLocaleString('en-US', { timeZone: EST_TZ }));
+    const offsetMs = utcStr - estStr; // positive means EST is behind UTC
+    // Midnight EST in UTC
+    return new Date(Date.UTC(year, month, day) + offsetMs);
+  }
+
+  function toESTDateString(isoString) {
+    // Convert a UTC timestamp to a YYYY-MM-DD string in EST
+    return new Date(isoString).toLocaleDateString('en-CA', { timeZone: EST_TZ });
+  }
+
   function getDateRange(period) {
-    const now = new Date();
+    const est = nowInEST();
     let start;
     switch (period) {
-      case 'last24h': start = new Date(now.getTime() - 86400000); break;
-      case 'today': start = new Date(now); start.setHours(0,0,0,0); break;
-      case 'week': start = new Date(now); start.setDate(start.getDate() - start.getDay()); start.setHours(0,0,0,0); break;
-      case 'month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-      case 'year': start = new Date(now.getFullYear(), 0, 1); break;
+      case 'last24h': start = new Date(Date.now() - 86400000); return start.toISOString();
+      case 'today': return estMidnightToUTC(est.getFullYear(), est.getMonth(), est.getDate()).toISOString();
+      case 'week': {
+        const d = new Date(est);
+        d.setDate(d.getDate() - d.getDay());
+        return estMidnightToUTC(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+      }
+      case 'month': return estMidnightToUTC(est.getFullYear(), est.getMonth(), 1).toISOString();
+      case 'year': return estMidnightToUTC(est.getFullYear(), 0, 1).toISOString();
       default: return null;
     }
-    return start.toISOString();
   }
 
   // ─── Stats API ───
@@ -624,7 +655,7 @@ function createWebServer() {
   app.get('/api/guilds/:guildId/stats', authMiddleware, async (req, res) => {
     try {
       const { guildId } = req.params;
-      const { period = 'all', userId } = req.query;
+      const { period = 'all', userId, startDate, endDate } = req.query;
       // If userId is specified and it's not the current user, require admin
       let targetDiscordId = req.user.discordId;
       if (userId && userId !== req.user.discordId) {
@@ -641,8 +672,30 @@ function createWebServer() {
         .eq('guild_id', guildId)
         .neq('status', 'void');
 
-      const dateStart = getDateRange(period);
-      if (dateStart) query = query.gte('created_at', dateStart);
+      // Date filtering: custom range or preset period
+      if (period === 'custom' && startDate) {
+        // Validate YYYY-MM-DD format
+        const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRe.test(startDate) || (endDate && !dateRe.test(endDate))) {
+          return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+        }
+        // startDate/endDate are YYYY-MM-DD strings in EST
+        const [sy, sm, sd] = startDate.split('-').map(Number);
+        const customStart = estMidnightToUTC(sy, sm - 1, sd).toISOString();
+        query = query.gte('created_at', customStart);
+        if (endDate) {
+          const [ey, em, ed] = endDate.split('-').map(Number);
+          // End of the selected day: midnight of the NEXT day in EST
+          const endDateObj = new Date(Date.UTC(ey, em - 1, ed));
+          endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
+          const [ey2, em2, ed2] = [endDateObj.getUTCFullYear(), endDateObj.getUTCMonth(), endDateObj.getUTCDate()];
+          const customEnd = estMidnightToUTC(ey2, em2, ed2).toISOString();
+          query = query.lt('created_at', customEnd);
+        }
+      } else {
+        const dateStart = getDateRange(period);
+        if (dateStart) query = query.gte('created_at', dateStart);
+      }
 
       const { data: bets, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
@@ -724,10 +777,10 @@ function createWebServer() {
         if (!worstBet || payout < worstBet._payout) worstBet = b;
       }
 
-      // Daily P&L (last 30 days)
+      // Daily P&L (grouped by EST date)
       const dailyPnL = {};
       for (const b of bets.filter(b => ['win', 'loss', 'push'].includes(b.status))) {
-        const day = new Date(b.created_at).toISOString().split('T')[0];
+        const day = toESTDateString(b.created_at);
         if (!dailyPnL[day]) dailyPnL[day] = { date: day, net: 0, bets: 0, wins: 0, losses: 0 };
         dailyPnL[day].bets++;
         if (b.status === 'win') {
