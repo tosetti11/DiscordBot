@@ -28,6 +28,7 @@ const { startBracketUpdater } = require('./services/bracketUpdater');
 const roleManager = require('./services/roleManager');
 const aiPickService = require('./services/aiPicks');
 const golfService = require('./services/golfRoundTotals');
+const mlbAnalysis = require('./services/mlbAnalysis');
 
 // ── Scoreboard helpers ──
 function findPlayer(players, playerName) {
@@ -371,6 +372,39 @@ client.once(Events.ClientReady, (c) => {
     // ─── Golf H2H Matchup Scheduler (PAUSED — waiting on odds source) ───
     // TODO: Re-enable once we have a working golf odds API
     console.log('   ⛳ Golf H2H Matchup scheduler PAUSED (odds source TBD)');
+
+    // ─── MLB Daily Market Analysis Scheduler ───
+    // 9:00 AM ET — Generate NRFI, Strikeout, and HR analyses for all MLB games
+    setTimeout(function scheduleMLB() {
+      mlbAnalysis.generateAllDailyAnalysis(client, AI_GUILD_ID).catch(e => console.error('[MLB Analysis] Error:', e.message));
+      setInterval(() => {
+        mlbAnalysis.generateAllDailyAnalysis(client, AI_GUILD_ID).catch(e => console.error('[MLB Analysis] Error:', e.message));
+      }, 24 * 60 * 60_000);
+    }, msUntilET(9, 0));
+
+    // Auto-resolve MLB analyses every 5 minutes
+    setInterval(async () => {
+      try {
+        await mlbAnalysis.autoResolveAll(client);
+      } catch (err) {
+        console.error('[MLB Analysis] Auto-resolve error:', err.message);
+      }
+    }, 5 * 60_000);
+
+    console.log('   ⚾ MLB Daily Analysis scheduler started (NRFI/K/HR)');
+
+    // Fire MLB analysis on startup if none exists yet (only after 9 AM ET, April-October)
+    setTimeout(async () => {
+      try {
+        const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const month = nowET.getMonth() + 1;
+        if (nowET.getHours() >= 9 && month >= 3 && month <= 10) {
+          await mlbAnalysis.generateAllDailyAnalysis(client, AI_GUILD_ID);
+        }
+      } catch (e) {
+        console.error('[MLB Analysis] Startup error:', e.message);
+      }
+    }, 20_000);
   }
 
   // ─── Lock Open Slips Channels (view + react + buttons only, no sending) ───

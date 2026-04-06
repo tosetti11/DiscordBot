@@ -76,29 +76,70 @@ async function generateDailyPick(client, guildId) {
     return null;
   }
 
+  // Enrich MLB games with probable pitchers
+  for (const game of allGames) {
+    if (game.sport === 'mlb') {
+      try {
+        const rawUrl = `https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=${new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '')}`;
+        const rawRes = await fetch(rawUrl);
+        const rawJson = await rawRes.json();
+        const event = (rawJson.events || []).find(e => e.id === game.espnGameId);
+        if (event) {
+          const comp = event.competitions?.[0];
+          const homeComp = comp?.competitors?.find(c => c.homeAway === 'home');
+          const awayComp = comp?.competitors?.find(c => c.homeAway === 'away');
+          const hp = homeComp?.probables?.[0];
+          const ap = awayComp?.probables?.[0];
+          game.homePitcher = hp ? `${hp.athlete?.displayName} ${hp.record || ''}` : 'TBD';
+          game.awayPitcher = ap ? `${ap.athlete?.displayName} ${ap.record || ''}` : 'TBD';
+        }
+      } catch (e) { /* non-critical */ }
+    }
+  }
+
   // Get current record for context
   const record = await aiPicksDb.getAiPickRecord(guildId);
   const streak = await aiPicksDb.getAiPickStreak(guildId);
 
-  const gamesJson = JSON.stringify(allGames.map(g => ({
-    sport: g.sport,
-    sportName: g.sportName,
-    matchup: `${g.away} @ ${g.home}`,
-    awayRecord: g.awayRecord,
-    homeRecord: g.homeRecord,
-    spread: g.spread,
-    overUnder: g.overUnder,
-    startTime: g.startTime,
-    espnGameId: g.espnGameId,
-  })), null, 2);
+  // Get recent performance for better self-awareness
+  const closedPicks = await aiPicksDb.getAiPickFullRecord(guildId);
+  const last10 = (closedPicks || []).slice(0, 10);
+  const recentPerformance = last10.map(p => `${p.sport} ${p.wager_type} ${p.pick}: ${p.status}`).join('; ');
 
-  const prompt = `You are an expert sports handicapper AI with an elite track record. Your current record is ${record.wins}-${record.losses}-${record.pushes}.
+  const gamesJson = JSON.stringify(allGames.map(g => {
+    const obj = {
+      sport: g.sport,
+      sportName: g.sportName,
+      matchup: `${g.away} @ ${g.home}`,
+      awayRecord: g.awayRecord,
+      homeRecord: g.homeRecord,
+      spread: g.spread,
+      overUnder: g.overUnder,
+      startTime: g.startTime,
+      espnGameId: g.espnGameId,
+    };
+    if (g.homePitcher) obj.homePitcher = g.homePitcher;
+    if (g.awayPitcher) obj.awayPitcher = g.awayPitcher;
+    return obj;
+  }), null, 2);
+
+  const prompt = `You are an expert sports handicapper AI running a public betting record. Your current record is ${record.wins}-${record.losses}-${record.pushes}.
+
+Recent results (most recent first): ${recentPerformance || 'No recent picks'}
+
+STRATEGY NOTES:
+- Analyze which bet types have been winning vs losing in recent history
+- If spreads have been losing, lean toward moneylines or totals
+- Look for genuine line value — where the market may be off
+- Consider situational factors: rest days, travel, motivation, injuries
+- For MLB: pitcher matchups are critical — a strong pitcher vs weak lineup is high value
+- Avoid picking heavy favorites with poor value odds
 
 Today's available games:
 ${gamesJson}
 
 Select ONE "Lock Pick of the Day" — your single best value play. Requirements:
-- Odds MUST be between -135 and +100 (this is a value-focused approach)
+- Odds MUST be between -160 and +130 (value-focused but allow slightly wider range for strong edges)
 - The pick must be a moneyline, spread, over/under, or team total (team_game bets). Player props are acceptable too.
 - Team total = one team's score over/under a line (e.g. 'Lakers Over 112.5')
 - Focus on value — find where the line is off or where one side has a clear edge
@@ -117,7 +158,7 @@ Return a JSON object with this EXACT structure:
   "propDescription": "<prop description if player_prop, else null>",
   "spreadValue": <numeric spread or total line, or null>,
   "overUnder": "Over" or "Under" or null,
-  "oddsAmerican": <American odds number between -135 and +100>,
+  "oddsAmerican": <American odds number between -160 and +130>,
   "espnGameId": "<ESPN game ID from the data>",
   "confidence": <number 85-99 representing confidence level>,
   "reasoning": "<2-3 sentence analysis explaining WHY this is the lock pick. Be specific about matchup advantages, trends, or line value.>"
@@ -135,8 +176,8 @@ IMPORTANT: Return ONLY valid JSON. No markdown, no explanation outside the JSON.
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 500,
+        temperature: 0.4,
+        max_tokens: 600,
       }),
     });
 
