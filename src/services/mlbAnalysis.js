@@ -95,7 +95,11 @@ async function fetchMLBScoreboardRaw() {
     if (!comp) continue;
 
     const status = event.status?.type?.state || 'pre';
-    if (status !== 'pre') continue;
+    // Include pre-game AND games that just started (1st inning or earlier)
+    // so early-start games aren't missed when analysis runs at 9 AM ET
+    const period = event.status?.period || 0;
+    if (status === 'post') continue;
+    if (status === 'in' && period > 1) continue;
 
     const home = comp.competitors?.find(c => c.homeAway === 'home');
     const away = comp.competitors?.find(c => c.homeAway === 'away');
@@ -752,7 +756,7 @@ async function autoResolveNrfi(client) {
       // Need the game to be at least past the 1st inning or complete
       if (game.state === 'pre') continue;
 
-      // Fetch full game data for linescore
+      // Fetch full game data for linescore + scoring plays
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${entry.espn_game_id}`);
       const json = await res.json();
 
@@ -769,12 +773,43 @@ async function autoResolveNrfi(client) {
       // Need at least 1st inning complete (top and bottom)
       if (awayLinescores.length < 1) continue;
 
-      const awayFirstInning = parseInt(awayLinescores[0]?.value || 0);
-      const homeFirstInning = parseInt(homeLinescores[0]?.value || 0);
+      let awayFirstInning = parseInt(awayLinescores[0]?.value ?? -1);
+      let homeFirstInning = parseInt(homeLinescores[0]?.value ?? -1);
+      if (isNaN(awayFirstInning)) awayFirstInning = -1;
+      if (isNaN(homeFirstInning)) homeFirstInning = -1;
 
-      // If away team scored in top of 1st, YRFI immediately
-      // If we have bottom of 1st too, we can fully resolve
-      const topFirstComplete = awayLinescores.length >= 1;
+      // Fallback: check scoring plays for 1st inning runs if linescore looks empty
+      if (awayFirstInning <= 0 && homeFirstInning <= 0 && (game.period > 1 || game.completed)) {
+        const scoringPlays = json.scoringPlays || [];
+        let awayR1 = 0, homeR1 = 0;
+        for (const play of scoringPlays) {
+          const period = play.period?.number || play.period;
+          if (period === 1 || period === '1') {
+            const homeAwayVal = play.team?.id === homeComp?.id ? 'home' : 'away';
+            // Match by team ID
+            const playTeamId = play.team?.id || play.team?.$ref?.match(/teams\/(\d+)/)?.[1];
+            const homeTeamId = homeComp?.id || homeComp?.team?.id;
+            const awayTeamId = awayComp?.id || awayComp?.team?.id;
+            if (playTeamId === homeTeamId) homeR1++;
+            else if (playTeamId === awayTeamId) awayR1++;
+            else awayR1++; // Default: count as away run if ambiguous
+          }
+        }
+        if (awayR1 > 0 || homeR1 > 0) {
+          console.log(`[MLB NRFI] Linescore showed 0-0 but scoring plays found ${awayR1}-${homeR1} for ${entry.away_abbr}@${entry.home_abbr}`);
+          awayFirstInning = awayR1;
+          homeFirstInning = homeR1;
+        } else if (awayFirstInning < 0) {
+          // Linescore wasn't populated, and no scoring plays in 1st — truly 0-0
+          awayFirstInning = 0;
+          homeFirstInning = 0;
+        }
+      }
+
+      // Clamp negatives to 0
+      if (awayFirstInning < 0) awayFirstInning = 0;
+      if (homeFirstInning < 0) homeFirstInning = 0;
+
       const bottomFirstComplete = homeLinescores.length >= 1 && (game.period > 1 || game.completed);
 
       if (awayFirstInning > 0 || homeFirstInning > 0) {
