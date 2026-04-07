@@ -536,7 +536,11 @@ function updateWagerFields(wager) {
     periodRow.classList.remove('hidden');
     spreadLabel.textContent = 'Team Total Line';
     document.getElementById('spread-value').placeholder = 'e.g. 112.5, 3.5, 24.5';
-  } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'double_chance' || wager === 'draw_no_bet') {
+  } else if (wager === 'moneyline') {
+    spreadRow.classList.add('hidden');
+    ouRow.classList.add('hidden');
+    periodRow.classList.remove('hidden');
+  } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'homerun' || wager === 'double_chance' || wager === 'draw_no_bet') {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
     periodRow.classList.add('hidden');
@@ -609,6 +613,7 @@ function buildParlayLegs() {
             <option value="team_total">🎯 Team Total</option>
             <option value="nrfi">⚾ NRFI (No Run 1st)</option>
             <option value="yrfi">⚾ YRFI (Yes Run 1st)</option>
+            <option value="homerun">💣 Home Run</option>
             <option value="double_chance">⚽ Double Chance</option>
             <option value="draw_no_bet">⚽ Draw No Bet</option>
           </select>
@@ -642,6 +647,7 @@ function buildParlayLegs() {
             <option value="2nd_period">2nd Period</option>
             <option value="3rd_period">3rd Period</option>
             <option value="1st_set">1st Set</option>
+            <option value="first_3">First 3 Innings (F3)</option>
             <option value="first_5">First 5 Innings (F5)</option>
             <option value="1st_inning">1st Inning</option>
             <option value="2nd_inning">2nd Inning</option>
@@ -894,7 +900,11 @@ function buildParlayLegs() {
         ouRow.classList.remove('hidden');
         periodRow.classList.remove('hidden');
         spreadLabel.textContent = 'Team Total Line';
-      } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'double_chance' || wager === 'draw_no_bet') {
+      } else if (wager === 'moneyline') {
+        spreadRow.classList.add('hidden');
+        ouRow.classList.add('hidden');
+        periodRow.classList.remove('hidden');
+      } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'homerun' || wager === 'double_chance' || wager === 'draw_no_bet') {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
         periodRow.classList.add('hidden');
