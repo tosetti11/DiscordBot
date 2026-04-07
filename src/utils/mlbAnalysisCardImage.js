@@ -318,7 +318,7 @@ async function generateStrikeoutCardImage(entries, record, streak) {
   const W = 560;
   const PAD = 20;
   const INNER = W - PAD * 2;
-  const ROW_H = 80;
+  const ROW_H = 64;
   const HEADER_H = 70;
   const FOOTER_H = 50;
 
@@ -390,7 +390,7 @@ async function generateStrikeoutCardImage(entries, record, streak) {
 
   y = HEADER_H;
 
-  // Game Rows
+  // Per-pitcher rows (each entry is one pitcher pick)
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     const rowY = y;
@@ -404,9 +404,9 @@ async function generateStrikeoutCardImage(entries, record, streak) {
     ctx.fillText(statusIcon(e.status), PAD, rowY + 22);
 
     // Matchup
-    ctx.font = `700 13px ${FF}`;
+    ctx.font = `700 12px ${FF}`;
     ctx.fillStyle = C.white;
-    ctx.fillText(`${e.away_abbr} @ ${e.home_abbr}`, PAD + 24, rowY + 18);
+    ctx.fillText(`${e.away_abbr} @ ${e.home_abbr}`, PAD + 24, rowY + 16);
 
     // Time
     const time = formatTime(e.event_start_time);
@@ -414,64 +414,47 @@ async function generateStrikeoutCardImage(entries, record, streak) {
       ctx.font = `500 10px ${FF}`;
       ctx.fillStyle = C.muted;
       const tW = ctx.measureText(time + ' ET').width;
-      ctx.fillText(time + ' ET', W - PAD - tW, rowY + 18);
+      ctx.fillText(time + ' ET', W - PAD - tW, rowY + 16);
     }
 
-    // Both pitchers with their analysis
-    const homeAnalysis = e.home_pitcher_stats?.analysis;
-    const awayAnalysis = e.away_pitcher_stats?.analysis;
+    // Suggestion pill with pitcher name (format: "Pitcher Over/Under X.5 K")
+    const suggMatch = e.suggestion.match(/^(.+?)\s+(Over|Under)\s+([\d.]+)\s+K$/i);
+    const pitcherName = suggMatch ? truncate(suggMatch[1], 16) : truncate(e.suggestion, 20);
+    const direction = suggMatch ? suggMatch[2] : '';
+    const kLine = suggMatch ? suggMatch[3] : '';
 
-    // Away pitcher line
-    ctx.font = `500 11px ${FF}`;
+    ctx.font = `600 11px ${FF}`;
     ctx.fillStyle = C.gray;
-    const awayLabel = truncate(e.away_pitcher, 16);
-    ctx.fillText(awayLabel, PAD + 24, rowY + 36);
+    ctx.fillText(pitcherName, PAD + 24, rowY + 34);
 
-    if (awayAnalysis) {
-      const aDir = awayAnalysis.suggestion === 'Over';
-      const aPillBg = aDir ? C.redFaint : 'rgba(88, 166, 255, 0.12)';
-      const aPillFg = aDir ? C.red : '#58a6ff';
-      const aPillText = `${awayAnalysis.suggestion} ${awayAnalysis.line} K`;
-      const aPillX = PAD + 24 + ctx.measureText(awayLabel + '  ').width;
-      drawPill(ctx, aPillX, rowY + 26, aPillText, aPillBg, aPillFg, 9, 6, 2);
+    if (direction) {
+      const isOver = direction === 'Over';
+      const pillBg = isOver ? C.redFaint : 'rgba(88, 166, 255, 0.12)';
+      const pillFg = isOver ? C.red : '#58a6ff';
+      const pillText = `${direction} ${kLine} K`;
+      const pillX = PAD + 24 + ctx.measureText(pitcherName + '  ').width;
+      drawPill(ctx, pillX, rowY + 24, pillText, pillBg, pillFg, 9, 6, 2);
 
+      // Confidence
       ctx.font = `700 9px ${FF}`;
-      ctx.fillStyle = awayAnalysis.confidence >= 70 ? C.green : C.gold;
-      ctx.fillText(`${awayAnalysis.confidence}%`, aPillX + ctx.measureText(aPillText).width + 28, rowY + 35);
+      ctx.fillStyle = e.confidence >= 70 ? C.green : C.gold;
+      ctx.fillText(`${e.confidence}%`, pillX + ctx.measureText(pillText).width + 28, rowY + 33);
     }
 
-    // Home pitcher line
-    ctx.font = `500 11px ${FF}`;
-    ctx.fillStyle = C.gray;
-    const homeLabel = truncate(e.home_pitcher, 16);
-    ctx.fillText(homeLabel, PAD + 24, rowY + 52);
-
-    if (homeAnalysis) {
-      const hDir = homeAnalysis.suggestion === 'Over';
-      const hPillBg = hDir ? C.redFaint : 'rgba(88, 166, 255, 0.12)';
-      const hPillFg = hDir ? C.red : '#58a6ff';
-      const hPillText = `${homeAnalysis.suggestion} ${homeAnalysis.line} K`;
-      const hPillX = PAD + 24 + ctx.measureText(homeLabel + '  ').width;
-      drawPill(ctx, hPillX, rowY + 42, hPillText, hPillBg, hPillFg, 9, 6, 2);
-
-      ctx.font = `700 9px ${FF}`;
-      ctx.fillStyle = homeAnalysis.confidence >= 70 ? C.green : C.gold;
-      ctx.fillText(`${homeAnalysis.confidence}%`, hPillX + ctx.measureText(hPillText).width + 28, rowY + 51);
-    }
-
-    // Best pick highlight
-    ctx.font = `600 10px ${FF}`;
-    ctx.fillStyle = theme.accent;
-    const bestStr = `⭐ ${truncate(e.suggestion, 30)}`;
-    ctx.fillText(bestStr, PAD + 24, rowY + 68);
-
-    // Result
+    // Result (right side)
     if (e.actual_result && e.status !== 'pending') {
-      ctx.font = `500 9px ${FF}`;
-      ctx.fillStyle = e.status === 'hit' ? C.green : C.red;
-      const rText = truncate(e.actual_result, 28);
+      ctx.font = `600 10px ${FF}`;
+      ctx.fillStyle = e.status === 'hit' ? C.green : e.status === 'push' ? C.gold : C.red;
+      const rText = truncate(e.actual_result, 32);
       const rW = ctx.measureText(rText).width;
-      ctx.fillText(rText, W - PAD - rW, rowY + 68);
+      ctx.fillText(rText, W - PAD - rW, rowY + 50);
+    }
+
+    // Reasoning snippet (bottom left)
+    if (e.reasoning && e.status === 'pending') {
+      ctx.font = `400 9px ${FF}`;
+      ctx.fillStyle = C.muted;
+      ctx.fillText(truncate(e.reasoning, 55), PAD + 24, rowY + 50);
     }
 
     y += ROW_H;
@@ -494,9 +477,15 @@ async function generateStrikeoutCardImage(entries, record, streak) {
   ctx.stroke();
 
   const overCount = entries.filter(e => e.suggestion.includes('Over')).length;
+  const hitCount = entries.filter(e => e.status === 'hit').length;
+  const missCount = entries.filter(e => e.status === 'miss').length;
+  const pendCount = entries.filter(e => e.status === 'pending').length;
+  let footerText = `${overCount} Over | ${entries.length - overCount} Under | ${entries.length} picks`;
+  if (hitCount > 0 || missCount > 0) footerText += ` · ${hitCount}✅ ${missCount}❌`;
+  if (pendCount > 0) footerText += ` ${pendCount}⏳`;
   ctx.font = `600 10px ${FF}`;
   ctx.fillStyle = C.gray;
-  ctx.fillText(`${overCount} Overs | ${entries.length - overCount} Unders | ${entries.length} matchups`, PAD + 4, y + 24);
+  ctx.fillText(footerText, PAD + 4, y + 24);
 
   ctx.fillStyle = C.muted;
   const pwStr = 'Powered by GPT-4o + ESPN';

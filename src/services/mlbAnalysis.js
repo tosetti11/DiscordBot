@@ -432,38 +432,20 @@ Order by confidence (highest first). Return ONLY valid JSON array.`;
     const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const analyses = JSON.parse(jsonStr);
 
-    // Build DB entries — one per pitcher (we use espnGameId + pitcher side as unique key via market_type)
-    // Actually, we'll store both pitchers in each game row as a combined analysis
-    // Group by espnGameId
-    const byGame = {};
-    for (const a of analyses) {
-      if (!byGame[a.espnGameId]) byGame[a.espnGameId] = [];
-      byGame[a.espnGameId].push(a);
-    }
-
+    // Build DB entries — one per pitcher (two per game)
     const entries = [];
-    for (const [gameId, pitchers] of Object.entries(byGame)) {
-      const game = games.find(g => g.espnGameId === gameId);
+    for (const a of analyses) {
+      const game = games.find(g => g.espnGameId === a.espnGameId);
       if (!game) continue;
 
-      // Store the best suggestion per game (highest confidence)
-      const bestPick = pitchers.sort((a, b) => b.confidence - a.confidence)[0];
-      const allPitcherData = pitchers.map(p => ({
-        pitcher: p.pitcher,
-        team: p.team,
-        side: p.side,
-        line: p.line,
-        suggestion: p.suggestion,
-        confidence: p.confidence,
-        reasoning: p.reasoning,
-        odds: p.odds,
-      }));
+      const side = a.side || (a.team === game.home.abbr ? 'home' : 'away');
+      const pitcher = side === 'home' ? game.homePitcher : game.awayPitcher;
 
       entries.push({
         guild_id: guildId,
         analysis_date: today,
         market_type: 'strikeout',
-        espn_game_id: gameId,
+        espn_game_id: `${a.espnGameId}_${side}`,
         home_team: game.home.team,
         home_abbr: game.home.abbr,
         away_team: game.away.team,
@@ -473,16 +455,16 @@ Order by confidence (highest first). Return ONLY valid JSON array.`;
         home_pitcher: game.homePitcher.name,
         home_pitcher_id: game.homePitcher.id,
         home_pitcher_headshot: game.homePitcher.headshot,
-        home_pitcher_stats: { ...game.homePitcher.stats, analysis: allPitcherData.find(p => p.side === 'home') },
+        home_pitcher_stats: game.homePitcher.stats,
         away_pitcher: game.awayPitcher.name,
         away_pitcher_id: game.awayPitcher.id,
         away_pitcher_headshot: game.awayPitcher.headshot,
-        away_pitcher_stats: { ...game.awayPitcher.stats, analysis: allPitcherData.find(p => p.side === 'away') },
-        suggestion: `${bestPick.pitcher} ${bestPick.suggestion} ${bestPick.line} K`,
-        confidence: bestPick.confidence,
-        reasoning: bestPick.reasoning,
-        odds: bestPick.odds || null,
-        line: bestPick.line,
+        away_pitcher_stats: game.awayPitcher.stats,
+        suggestion: `${a.pitcher} ${a.suggestion} ${a.line} K`,
+        confidence: a.confidence,
+        reasoning: a.reasoning,
+        odds: a.odds || null,
+        line: a.line,
       });
     }
 
@@ -633,6 +615,41 @@ Order by confidence (highest first). Return ONLY valid JSON array.`;
         wind_speed: weatherMap[a.espnGameId]?.gust || null,
       };
     }).filter(Boolean);
+
+    // Fill in any games GPT missed with a default entry
+    const coveredGameIds = new Set(entries.map(e => e.espn_game_id));
+    for (const game of games) {
+      if (coveredGameIds.has(game.espnGameId)) continue;
+      console.log(`[MLB HR] GPT missed game ${game.espnGameId} (${game.away.abbr}@${game.home.abbr}), adding default`);
+      entries.push({
+        guild_id: guildId,
+        analysis_date: today,
+        market_type: 'homerun',
+        espn_game_id: game.espnGameId,
+        home_team: game.home.team,
+        home_abbr: game.home.abbr,
+        away_team: game.away.team,
+        away_abbr: game.away.abbr,
+        game_number: game.gameNumber,
+        event_start_time: game.startTime,
+        home_pitcher: game.homePitcher.name,
+        home_pitcher_id: game.homePitcher.id,
+        home_pitcher_headshot: game.homePitcher.headshot,
+        home_pitcher_stats: game.homePitcher.stats,
+        away_pitcher: game.awayPitcher.name,
+        away_pitcher_id: game.awayPitcher.id,
+        away_pitcher_headshot: game.awayPitcher.headshot,
+        away_pitcher_stats: game.awayPitcher.stats,
+        suggestion: 'HR Likely',
+        confidence: 55,
+        reasoning: 'Analysis unavailable — default pick based on league averages.',
+        odds: null,
+        line: 1.5,
+        temperature: weatherMap[game.espnGameId]?.temperature || null,
+        weather_condition: weatherMap[game.espnGameId]?.conditionId || null,
+        wind_speed: weatherMap[game.espnGameId]?.gust || null,
+      });
+    }
 
     await mlbDb.createAnalysisEntries(entries);
     console.log(`[MLB HR] Generated ${entries.length} analyses for ${today}`);
@@ -841,13 +858,15 @@ async function autoResolveStrikeouts(client) {
 
   for (const entry of pending) {
     try {
+      // espn_game_id may have _away or _home suffix for per-pitcher entries
+      const realGameId = entry.espn_game_id.replace(/_(away|home)$/, '');
       const dateStr = entry.analysis_date.replace(/-/g, '');
       const games = await getTodaysGames('mlb', dateStr);
-      const game = games.find(g => g.id === entry.espn_game_id);
+      const game = games.find(g => g.id === realGameId);
       if (!game || !game.completed) continue;
 
       // Fetch box score for pitcher K stats
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${entry.espn_game_id}`);
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${realGameId}`);
       const json = await res.json();
 
       const boxPlayers = json.boxscore?.players || [];
@@ -863,18 +882,18 @@ async function autoResolveStrikeouts(client) {
       const direction = suggestionMatch[2].toLowerCase();
       const kLine = parseFloat(suggestionMatch[3]);
 
-      // Find pitcher in box score
+      // Find pitcher in box score (ESPN uses statGroup.type, not .name)
       for (const teamStats of boxPlayers) {
         for (const statGroup of (teamStats.statistics || [])) {
-          if (statGroup.name !== 'pitching') continue;
+          if ((statGroup.type || statGroup.name) !== 'pitching') continue;
           const kIdx = (statGroup.labels || []).findIndex(l => l === 'K');
+          if (kIdx === -1) continue;
           for (const athlete of (statGroup.athletes || [])) {
             const name = athlete.athlete?.displayName || '';
             if (name.toLowerCase().includes(targetPitcher.toLowerCase().split(' ').pop()) ||
                 targetPitcher.toLowerCase().includes(name.toLowerCase().split(' ').pop())) {
-              // Check if this is the starting pitcher (usually first listed)
               const kCount = parseInt(athlete.stats?.[kIdx] || 0);
-              if (athlete.starter || !bestPitcherK) {
+              if (athlete.starter || bestPitcherK === null) {
                 bestPitcherK = kCount;
                 bestPitcherName = name;
               }
@@ -892,7 +911,7 @@ async function autoResolveStrikeouts(client) {
         status = bestPitcherK < kLine ? 'hit' : bestPitcherK === kLine ? 'push' : 'miss';
       }
 
-      const result = `${bestPitcherName}: ${bestPitcherK} K (${direction} ${kLine})`;
+      const result = `${bestPitcherName}: ${bestPitcherK} K (${direction} ${kLine}) ${status === 'hit' ? '✅' : status === 'push' ? '🟡' : '❌'}`;
       await mlbDb.closeAnalysisEntry(entry.id, status, result);
       console.log(`[MLB K] Resolved ${entry.away_abbr}@${entry.home_abbr}: ${status} (${result})`);
     } catch (err) {
@@ -918,16 +937,21 @@ async function autoResolveHomeruns(client) {
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${entry.espn_game_id}`);
       const json = await res.json();
 
-      // Count total HRs from box score hitting stats
+      // Count total HRs from box score hitting stats (ESPN uses statGroup.type, not .name)
       let totalHR = 0;
+      const hrHitters = [];
       const boxPlayers = json.boxscore?.players || [];
       for (const teamStats of boxPlayers) {
         for (const statGroup of (teamStats.statistics || [])) {
-          if (statGroup.name !== 'batting') continue;
+          if ((statGroup.type || statGroup.name) !== 'batting') continue;
           const hrIdx = (statGroup.labels || []).findIndex(l => l === 'HR');
           if (hrIdx === -1) continue;
           for (const athlete of (statGroup.athletes || [])) {
-            totalHR += parseInt(athlete.stats?.[hrIdx] || 0);
+            const hr = parseInt(athlete.stats?.[hrIdx] || 0);
+            if (hr > 0) {
+              totalHR += hr;
+              hrHitters.push(athlete.athlete?.displayName || '?');
+            }
           }
         }
       }
@@ -935,7 +959,8 @@ async function autoResolveHomeruns(client) {
       const isHRLikely = entry.suggestion === 'HR Likely';
       const hadHR = totalHR > 0;
       const status = (isHRLikely === hadHR) ? 'hit' : 'miss';
-      const result = `${totalHR} HR${totalHR !== 1 ? 's' : ''} in game (${game.away.abbreviation} ${game.away.score} - ${game.home.abbreviation} ${game.home.score})`;
+      const hitterStr = hrHitters.length > 0 ? ` (${hrHitters.join(', ')})` : '';
+      const result = `${totalHR} HR${totalHR !== 1 ? 's' : ''}${hitterStr} ${status === 'hit' ? '✅' : '❌'}`;
 
       await mlbDb.closeAnalysisEntry(entry.id, status, result);
       console.log(`[MLB HR] Resolved ${entry.away_abbr}@${entry.home_abbr}: ${status} (${result})`);
