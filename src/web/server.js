@@ -3978,6 +3978,47 @@ IMPORTANT RULES:
     }
   });
 
+  // ─── MLB Analysis Routes ───
+  const mlbAnalysisDb = require('../database/mlbAnalysis');
+
+  app.get('/api/guilds/:guildId/mlb-analysis', authMiddleware, async (req, res) => {
+    try {
+      const { date, market_type } = req.query;
+      if (!date || !market_type) {
+        return res.status(400).json({ error: 'date and market_type are required' });
+      }
+      const allowed = ['nrfi', 'strikeout', 'homerun'];
+      if (!allowed.includes(market_type)) {
+        return res.status(400).json({ error: 'Invalid market_type' });
+      }
+      const entries = await mlbAnalysisDb.getAnalysisByDate(date, market_type, req.params.guildId);
+      const record = await mlbAnalysisDb.getRecord(market_type, req.params.guildId);
+      const todayRecord = await mlbAnalysisDb.getTodayRecord(market_type, req.params.guildId, date);
+      const streak = await mlbAnalysisDb.getStreak(market_type, req.params.guildId);
+      res.json({ entries, record, todayRecord, streak });
+    } catch (err) {
+      console.error('[API] MLB analysis error:', err.message);
+      res.status(500).json({ error: 'Failed to fetch MLB analysis' });
+    }
+  });
+
+  app.get('/api/guilds/:guildId/mlb-analysis/dates', authMiddleware, async (req, res) => {
+    try {
+      const { supabase } = require('../config/supabase');
+      const { data, error } = await supabase
+        .from('mlb_daily_analysis')
+        .select('analysis_date')
+        .eq('guild_id', req.params.guildId)
+        .order('analysis_date', { ascending: false });
+      if (error) throw error;
+      const dates = [...new Set((data || []).map(r => r.analysis_date))];
+      res.json(dates);
+    } catch (err) {
+      console.error('[API] MLB analysis dates error:', err.message);
+      res.status(500).json({ error: 'Failed to fetch dates' });
+    }
+  });
+
   // ─── Bracket Challenge Routes ───
   require('./bracketRoutes')(app, { jwt, JWT_SECRET, discordClient, path });
 

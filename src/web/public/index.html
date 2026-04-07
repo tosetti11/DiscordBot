@@ -1929,46 +1929,103 @@
   <!-- AI Picks Page -->
   <main id="ai-picks-page" class="main-content hidden">
     <div class="stats-container">
-      <h2 class="section-title">🤖 AI Pick of the Day</h2>
+      <h2 class="section-title">🤖 AI Picks</h2>
 
-      <!-- Record Summary -->
-      <div class="ai-picks-summary" id="ai-picks-summary">
-        <div class="ai-summary-card">
-          <span class="ai-summary-value" id="ai-record">—</span>
-          <span class="ai-summary-label">Record</span>
+      <!-- Top-Level Tabs: Daily Lock vs MLB Analysis -->
+      <div class="ai-picks-tabs ai-top-tabs">
+        <button class="ai-tab active" data-aitoptab="daily-lock" onclick="switchAiTopTab('daily-lock')">🔒 Daily Lock</button>
+        <button class="ai-tab" data-aitoptab="nrfi" onclick="switchAiTopTab('nrfi')">⚾ NRFI</button>
+        <button class="ai-tab" data-aitoptab="homerun" onclick="switchAiTopTab('homerun')">💣 Home Runs</button>
+        <button class="ai-tab" data-aitoptab="strikeout" onclick="switchAiTopTab('strikeout')">🔥 Strikeouts</button>
+      </div>
+
+      <!-- ═══ Daily Lock Section ═══ -->
+      <div id="ai-section-daily-lock" class="ai-top-section">
+        <!-- Record Summary -->
+        <div class="ai-picks-summary" id="ai-picks-summary">
+          <div class="ai-summary-card">
+            <span class="ai-summary-value" id="ai-record">—</span>
+            <span class="ai-summary-label">Record</span>
+          </div>
+          <div class="ai-summary-card">
+            <span class="ai-summary-value" id="ai-units">—</span>
+            <span class="ai-summary-label">Units</span>
+          </div>
+          <div class="ai-summary-card">
+            <span class="ai-summary-value" id="ai-streak">—</span>
+            <span class="ai-summary-label">Streak</span>
+          </div>
+          <div class="ai-summary-card">
+            <span class="ai-summary-value" id="ai-roi">—</span>
+            <span class="ai-summary-label">ROI</span>
+          </div>
         </div>
-        <div class="ai-summary-card">
-          <span class="ai-summary-value" id="ai-units">—</span>
-          <span class="ai-summary-label">Units</span>
+
+        <!-- Sub-Tabs -->
+        <div class="ai-picks-tabs">
+          <button class="ai-tab active" data-aitab="picks" onclick="switchAiTab('picks')">📅 Picks</button>
+          <button class="ai-tab" data-aitab="leaderboard" onclick="switchAiTab('leaderboard')">🏆 Tail Leaderboard</button>
         </div>
-        <div class="ai-summary-card">
-          <span class="ai-summary-value" id="ai-streak">—</span>
-          <span class="ai-summary-label">Streak</span>
+
+        <!-- Picks Tab -->
+        <div id="ai-tab-picks" class="ai-tab-content">
+          <div class="ai-month-selector" id="ai-month-selector"></div>
+          <div id="ai-picks-list" class="ai-picks-list">
+            <p class="muted-text">Loading picks...</p>
+          </div>
         </div>
-        <div class="ai-summary-card">
-          <span class="ai-summary-value" id="ai-roi">—</span>
-          <span class="ai-summary-label">ROI</span>
+
+        <!-- Leaderboard Tab -->
+        <div id="ai-tab-leaderboard" class="ai-tab-content hidden">
+          <div id="ai-leaderboard-list" class="ai-picks-list">
+            <p class="muted-text">Loading leaderboard...</p>
+          </div>
         </div>
       </div>
 
-      <!-- Tabs -->
-      <div class="ai-picks-tabs">
-        <button class="ai-tab active" data-aitab="picks" onclick="switchAiTab('picks')">📅 Picks</button>
-        <button class="ai-tab" data-aitab="leaderboard" onclick="switchAiTab('leaderboard')">🏆 Tail Leaderboard</button>
-      </div>
-
-      <!-- Picks Tab -->
-      <div id="ai-tab-picks" class="ai-tab-content">
-        <div class="ai-month-selector" id="ai-month-selector"></div>
-        <div id="ai-picks-list" class="ai-picks-list">
-          <p class="muted-text">Loading picks...</p>
+      <!-- ═══ MLB Analysis Sections (NRFI / HR / Strikeouts) ═══ -->
+      <div id="ai-section-nrfi" class="ai-top-section hidden" data-market="nrfi">
+        <div class="mlb-analysis-header">
+          <div class="mlb-date-nav">
+            <button class="mlb-date-btn" onclick="mlbDateNav('nrfi', -1)">◀</button>
+            <input type="date" class="mlb-date-input" id="mlb-date-nrfi" onchange="loadMlbAnalysis('nrfi')">
+            <button class="mlb-date-btn" onclick="mlbDateNav('nrfi', 1)">▶</button>
+            <button class="mlb-date-btn mlb-today-btn" onclick="mlbDateToday('nrfi')">Today</button>
+          </div>
+          <div class="mlb-record-bar" id="mlb-record-nrfi"></div>
+        </div>
+        <div id="mlb-entries-nrfi" class="mlb-entries-list">
+          <p class="muted-text">Loading NRFI analysis...</p>
         </div>
       </div>
 
-      <!-- Leaderboard Tab -->
-      <div id="ai-tab-leaderboard" class="ai-tab-content hidden">
-        <div id="ai-leaderboard-list" class="ai-picks-list">
-          <p class="muted-text">Loading leaderboard...</p>
+      <div id="ai-section-homerun" class="ai-top-section hidden" data-market="homerun">
+        <div class="mlb-analysis-header">
+          <div class="mlb-date-nav">
+            <button class="mlb-date-btn" onclick="mlbDateNav('homerun', -1)">◀</button>
+            <input type="date" class="mlb-date-input" id="mlb-date-homerun" onchange="loadMlbAnalysis('homerun')">
+            <button class="mlb-date-btn" onclick="mlbDateNav('homerun', 1)">▶</button>
+            <button class="mlb-date-btn mlb-today-btn" onclick="mlbDateToday('homerun')">Today</button>
+          </div>
+          <div class="mlb-record-bar" id="mlb-record-homerun"></div>
+        </div>
+        <div id="mlb-entries-homerun" class="mlb-entries-list">
+          <p class="muted-text">Loading Home Run analysis...</p>
+        </div>
+      </div>
+
+      <div id="ai-section-strikeout" class="ai-top-section hidden" data-market="strikeout">
+        <div class="mlb-analysis-header">
+          <div class="mlb-date-nav">
+            <button class="mlb-date-btn" onclick="mlbDateNav('strikeout', -1)">◀</button>
+            <input type="date" class="mlb-date-input" id="mlb-date-strikeout" onchange="loadMlbAnalysis('strikeout')">
+            <button class="mlb-date-btn" onclick="mlbDateNav('strikeout', 1)">▶</button>
+            <button class="mlb-date-btn mlb-today-btn" onclick="mlbDateToday('strikeout')">Today</button>
+          </div>
+          <div class="mlb-record-bar" id="mlb-record-strikeout"></div>
+        </div>
+        <div id="mlb-entries-strikeout" class="mlb-entries-list">
+          <p class="muted-text">Loading Strikeout analysis...</p>
         </div>
       </div>
     </div>

@@ -7682,6 +7682,159 @@ async function fetchAiLeaderboard() {
 }
 
 // ═══════════════════════════════════════════════
+//  AI Top-Tab Switching (Daily Lock / MLB tabs)
+// ═══════════════════════════════════════════════
+
+const MLB_MARKET_LABELS = { nrfi: 'NRFI', homerun: 'Home Runs', strikeout: 'Strikeouts' };
+const MLB_MARKET_COLORS = { nrfi: '#3fb950', homerun: '#a855f7', strikeout: '#f85149' };
+let currentAiTopTab = 'daily-lock';
+
+function switchAiTopTab(tab) {
+  currentAiTopTab = tab;
+  document.querySelectorAll('.ai-top-tabs .ai-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.ai-top-tabs .ai-tab[data-aitoptab="${tab}"]`).classList.add('active');
+
+  // Hide all sections
+  document.querySelectorAll('.ai-top-section').forEach(s => s.classList.add('hidden'));
+
+  if (tab === 'daily-lock') {
+    document.getElementById('ai-section-daily-lock').classList.remove('hidden');
+  } else {
+    document.getElementById(`ai-section-${tab}`).classList.remove('hidden');
+    // Set date to today if not set
+    const dateInput = document.getElementById(`mlb-date-${tab}`);
+    if (!dateInput.value) {
+      dateInput.value = getTodayEST();
+    }
+    loadMlbAnalysis(tab);
+  }
+}
+
+function getTodayEST() {
+  const now = new Date();
+  const est = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  return est.getFullYear() + '-' + String(est.getMonth() + 1).padStart(2, '0') + '-' + String(est.getDate()).padStart(2, '0');
+}
+
+function mlbDateNav(market, delta) {
+  const dateInput = document.getElementById(`mlb-date-${market}`);
+  const d = new Date(dateInput.value + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  dateInput.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  loadMlbAnalysis(market);
+}
+
+function mlbDateToday(market) {
+  document.getElementById(`mlb-date-${market}`).value = getTodayEST();
+  loadMlbAnalysis(market);
+}
+
+async function loadMlbAnalysis(market) {
+  if (!aiPicksGuildId) return;
+  const date = document.getElementById(`mlb-date-${market}`).value;
+  if (!date) return;
+
+  const entriesEl = document.getElementById(`mlb-entries-${market}`);
+  const recordEl = document.getElementById(`mlb-record-${market}`);
+  entriesEl.innerHTML = '<p class="muted-text">Loading...</p>';
+
+  try {
+    const res = await fetch(`/api/guilds/${aiPicksGuildId}/mlb-analysis?date=${date}&market_type=${market}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+
+    const { entries, record, todayRecord, streak } = data;
+    const color = MLB_MARKET_COLORS[market];
+
+    // Render record bar
+    const streakStr = streak > 0 ? `🔥 ${streak}W` : streak < 0 ? `${Math.abs(streak)}L` : '—';
+    recordEl.innerHTML = `
+      <div class="mlb-record-pills">
+        <span class="mlb-pill" style="border-color: ${color}">
+          Season: <strong>${record.hits}-${record.misses}-${record.pushes}</strong>
+        </span>
+        <span class="mlb-pill" style="border-color: ${color}">
+          Today: <strong>${todayRecord.hits}-${todayRecord.misses}-${todayRecord.pushes}</strong>
+        </span>
+        <span class="mlb-pill" style="border-color: ${color}">
+          Streak: <strong>${streakStr}</strong>
+        </span>
+      </div>
+    `;
+
+    if (!entries || entries.length === 0) {
+      entriesEl.innerHTML = '<p class="muted-text">No analysis for this date.</p>';
+      return;
+    }
+
+    entriesEl.innerHTML = entries.map(e => renderMlbEntry(e, market)).join('');
+  } catch (err) {
+    console.error(`MLB analysis (${market}) error:`, err);
+    entriesEl.innerHTML = '<p class="muted-text">Failed to load analysis.</p>';
+  }
+}
+
+function renderMlbEntry(e, market) {
+  const color = MLB_MARKET_COLORS[market];
+  const statusIcon = e.status === 'hit' ? '✅' : e.status === 'miss' ? '❌' : e.status === 'push' ? '🟡' : e.status === 'postponed' ? '🚫' : '⏳';
+  const statusClass = e.status === 'hit' ? 'hit' : e.status === 'miss' ? 'miss' : e.status === 'push' ? 'push' : 'pending';
+
+  // Format game time
+  let gameTime = '';
+  if (e.event_start_time) {
+    try {
+      const dt = new Date(e.event_start_time);
+      gameTime = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
+    } catch { gameTime = e.event_start_time; }
+  }
+
+  // Build suggestion pill based on market
+  let suggestionPill = '';
+  if (market === 'nrfi') {
+    const pillColor = e.suggestion === 'NRFI' ? '#3fb950' : '#f85149';
+    suggestionPill = `<span class="mlb-suggestion-pill" style="background: ${pillColor}20; color: ${pillColor}; border: 1px solid ${pillColor}40">${esc(e.suggestion)}</span>`;
+  } else if (market === 'strikeout') {
+    const pillColor = '#f85149';
+    suggestionPill = `<span class="mlb-suggestion-pill" style="background: ${pillColor}20; color: ${pillColor}; border: 1px solid ${pillColor}40">${esc(e.suggestion)}${e.line ? ' ' + e.line : ''}</span>`;
+  } else if (market === 'homerun') {
+    const pillColor = '#a855f7';
+    suggestionPill = `<span class="mlb-suggestion-pill" style="background: ${pillColor}20; color: ${pillColor}; border: 1px solid ${pillColor}40">${esc(e.suggestion)}</span>`;
+  }
+
+  // Confidence bar
+  const confColor = e.confidence >= 75 ? '#3fb950' : e.confidence >= 55 ? '#FFD700' : '#f85149';
+
+  return `
+    <div class="mlb-entry-card ${statusClass}" style="border-left-color: ${color}">
+      <div class="mlb-entry-top">
+        <div class="mlb-matchup">
+          <span class="mlb-team away">${esc(e.away_abbr || e.away_team)}</span>
+          <span class="mlb-vs">@</span>
+          <span class="mlb-team home">${esc(e.home_abbr || e.home_team)}</span>
+          ${gameTime ? `<span class="mlb-game-time">${gameTime}</span>` : ''}
+        </div>
+        <div class="mlb-entry-status">
+          <span class="mlb-status-icon">${statusIcon}</span>
+          ${e.actual_result ? `<span class="mlb-actual-result">${esc(e.actual_result)}</span>` : ''}
+        </div>
+      </div>
+      <div class="mlb-entry-body">
+        <div class="mlb-suggestion-row">
+          ${suggestionPill}
+          ${e.odds ? `<span class="mlb-odds">${esc(e.odds)}</span>` : ''}
+          <span class="mlb-confidence" style="color: ${confColor}">${e.confidence}%</span>
+        </div>
+        ${e.reasoning ? `<div class="mlb-reasoning">${esc(e.reasoning)}</div>` : ''}
+        <div class="mlb-pitchers">
+          ${e.away_pitcher ? `<span>⚾ ${esc(e.away_pitcher)}</span>` : ''}
+          ${e.home_pitcher ? `<span>vs ${esc(e.home_pitcher)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════
 //  Golf Admin (Screenshot → GPT-4o → Discord)
 // ═══════════════════════════════════════════════
 

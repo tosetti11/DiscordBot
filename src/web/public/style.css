@@ -6485,6 +6485,187 @@ textarea {
 }
 
 /* ═══════════════════════════════════════════════
+   MLB Analysis Tabs
+   ═══════════════════════════════════════════════ */
+
+.ai-top-tabs {
+  margin-bottom: 20px;
+}
+.ai-top-tabs .ai-tab {
+  font-size: 14px;
+  padding: 10px 18px;
+}
+
+.ai-top-section.hidden { display: none; }
+
+/* Date Nav */
+.mlb-analysis-header {
+  margin-bottom: 16px;
+}
+.mlb-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mlb-date-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 0.15s;
+}
+.mlb-date-btn:hover { background: var(--bg-hover); }
+.mlb-today-btn {
+  font-size: 12px;
+  color: #FFD700;
+  border-color: rgba(255, 215, 0, 0.3);
+}
+.mlb-date-input {
+  padding: 6px 12px;
+  border: 1px solid var(--bg-hover);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mlb-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* Record pills */
+.mlb-record-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mlb-pill {
+  padding: 5px 14px;
+  border: 1px solid;
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+.mlb-pill strong {
+  font-weight: 800;
+}
+
+/* Entry Cards */
+.mlb-entries-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mlb-entry-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-hover);
+  border-left: 4px solid #58a6ff;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  transition: border-color 0.15s;
+}
+.mlb-entry-card:hover { border-color: rgba(255, 215, 0, 0.3); }
+.mlb-entry-card.hit { border-left-color: #43b581; }
+.mlb-entry-card.miss { border-left-color: #ff4444; }
+.mlb-entry-card.push { border-left-color: #FFD700; }
+.mlb-entry-card.pending { border-left-color: #58a6ff; }
+
+.mlb-entry-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mlb-matchup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+.mlb-team {
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.mlb-vs {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.mlb-game-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+.mlb-entry-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mlb-status-icon { font-size: 16px; }
+.mlb-actual-result {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.mlb-entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mlb-suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.mlb-suggestion-pill {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.mlb-odds {
+  font-size: 13px;
+  color: #FFD700;
+  font-weight: 700;
+}
+.mlb-confidence {
+  font-size: 12px;
+  font-weight: 800;
+}
+.mlb-reasoning {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mlb-pitchers {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .ai-top-tabs { flex-wrap: wrap; }
+  .ai-top-tabs .ai-tab { font-size: 12px; padding: 8px 12px; }
+  .mlb-date-nav { flex-wrap: wrap; }
+  .mlb-entry-top { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .mlb-record-pills { gap: 6px; }
+  .mlb-pill { font-size: 11px; padding: 4px 10px; }
+}
+
+/* ═══════════════════════════════════════════════
    Golf Admin Page
    ═══════════════════════════════════════════════ */
 
