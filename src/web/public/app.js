@@ -530,17 +530,40 @@ function updateWagerFields(wager) {
     periodRow.classList.remove('hidden');
     spreadLabel.textContent = 'Total Line';
     document.getElementById('spread-value').placeholder = 'e.g. 220.5, 48.5';
+    // Show only Over/Under buttons
+    document.querySelectorAll('#over-under-row .toggle-btn').forEach(btn => {
+      btn.classList.toggle('hidden', btn.dataset.value === 'Yes' || btn.dataset.value === 'No');
+    });
+    document.querySelectorAll('#over-under-row .toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#over-under-row .toggle-btn[data-value="Over"]').classList.add('active');
   } else if (wager === 'team_total') {
     spreadRow.classList.remove('hidden');
     ouRow.classList.remove('hidden');
     periodRow.classList.remove('hidden');
     spreadLabel.textContent = 'Team Total Line';
     document.getElementById('spread-value').placeholder = 'e.g. 112.5, 3.5, 24.5';
+    // Show only Over/Under buttons
+    document.querySelectorAll('#over-under-row .toggle-btn').forEach(btn => {
+      btn.classList.toggle('hidden', btn.dataset.value === 'Yes' || btn.dataset.value === 'No');
+    });
+    document.querySelectorAll('#over-under-row .toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#over-under-row .toggle-btn[data-value="Over"]').classList.add('active');
   } else if (wager === 'moneyline') {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
     periodRow.classList.remove('hidden');
-  } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'homerun' || wager === 'double_chance' || wager === 'draw_no_bet') {
+  } else if (wager === 'homerun') {
+    spreadRow.classList.remove('hidden');
+    ouRow.classList.remove('hidden');
+    periodRow.classList.add('hidden');
+    spreadLabel.textContent = 'HR Line';
+    document.getElementById('spread-value').placeholder = 'e.g. 0.5, 1.5 (or blank for Yes/No)';
+    // Show all 4 buttons for homerun
+    document.querySelectorAll('#over-under-row .toggle-btn').forEach(btn => btn.classList.remove('hidden'));
+    // Default to Yes
+    document.querySelectorAll('#over-under-row .toggle-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#over-under-row .toggle-btn[data-value="Yes"]').classList.add('active');
+  } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'double_chance' || wager === 'draw_no_bet') {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
     periodRow.classList.add('hidden');
@@ -627,6 +650,8 @@ function buildParlayLegs() {
           <div class="toggle-group">
             <button type="button" class="toggle-btn leg-ou-btn active" data-leg="${i}" data-value="Over">⬆️ Over</button>
             <button type="button" class="toggle-btn leg-ou-btn" data-leg="${i}" data-value="Under">⬇️ Under</button>
+            <button type="button" class="toggle-btn leg-ou-btn" data-leg="${i}" data-value="Yes">✅ Yes</button>
+            <button type="button" class="toggle-btn leg-ou-btn" data-leg="${i}" data-value="No">❌ No</button>
           </div>
         </div>
       </div>
@@ -904,7 +929,12 @@ function buildParlayLegs() {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
         periodRow.classList.remove('hidden');
-      } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'homerun' || wager === 'double_chance' || wager === 'draw_no_bet') {
+      } else if (wager === 'homerun') {
+        spreadRow.classList.remove('hidden');
+        ouRow.classList.remove('hidden');
+        periodRow.classList.add('hidden');
+        spreadLabel.textContent = 'HR Line';
+      } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'double_chance' || wager === 'draw_no_bet') {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
         periodRow.classList.add('hidden');
@@ -1028,6 +1058,14 @@ async function handleSubmit(e) {
             const activeOU = document.querySelector(`.leg-ou-btn[data-leg="${i}"].active`);
             leg.overUnder = activeOU ? activeOU.dataset.value : 'Over';
           }
+          if (wager === 'homerun') {
+            const activeOU = document.querySelector(`.leg-ou-btn[data-leg="${i}"].active`);
+            leg.overUnder = activeOU ? activeOU.dataset.value : 'Yes';
+            leg.spreadValue = document.querySelector(`.leg-spread-value[data-leg="${i}"]`)?.value || null;
+          }
+          if (wager === 'moneyline' || wager === 'spread') {
+            leg.period = document.querySelector(`.leg-period[data-leg="${i}"]`)?.value || 'full_game';
+          }
         } else if (category === 'player_prop') {
           leg.wagerType = 'prop';
           leg.playerName = document.querySelector(`.leg-player-name[data-leg="${i}"]`)?.value;
@@ -1123,7 +1161,14 @@ async function handleSubmit(e) {
           const activeOU = document.querySelector('#over-under-row .toggle-btn.active');
           body.overUnder = activeOU ? activeOU.dataset.value : 'Over';
         }
-        // NRFI/YRFI don't need spread/period — they're standalone
+        if (wager === 'homerun') {
+          const activeOU = document.querySelector('#over-under-row .toggle-btn.active');
+          body.overUnder = activeOU ? activeOU.dataset.value : 'Yes';
+          body.spreadValue = document.getElementById('spread-value').value || null;
+        }
+        if (wager === 'moneyline' || wager === 'spread') {
+          body.period = document.getElementById('period-select')?.value || 'full_game';
+        }
       } else if (category === 'player_prop') {
         body.wagerType = 'prop';
         body.playerName = document.getElementById('player-name').value;

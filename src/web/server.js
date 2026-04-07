@@ -1820,7 +1820,7 @@ function createWebServer() {
         const mergedBet = { ...bet, ...fields };
         const cat = mergedBet.bet_category || bet.bet_category;
         const wt = mergedBet.wager_type || bet.wager_type;
-        const EDIT_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
+        const EDIT_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_3': 'F3', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
         const EDIT_FIGHT_METHOD_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
         const editPeriod = mergedBet.period && mergedBet.period !== 'full_game' ? ` (${EDIT_PERIOD_LABELS[mergedBet.period] || mergedBet.period})` : '';
         if (cat === 'futures') {
@@ -1844,6 +1844,14 @@ function createWebServer() {
             fields.pick = `NRFI ${mergedBet.team_a || ''} vs ${mergedBet.team_b || ''}`.trim();
           } else if (wt === 'yrfi') {
             fields.pick = `YRFI ${mergedBet.team_a || ''} vs ${mergedBet.team_b || ''}`.trim();
+          } else if (wt === 'homerun') {
+            const hrDir = req.body.overUnder || (bet.pick?.includes('No HR') ? 'No' : bet.pick?.includes('Yes HR') ? 'Yes' : 'Yes');
+            if (hrDir === 'Yes' || hrDir === 'No') {
+              fields.pick = `${hrDir} HR ${mergedBet.team_a || ''} vs ${mergedBet.team_b || ''}`.trim();
+            } else {
+              const sv = parseFloat(mergedBet.spread_value || 0);
+              fields.pick = `${hrDir} ${Math.abs(sv)} HRs ${mergedBet.team_a || ''} vs ${mergedBet.team_b || ''}`.trim();
+            }
           } else if (wt === 'double_chance') {
             fields.pick = `Double Chance: ${mergedBet.team_a || ''} or Draw`;
           } else if (wt === 'draw_no_bet') {
@@ -1894,7 +1902,7 @@ function createWebServer() {
           // Reconstruct leg pick
           const lCat = leg.betCategory || 'team_game';
           const lWt = leg.wagerType || 'moneyline';
-          const LEG_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
+          const LEG_PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_3': 'F3', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
           const LEG_FIGHT_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
           const lPeriod = leg.period && leg.period !== 'full_game' ? ` (${LEG_PERIOD_LABELS[leg.period] || leg.period})` : '';
           if (lCat === 'futures') {
@@ -1916,6 +1924,14 @@ function createWebServer() {
               legFields.pick = `NRFI ${lTeamA} vs ${leg.teamB || ''}`.trim();
             } else if (lWt === 'yrfi') {
               legFields.pick = `YRFI ${lTeamA} vs ${leg.teamB || ''}`.trim();
+            } else if (lWt === 'homerun') {
+              const hrDir = leg.overUnder || 'Yes';
+              if (hrDir === 'Yes' || hrDir === 'No') {
+                legFields.pick = `${hrDir} HR ${lTeamA} vs ${leg.teamB || ''}`.trim();
+              } else {
+                const sv = parseFloat(leg.spreadValue || 0);
+                legFields.pick = `${hrDir} ${Math.abs(sv)} HRs ${lTeamA} vs ${leg.teamB || ''}`.trim();
+              }
             } else if (lWt === 'double_chance') {
               legFields.pick = `Double Chance: ${lTeamA} or Draw`;
             } else if (lWt === 'draw_no_bet') {
@@ -2194,7 +2210,8 @@ Rules:
 - For over/under totals (team_game with wagerType "total"), the spreadValue should always end in .5 (e.g. 220.5, 45.5). If the line is a whole number, add .5.
 - TEAM TOTALS: If the bet is on a single team's score (e.g. "Duke Over 71.5", "Lakers Under 108.5", "Team Total Over 112.5"), use wagerType "team_total" (NOT "total"). Set teamA to the team whose score is being bet on. The overUnder and spreadValue work the same as regular totals. Team totals typically have lower lines than game totals (e.g. 71.5 for a team vs 141.5 for the full game).
 - NRFI/YRFI (Baseball): If the bet is "No Run First Inning" or "NRFI", set wagerType to "nrfi". If it's "Yes Run First Inning" or "YRFI", set wagerType to "yrfi". Set betCategory to "team_game". Set teamA and teamB to the two teams in the matchup. No spreadValue or overUnder needed. These are common MLB bets.
-- BASEBALL INNINGS: For bets on specific innings (e.g. "1st Inning Over 0.5", "First 5 Innings"), use the appropriate period value: "first_5" for First 5 Innings (F5), "1st_inning" through "5th_inning" for individual innings. Strikeout props, home run props, and hit props for baseball are player props — use betCategory "player_prop" and wagerType "prop".
+- HOME RUN BETS (Baseball): If the bet is "Yes HR", "No HR", "Over/Under X.5 Home Runs" for a game, set wagerType to "homerun", betCategory to "team_game", and set teamA and teamB. For Yes/No bets, set overUnder to "Yes" or "No". For Over/Under HR line bets, set overUnder to "Over" or "Under" and spreadValue to the line (e.g. "1.5"). Note: "To Hit a Home Run" for a specific player is a player prop, NOT a homerun wager type.
+- BASEBALL INNINGS: For bets on specific innings (e.g. "1st Inning Over 0.5", "First 5 Innings", "First 3 Innings"), use the appropriate period value: "first_3" for First 3 Innings (F3), "first_5" for First 5 Innings (F5), "1st_inning" through "5th_inning" for individual innings. Strikeout props, home run props, and hit props for baseball are player props — use betCategory "player_prop" and wagerType "prop".
 - SOCCER BETS: "Double Chance" (e.g. "Team A or Draw", "1X", "X2") use wagerType "double_chance". "Draw No Bet" use wagerType "draw_no_bet" with teamA as the team you're backing. For 3-way moneyline where you bet on a draw, use wagerType "moneyline" with teamA set to "Draw". All soccer props (goals, assists, shots) use betCategory "player_prop", wagerType "prop".
 - HOCKEY BETS: Anytime goal scorer, first goal scorer, multiple goals, assists, saves, shots on goal, and points are all player props — use betCategory "player_prop" and wagerType "prop". Keep the prop description exactly as shown on the slip.
 - COMBO PROPS: For combination stat props like "PTS+REB+AST", "PTS+REB", "REB+AST", "Hits+Runs+RBIs", keep the full stat combo in propDescription (e.g. "Over 45.5 PTS+REB+AST"). These are player props.
@@ -3442,7 +3459,7 @@ IMPORTANT RULES:
           status: 'open',
         }, displayName);
 
-        const PERIOD_LABELS_P = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S' };
+        const PERIOD_LABELS_P = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_3': 'F3', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
         const FIGHT_METHOD_LABELS_P = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
 
         const legRecords = legs.map((leg, i) => {
@@ -3466,6 +3483,14 @@ IMPORTANT RULES:
               legPick = `NRFI ${truncate(leg.teamA, 200)} vs ${truncate(leg.teamB, 200)}`;
             } else if (leg.wagerType === 'yrfi') {
               legPick = `YRFI ${truncate(leg.teamA, 200)} vs ${truncate(leg.teamB, 200)}`;
+            } else if (leg.wagerType === 'homerun') {
+              const hrDir = leg.overUnder || 'Yes';
+              if (hrDir === 'Yes' || hrDir === 'No') {
+                legPick = `${hrDir} HR ${truncate(leg.teamA, 200)} vs ${truncate(leg.teamB, 200)}`;
+              } else {
+                const sv = parseFloat(leg.spreadValue);
+                legPick = `${hrDir} ${isNaN(sv) ? '' : Math.abs(sv) + ' '}HRs ${truncate(leg.teamA, 200)} vs ${truncate(leg.teamB, 200)}`;
+              }
             } else if (leg.wagerType === 'double_chance') {
               legPick = `Double Chance: ${truncate(leg.teamA, 200)} or Draw`;
             } else if (leg.wagerType === 'draw_no_bet') {
@@ -3573,7 +3598,7 @@ IMPORTANT RULES:
 
       } else {
         // ── Single bet ──
-        const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
+        const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', '1st_set': '1S', 'first_3': 'F3', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
         const FIGHT_METHOD_LABELS = { ko_tko: 'KO/TKO', submission: 'Sub', decision: 'Dec', unanimous_decision: 'UD', split_decision: 'SD', dq: 'DQ', points: 'Pts' };
         const periodTag = period && period !== 'full_game' ? ` (${PERIOD_LABELS[period] || period})` : '';
 
@@ -3596,6 +3621,14 @@ IMPORTANT RULES:
             finalPick = `NRFI ${safeTeamA} vs ${safeTeamB}`;
           } else if (wagerType === 'yrfi') {
             finalPick = `YRFI ${safeTeamA} vs ${safeTeamB}`;
+          } else if (wagerType === 'homerun') {
+            const hrDir = overUnder || 'Yes';
+            if (hrDir === 'Yes' || hrDir === 'No') {
+              finalPick = `${hrDir} HR ${safeTeamA} vs ${safeTeamB}`;
+            } else {
+              const sv = parseFloat(spreadValue);
+              finalPick = `${hrDir} ${isNaN(sv) ? '' : Math.abs(sv) + ' '}HRs ${safeTeamA} vs ${safeTeamB}`;
+            }
           } else if (wagerType === 'double_chance') {
             finalPick = `Double Chance: ${safeTeamA} or Draw`;
           } else if (wagerType === 'draw_no_bet') {

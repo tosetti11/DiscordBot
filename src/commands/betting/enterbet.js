@@ -531,12 +531,32 @@ async function handleWagerTypeSelect(interaction) {
     });
   }
 
+  // For homerun bets, ask Over/Under or Yes/No
+  if (session.currentWagerType === 'homerun') {
+    const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('enterbet_over_under')
+        .setPlaceholder('Over/Under or Yes/No?')
+        .addOptions([
+          { label: 'Yes', value: 'Yes', description: 'Player hits a home run', emoji: '✅' },
+          { label: 'No', value: 'No', description: 'Player does not hit a home run', emoji: '❌' },
+          { label: 'Over', value: 'Over', description: 'Over X.5 home runs', emoji: '⬆️' },
+          { label: 'Under', value: 'Under', description: 'Under X.5 home runs', emoji: '⬇️' },
+        ])
+    );
+    return interaction.update({
+      content: `💣 Home Run — Yes/No or Over/Under?${legLabel}`,
+      components: [row],
+    });
+  }
+
   // For spread or moneyline, ask period before opening modal
   if (session.currentWagerType === 'spread' || session.currentWagerType === 'moneyline') {
     return showPeriodSelect(interaction, session);
   }
 
-  // NRFI/YRFI/Homerun/Double Chance/Draw No Bet skip Over/Under and period — go straight to modal
+  // NRFI/YRFI/Double Chance/Draw No Bet skip Over/Under and period — go straight to modal
   await showTeamGameModal(interaction, session);
 }
 
@@ -546,8 +566,13 @@ async function handleOverUnderSelect(interaction) {
   const session = betSessions.get(userId);
   if (!session) return interaction.update({ content: 'Session expired. Use `/enterbet` again.', components: [] });
 
-  session.overUnder = interaction.values[0]; // 'Over' or 'Under'
+  session.overUnder = interaction.values[0]; // 'Over', 'Under', 'Yes', or 'No'
   betSessions.set(userId, session);
+
+  // Homerun bets skip period selection — go straight to modal
+  if (session.currentWagerType === 'homerun') {
+    return showTeamGameModal(interaction, session);
+  }
 
   return showPeriodSelect(interaction, session);
 }
