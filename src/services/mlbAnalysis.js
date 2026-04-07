@@ -773,8 +773,8 @@ async function autoResolveNrfi(client) {
       // Need at least 1st inning complete (top and bottom)
       if (awayLinescores.length < 1) continue;
 
-      let awayFirstInning = parseInt(awayLinescores[0]?.value ?? -1);
-      let homeFirstInning = parseInt(homeLinescores[0]?.value ?? -1);
+      let awayFirstInning = parseInt(awayLinescores[0]?.displayValue ?? awayLinescores[0]?.value ?? -1);
+      let homeFirstInning = parseInt(homeLinescores[0]?.displayValue ?? homeLinescores[0]?.value ?? -1);
       if (isNaN(awayFirstInning)) awayFirstInning = -1;
       if (isNaN(homeFirstInning)) homeFirstInning = -1;
 
