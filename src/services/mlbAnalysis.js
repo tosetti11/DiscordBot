@@ -123,12 +123,14 @@ async function fetchMLBScoreboardRaw() {
       home: {
         team: home.team?.displayName || 'Home',
         abbr: home.team?.abbreviation || '',
+        id: home.team?.id || null,
         record: home.records?.[0]?.summary || '',
         logo: home.team?.logo || null,
       },
       away: {
         team: away.team?.displayName || 'Away',
         abbr: away.team?.abbreviation || '',
+        id: away.team?.id || null,
         record: away.records?.[0]?.summary || '',
         logo: away.team?.logo || null,
       },
@@ -166,6 +168,90 @@ async function fetchMLBScoreboardRaw() {
   // Sort by start time
   games.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
   return games;
+}
+
+/**
+ * Fetch detailed season stats for a pitcher from ESPN web API.
+ * Returns { K9, WHIP, IP, K, BB, KBB, ERA, GS, QS, PperStart, PperInning, GB, FB, GF } or null.
+ */
+async function fetchPitcherDetailedStats(espnAthleteId) {
+  if (!espnAthleteId) return null;
+  try {
+    const res = await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/${espnAthleteId}/stats`);
+    const json = await res.json();
+    if (!json.categories) return null;
+
+    const pitching = json.categories.find(c => c.name === 'pitching');
+    const expanded = json.categories.find(c => c.name === 'expanded-pitching');
+    if (!pitching || !expanded) return null;
+
+    // Current season = last entry
+    const pSeason = pitching.statistics[pitching.statistics.length - 1];
+    const eSeason = expanded.statistics[expanded.statistics.length - 1];
+    if (!pSeason || !eSeason) return null;
+
+    const pIdx = (label) => pitching.labels.indexOf(label);
+    const eIdx = (label) => expanded.labels.indexOf(label);
+
+    return {
+      season: pSeason.season?.year,
+      GP: pSeason.stats[pIdx('GP')] || '0',
+      GS: pSeason.stats[pIdx('GS')] || '0',
+      ERA: pSeason.stats[pIdx('ERA')] || 'N/A',
+      WHIP: pSeason.stats[pIdx('WHIP')] || 'N/A',
+      IP: pSeason.stats[pIdx('IP')] || '0',
+      K: pSeason.stats[pIdx('K')] || '0',
+      BB: pSeason.stats[pIdx('BB')] || '0',
+      KBB: pSeason.stats[pIdx('K/BB')] || 'N/A',
+      K9: eSeason.stats[eIdx('K/9')] || 'N/A',
+      QS: eSeason.stats[eIdx('QS')] || '0',
+      PperStart: eSeason.stats[eIdx('P/S')] || 'N/A',
+      PperInning: eSeason.stats[eIdx('P/I')] || 'N/A',
+      GB: eSeason.stats[eIdx('GB')] || '0',
+      FB: eSeason.stats[eIdx('FB')] || '0',
+      GF: eSeason.stats[eIdx('G/F')] || 'N/A',
+    };
+  } catch (e) {
+    console.error(`[MLB] Failed to fetch pitcher stats for ${espnAthleteId}:`, e.message);
+    return null;
+  }
+}
+
+/**
+ * Fetch team batting stats from ESPN. Returns { SO, AB, PA, AVG, OBP, OPS, BBPA, BBK } or null.
+ */
+async function fetchTeamBattingStats(espnTeamId) {
+  if (!espnTeamId) return null;
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/${espnTeamId}/statistics`);
+    const json = await res.json();
+    const batting = json.results?.stats?.categories?.find(c => c.name === 'batting');
+    if (!batting) return null;
+
+    const get = (abbr) => {
+      const stat = batting.stats.find(s => s.abbreviation === abbr);
+      return stat ? stat.displayValue : null;
+    };
+
+    const so = parseFloat(get('SO')) || 0;
+    const pa = parseFloat(get('PA')) || 1;
+    const gp = parseFloat(get('GP')) || 1;
+
+    return {
+      SO: get('SO'),
+      AB: get('AB'),
+      PA: get('PA'),
+      GP: get('GP'),
+      AVG: get('AVG'),
+      OBP: get('OBP'),
+      OPS: get('OPS'),
+      KRate: ((so / pa) * 100).toFixed(1) + '%',
+      KPerGame: (so / gp).toFixed(1),
+    };
+  } catch (e) {
+    console.error(`[MLB] Failed to fetch team batting stats for ${espnTeamId}:`, e.message);
+    return null;
+  }
 }
 
 /**
@@ -361,36 +447,114 @@ async function generateStrikeoutAnalysis(client, guildId) {
 
   const record = await mlbDb.getRecord('strikeout', guildId);
 
-  // Build data emphasizing pitcher strikeout profiles
-  const gamesData = games.map(g => ({
-    espnGameId: g.espnGameId,
-    matchup: `${g.away.abbr} @ ${g.home.abbr}`,
-    awayTeam: g.away.team,
-    homeTeam: g.home.team,
-    awayPitcher: g.awayPitcher.name,
-    awayPitcherRecord: g.awayPitcher.record,
-    awayPitcherERA: g.awayPitcher.stats?.ERA || 'N/A',
-    homePitcher: g.homePitcher.name,
-    homePitcherRecord: g.homePitcher.record,
-    homePitcherERA: g.homePitcher.stats?.ERA || 'N/A',
-    overUnder: g.odds.overUnder,
-    startTime: g.startTime,
-    gameNumber: g.gameNumber,
-  }));
+  // Fetch detailed pitcher stats and team batting stats in parallel
+  console.log('[MLB K] Fetching detailed pitcher stats and team batting data...');
+  const pitcherStatsCache = {};
+  const teamBattingCache = {};
 
-  const prompt = `You are an elite MLB analytics model specializing in starting pitcher strikeout over/under markets. Your current record is ${record.hits}-${record.misses}.
+  const pitcherFetches = [];
+  const teamFetches = new Set();
 
-Analyze the starting pitchers in EVERY game on today's MLB slate for strikeout over/under bets. For EACH starting pitcher (both home and away), consider:
-1. Career K/9 rate and recent K/9 trends
-2. Opposing lineup strikeout rate (high-K lineup = more K's for pitcher)
-3. Pitcher's average innings pitched (more IP = more K opportunity)
-4. Day/night splits for K rate
-5. Ballpark effects on strikeouts
-6. Recent form (last 3-5 starts K totals)
-7. Pitch mix and dominant pitch effectiveness
-8. Umpire tendencies (expanded/tight zone)
+  for (const g of games) {
+    if (g.homePitcher.id) pitcherFetches.push(fetchPitcherDetailedStats(g.homePitcher.id).then(s => { pitcherStatsCache[g.homePitcher.id] = s; }));
+    if (g.awayPitcher.id) pitcherFetches.push(fetchPitcherDetailedStats(g.awayPitcher.id).then(s => { pitcherStatsCache[g.awayPitcher.id] = s; }));
+    // Fetch batting stats for each team (pitcher faces opposing team's batters)
+    if (g.home.id && !teamFetches.has(g.home.id)) {
+      teamFetches.add(g.home.id);
+      pitcherFetches.push(fetchTeamBattingStats(g.home.id).then(s => { teamBattingCache[g.home.id] = s; }));
+    }
+    if (g.away.id && !teamFetches.has(g.away.id)) {
+      teamFetches.add(g.away.id);
+      pitcherFetches.push(fetchTeamBattingStats(g.away.id).then(s => { teamBattingCache[g.away.id] = s; }));
+    }
+  }
 
-Today's MLB slate:
+  await Promise.all(pitcherFetches);
+  console.log(`[MLB K] Fetched stats for ${Object.keys(pitcherStatsCache).length} pitchers, ${Object.keys(teamBattingCache).length} teams`);
+
+  // Build data with real K/9, IP, WHIP, and opposing team K-rate
+  const gamesData = games.map(g => {
+    const hpStats = pitcherStatsCache[g.homePitcher.id];
+    const apStats = pitcherStatsCache[g.awayPitcher.id];
+    // Away pitcher faces home team's batting; home pitcher faces away team's batting
+    const homeTeamBatting = teamBattingCache[g.home.id];
+    const awayTeamBatting = teamBattingCache[g.away.id];
+
+    return {
+      espnGameId: g.espnGameId,
+      matchup: `${g.away.abbr} @ ${g.home.abbr}`,
+      awayTeam: g.away.team,
+      homeTeam: g.home.team,
+      awayPitcher: {
+        name: g.awayPitcher.name,
+        record: g.awayPitcher.record,
+        seasonERA: apStats?.ERA || g.awayPitcher.stats?.ERA || 'N/A',
+        seasonK9: apStats?.K9 || 'N/A',
+        seasonWHIP: apStats?.WHIP || 'N/A',
+        seasonIP: apStats?.IP || 'N/A',
+        seasonK: apStats?.K || 'N/A',
+        seasonBB: apStats?.BB || 'N/A',
+        seasonGS: apStats?.GS || 'N/A',
+        avgPitchesPerStart: apStats?.PperStart || 'N/A',
+        qualityStarts: apStats?.QS || 'N/A',
+      },
+      homePitcher: {
+        name: g.homePitcher.name,
+        record: g.homePitcher.record,
+        seasonERA: hpStats?.ERA || g.homePitcher.stats?.ERA || 'N/A',
+        seasonK9: hpStats?.K9 || 'N/A',
+        seasonWHIP: hpStats?.WHIP || 'N/A',
+        seasonIP: hpStats?.IP || 'N/A',
+        seasonK: hpStats?.K || 'N/A',
+        seasonBB: hpStats?.BB || 'N/A',
+        seasonGS: hpStats?.GS || 'N/A',
+        avgPitchesPerStart: hpStats?.PperStart || 'N/A',
+        qualityStarts: hpStats?.QS || 'N/A',
+      },
+      homeTeamBatting: homeTeamBatting ? {
+        teamKRate: homeTeamBatting.KRate,
+        teamKPerGame: homeTeamBatting.KPerGame,
+        teamSO: homeTeamBatting.SO,
+        teamAVG: homeTeamBatting.AVG,
+        teamOPS: homeTeamBatting.OPS,
+      } : 'N/A',
+      awayTeamBatting: awayTeamBatting ? {
+        teamKRate: awayTeamBatting.KRate,
+        teamKPerGame: awayTeamBatting.KPerGame,
+        teamSO: awayTeamBatting.SO,
+        teamAVG: awayTeamBatting.AVG,
+        teamOPS: awayTeamBatting.OPS,
+      } : 'N/A',
+      overUnder: g.odds.overUnder,
+      startTime: g.startTime,
+      gameNumber: g.gameNumber,
+    };
+  });
+
+  const prompt = `You are an elite MLB strikeout prop analyst. Your current record is ${record.hits}-${record.misses}.
+
+CRITICAL RULES:
+- You MUST produce a MIX of Over AND Under picks. Target roughly 40-60% Unders.
+- Do NOT default to Over. Many pitchers have low K/9 or face low-K teams — those are Unders.
+- Set your projected K line based on the pitcher's K/9 rate and expected innings:
+  • Expected K = (K/9 × expected IP) / 9
+  • If a pitcher has 7.0 K/9 and you expect 5.5 IP, projected Ks ≈ 4.3 → line should be ~4.5
+  • If a pitcher has 11.0 K/9 and you expect 6.0 IP, projected Ks ≈ 7.3 → line should be ~6.5
+- A pitcher with K/9 below 7.5 facing a team with K-rate below 23% is a STRONG Under candidate.
+- A pitcher with K/9 above 9.5 facing a team with K-rate above 25% is a STRONG Over candidate.
+- A pitcher averaging under 80 pitches/start likely won't last 5+ innings — lean Under.
+- Factor in the opposing team's K-rate heavily. High-contact teams (low K%) = fewer Ks for the pitcher.
+
+GUIDELINES FOR SETTING K LINES:
+- Lines should be realistic sportsbook-style half numbers (4.5, 5.5, 6.5, 7.5, etc.)
+- Average MLB starter: ~5.0-5.5 K per game. Only elite aces consistently hit 7+.
+- K/9 is per 9 innings. Most starters go 5-6 IP, so multiply K/9 by ~0.6 for expected Ks.
+- Low K/9 (< 7.5) pitcher vs low-K team = line 4.5 or lower, suggest Under
+- Moderate K/9 (7.5-9.0) = line 5.5, direction depends on matchup
+- High K/9 (> 9.5) vs high-K team = line 6.5+, lean Over
+- Factor expected pitch count: low pitches/start = fewer innings = fewer K opportunities
+
+Today's MLB slate with detailed stats:
 ${JSON.stringify(gamesData, null, 2)}
 
 For each game, analyze BOTH starting pitchers. Return a JSON array with one object per pitcher (two per game):
@@ -400,11 +564,11 @@ For each game, analyze BOTH starting pitchers. Return a JSON array with one obje
     "pitcher": "<pitcher name>",
     "team": "<team abbreviation>",
     "side": "home" or "away",
-    "line": <projected K line, e.g. 5.5>,
+    "line": <projected K line as X.5 number>,
     "suggestion": "Over" or "Under",
     "confidence": <number 50-99>,
-    "reasoning": "<1-2 sentence specific analysis>",
-    "odds": "<approximate odds if known, e.g. '-120', or null>"
+    "reasoning": "<1-2 sentence reasoning citing specific K/9, opposing K-rate, expected IP>",
+    "odds": null
   }
 ]
 
