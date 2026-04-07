@@ -441,6 +441,17 @@ function setupEventListeners() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#over-under-row .toggle-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      // For homerun bets, hide/show line field based on Yes/No vs Over/Under
+      const wager = document.getElementById('wager-type')?.value;
+      if (wager === 'homerun') {
+        const spreadRow = document.getElementById('spread-line-row');
+        if (btn.dataset.value === 'Yes' || btn.dataset.value === 'No') {
+          spreadRow.classList.add('hidden');
+          document.getElementById('spread-value').value = '';
+        } else {
+          spreadRow.classList.remove('hidden');
+        }
+      }
     });
   });
 
@@ -553,14 +564,15 @@ function updateWagerFields(wager) {
     ouRow.classList.add('hidden');
     periodRow.classList.remove('hidden');
   } else if (wager === 'homerun') {
-    spreadRow.classList.remove('hidden');
+    spreadRow.classList.add('hidden');
     ouRow.classList.remove('hidden');
     periodRow.classList.add('hidden');
     spreadLabel.textContent = 'HR Line';
-    document.getElementById('spread-value').placeholder = 'e.g. 0.5, 1.5 (or blank for Yes/No)';
+    document.getElementById('spread-value').placeholder = 'e.g. 0.5, 1.5';
+    document.getElementById('spread-value').value = '';
     // Show all 4 buttons for homerun
     document.querySelectorAll('#over-under-row .toggle-btn').forEach(btn => btn.classList.remove('hidden'));
-    // Default to Yes
+    // Default to Yes (no line needed)
     document.querySelectorAll('#over-under-row .toggle-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('#over-under-row .toggle-btn[data-value="Yes"]').classList.add('active');
   } else if (wager === 'nrfi' || wager === 'yrfi' || wager === 'double_chance' || wager === 'draw_no_bet') {
@@ -930,7 +942,7 @@ function buildParlayLegs() {
         ouRow.classList.add('hidden');
         periodRow.classList.remove('hidden');
       } else if (wager === 'homerun') {
-        spreadRow.classList.remove('hidden');
+        spreadRow.classList.add('hidden');
         ouRow.classList.remove('hidden');
         periodRow.classList.add('hidden');
         spreadLabel.textContent = 'HR Line';
@@ -951,6 +963,16 @@ function buildParlayLegs() {
         const leg = btn.dataset.leg;
         card.querySelectorAll(`.leg-ou-btn[data-leg="${leg}"]`).forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        // For homerun legs, hide/show line field based on Yes/No vs Over/Under
+        const wager = card.querySelector(`.leg-wager-type[data-leg="${leg}"]`)?.value;
+        if (wager === 'homerun') {
+          const spreadRow = document.querySelector(`.leg-spread-row-${leg}`);
+          if (btn.dataset.value === 'Yes' || btn.dataset.value === 'No') {
+            spreadRow.classList.add('hidden');
+          } else {
+            spreadRow.classList.remove('hidden');
+          }
+        }
       });
     });
 

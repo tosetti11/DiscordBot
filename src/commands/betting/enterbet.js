@@ -627,7 +627,7 @@ async function showTeamGameModal(interaction, session) {
   const legLabel = session.betType === 'parlay' ? ` (Leg ${session.currentLeg})` : '';
   const wagerType = session.currentWagerType;
 
-  const wagerLabels = { moneyline: 'Moneyline', spread: 'Spread', total: 'Over/Under', team_total: 'Team Total', nrfi: 'NRFI', yrfi: 'YRFI', double_chance: 'Double Chance', draw_no_bet: 'Draw No Bet' };
+  const wagerLabels = { moneyline: 'Moneyline', spread: 'Spread', total: 'Over/Under', team_total: 'Team Total', nrfi: 'NRFI', yrfi: 'YRFI', homerun: 'Home Run', double_chance: 'Double Chance', draw_no_bet: 'Draw No Bet' };
   const modal = new ModalBuilder()
     .setCustomId('enterbet_team_modal')
     .setTitle(`${wagerLabels[wagerType]} Bet${legLabel}`);
@@ -697,6 +697,15 @@ async function showTeamGameModal(interaction, session) {
       .setRequired(true)
       .setMaxLength(10);
     fields.push(new ActionRowBuilder().addComponents(ttInput));
+  } else if (wagerType === 'homerun' && (session.overUnder === 'Over' || session.overUnder === 'Under')) {
+    const hrInput = new TextInputBuilder()
+      .setCustomId('line_value')
+      .setLabel(`${session.overUnder} — HR Line`)
+      .setPlaceholder('e.g. 0.5, 1.5')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true)
+      .setMaxLength(10);
+    fields.push(new ActionRowBuilder().addComponents(hrInput));
   }
 
   if (session.betType === 'parlay') {
@@ -974,8 +983,8 @@ async function handleTeamModalSubmit(interaction) {
   const wagerType = session.currentWagerType;
   let spreadValue = null;
 
-  // Parse line value for spread/total/team_total
-  if (wagerType === 'spread' || wagerType === 'total' || wagerType === 'team_total') {
+  // Parse line value for spread/total/team_total/homerun O/U
+  if (wagerType === 'spread' || wagerType === 'total' || wagerType === 'team_total' || (wagerType === 'homerun' && (session.overUnder === 'Over' || session.overUnder === 'Under'))) {
     const lineRaw = interaction.fields.getTextInputValue('line_value').trim();
     spreadValue = parseFloat(lineRaw);
     if (isNaN(spreadValue)) {
@@ -1013,7 +1022,7 @@ async function handleTeamModalSubmit(interaction) {
   try { eventStartTime = interaction.fields.getTextInputValue('event_start_time')?.trim() || null; } catch (e) { /* no field for single bets */ }
 
   // Period tag for pick string
-  const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
+  const PERIOD_LABELS = { '1st_half': '1H', '2nd_half': '2H', '1st_quarter': '1Q', '2nd_quarter': '2Q', '3rd_quarter': '3Q', '4th_quarter': '4Q', '1st_period': '1P', '2nd_period': '2P', '3rd_period': '3P', 'first_3': 'F3', 'first_5': 'F5', '1st_inning': '1st Inn', '2nd_inning': '2nd Inn', '3rd_inning': '3rd Inn', '4th_inning': '4th Inn', '5th_inning': '5th Inn' };
   const period = session.period || 'full_game';
   const periodTag = period !== 'full_game' ? ` (${PERIOD_LABELS[period] || period})` : '';
 
@@ -1030,6 +1039,13 @@ async function handleTeamModalSubmit(interaction) {
     pick = `NRFI ${teamA} vs ${teamB}`;
   } else if (wagerType === 'yrfi') {
     pick = `YRFI ${teamA} vs ${teamB}`;
+  } else if (wagerType === 'homerun') {
+    const hrDir = session.overUnder || 'Yes';
+    if (hrDir === 'Yes' || hrDir === 'No') {
+      pick = `${hrDir} HR ${teamA} vs ${teamB}`;
+    } else {
+      pick = `${hrDir} ${Math.abs(spreadValue)} HRs ${teamA} vs ${teamB}`;
+    }
   } else if (wagerType === 'double_chance') {
     pick = `Double Chance: ${teamA} or Draw`;
   } else if (wagerType === 'draw_no_bet') {
