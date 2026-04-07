@@ -193,6 +193,15 @@ async function fetchPitcherDetailedStats(espnAthleteId) {
     const pIdx = (label) => pitching.labels.indexOf(label);
     const eIdx = (label) => expanded.labels.indexOf(label);
 
+    // Opponent batting for HR allowed
+    const oppBatting = json.categories.find(c => c.name === 'opponent-batting');
+    const oSeason = oppBatting?.statistics?.[oppBatting.statistics.length - 1];
+    const oIdx = (label) => oppBatting ? oppBatting.labels.indexOf(label) : -1;
+
+    const ip = parseFloat(pSeason.stats[pIdx('IP')]) || 0;
+    const hrAllowed = oSeason ? parseInt(oSeason.stats[oIdx('HR')]) || 0 : 0;
+    const hr9 = ip > 0 ? ((hrAllowed / ip) * 9).toFixed(2) : 'N/A';
+
     return {
       season: pSeason.season?.year,
       GP: pSeason.stats[pIdx('GP')] || '0',
@@ -210,6 +219,8 @@ async function fetchPitcherDetailedStats(espnAthleteId) {
       GB: eSeason.stats[eIdx('GB')] || '0',
       FB: eSeason.stats[eIdx('FB')] || '0',
       GF: eSeason.stats[eIdx('G/F')] || 'N/A',
+      HRAllowed: String(hrAllowed),
+      HR9: hr9,
     };
   } catch (e) {
     console.error(`[MLB] Failed to fetch pitcher stats for ${espnAthleteId}:`, e.message);
@@ -236,20 +247,71 @@ async function fetchTeamBattingStats(espnTeamId) {
     const so = parseFloat(get('SO')) || 0;
     const pa = parseFloat(get('PA')) || 1;
     const gp = parseFloat(get('GP')) || 1;
+    const hr = parseFloat(get('HR')) || 0;
 
     return {
       SO: get('SO'),
+      HR: get('HR'),
       AB: get('AB'),
       PA: get('PA'),
       GP: get('GP'),
       AVG: get('AVG'),
       OBP: get('OBP'),
+      SLG: get('SLG'),
       OPS: get('OPS'),
       KRate: ((so / pa) * 100).toFixed(1) + '%',
       KPerGame: (so / gp).toFixed(1),
+      HRPerGame: (hr / gp).toFixed(2),
     };
   } catch (e) {
     console.error(`[MLB] Failed to fetch team batting stats for ${espnTeamId}:`, e.message);
+    return null;
+  }
+}
+
+/**
+ * Fetch team leaders (HR leader, AVG leader, etc.) from ESPN game summary.
+ * Returns { home: { hrLeader, hrCount, avgLeader }, away: { ... } } or null.
+ */
+async function fetchGameLeaders(espnGameId) {
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${espnGameId}`);
+    const json = await res.json();
+    if (!json.leaders || !json.header) return null;
+
+    // Determine home/away team IDs from header
+    const comp = json.header.competitions?.[0];
+    const homeTeamId = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.id;
+    const awayTeamId = comp?.competitors?.find(c => c.homeAway === 'away')?.team?.id;
+
+    const result = { home: null, away: null };
+    for (const teamLeaders of json.leaders) {
+      const teamId = String(teamLeaders.team?.id);
+      const side = teamId === String(homeTeamId) ? 'home' : teamId === String(awayTeamId) ? 'away' : null;
+      if (!side) continue;
+
+      const leaders = {};
+      for (const cat of (teamLeaders.leaders || [])) {
+        const top = cat.leaders?.[0];
+        if (!top) continue;
+        leaders[cat.name || cat.displayName] = {
+          player: top.athlete?.displayName || 'Unknown',
+          value: top.displayValue || top.value,
+        };
+      }
+      result[side] = {
+        team: teamLeaders.team?.displayName,
+        hrLeader: leaders.homeRuns?.player || null,
+        hrCount: leaders.homeRuns?.value || '0',
+        avgLeader: leaders.avg?.player || null,
+        avgValue: leaders.avg?.value || null,
+        rbiLeader: leaders.RBIs?.player || null,
+        rbiCount: leaders.RBIs?.value || '0',
+      };
+    }
+    return result;
+  } catch (e) {
+    console.error(`[MLB] Failed to fetch game leaders for ${espnGameId}:`, e.message);
     return null;
   }
 }
@@ -667,48 +729,116 @@ async function generateHomerunAnalysis(client, guildId) {
 
   const record = await mlbDb.getRecord('homerun', guildId);
 
+  // Fetch weather, pitcher stats, team batting stats, and game leaders in parallel
+  console.log('[MLB HR] Fetching weather, pitcher stats, team batting, and game leaders...');
   const weatherMap = {};
+  const pitcherStatsCache = {};
+  const teamBattingCache = {};
+  const gameLeadersMap = {};
+
+  const fetches = [];
+
+  // Weather for first 8 games
   for (const game of games.slice(0, 8)) {
-    const w = await fetchGameWeather(game.espnGameId);
-    if (w) weatherMap[game.espnGameId] = w;
+    fetches.push(fetchGameWeather(game.espnGameId).then(w => { if (w) weatherMap[game.espnGameId] = w; }));
   }
 
-  const gamesData = games.map(g => ({
-    espnGameId: g.espnGameId,
-    matchup: `${g.away.abbr} @ ${g.home.abbr}`,
-    awayTeam: g.away.team,
-    homeTeam: g.home.team,
-    awayRecord: g.away.record,
-    homeRecord: g.home.record,
-    awayPitcher: g.awayPitcher.name,
-    awayPitcherERA: g.awayPitcher.stats?.ERA || 'N/A',
-    homePitcher: g.homePitcher.name,
-    homePitcherERA: g.homePitcher.stats?.ERA || 'N/A',
-    overUnder: g.odds.overUnder,
-    startTime: g.startTime,
-    gameNumber: g.gameNumber,
-    weather: weatherMap[g.espnGameId] ? {
-      temp: weatherMap[g.espnGameId].temperature,
-      wind: weatherMap[g.espnGameId].gust,
-    } : null,
-  }));
+  // Game leaders (HR leaders per team) for all games
+  for (const game of games) {
+    fetches.push(fetchGameLeaders(game.espnGameId).then(l => { if (l) gameLeadersMap[game.espnGameId] = l; }));
+  }
 
-  const prompt = `You are an elite MLB analytics model specializing in home run markets. Your current record is ${record.hits}-${record.misses}.
+  // Pitcher detailed stats
+  const teamFetches = new Set();
+  for (const g of games) {
+    if (g.homePitcher.id) fetches.push(fetchPitcherDetailedStats(g.homePitcher.id).then(s => { pitcherStatsCache[g.homePitcher.id] = s; }));
+    if (g.awayPitcher.id) fetches.push(fetchPitcherDetailedStats(g.awayPitcher.id).then(s => { pitcherStatsCache[g.awayPitcher.id] = s; }));
+    if (g.home.id && !teamFetches.has(g.home.id)) {
+      teamFetches.add(g.home.id);
+      fetches.push(fetchTeamBattingStats(g.home.id).then(s => { teamBattingCache[g.home.id] = s; }));
+    }
+    if (g.away.id && !teamFetches.has(g.away.id)) {
+      teamFetches.add(g.away.id);
+      fetches.push(fetchTeamBattingStats(g.away.id).then(s => { teamBattingCache[g.away.id] = s; }));
+    }
+  }
 
-Analyze EVERY game on today's MLB slate for home run potential. For each game, consider:
-1. Starting pitcher HR/9 rate and fly ball tendency
-2. Opposing lineup HR power (team HR stats, individual sluggers)
-3. Ballpark HR factors (park dimensions, altitude — e.g. Coors Field is elite for HRs)
-4. Weather: temperature (heat = ball carries further), wind direction/speed (wind blowing out = more HRs)
-5. Pitcher handedness vs lineup handedness splits
-6. Recent HR trends for both teams
-7. Game total (high O/U correlates with HR likelihood)
-8. Bullpen HR tendencies for later innings
+  await Promise.all(fetches);
+  console.log(`[MLB HR] Fetched data: ${Object.keys(gameLeadersMap).length} game leaders, ${Object.keys(pitcherStatsCache).length} pitchers, ${Object.keys(teamBattingCache).length} teams`);
 
-Today's MLB slate:
+  const gamesData = games.map(g => {
+    const hpStats = pitcherStatsCache[g.homePitcher.id];
+    const apStats = pitcherStatsCache[g.awayPitcher.id];
+    const homeTeamBatting = teamBattingCache[g.home.id];
+    const awayTeamBatting = teamBattingCache[g.away.id];
+    const leaders = gameLeadersMap[g.espnGameId];
+
+    return {
+      espnGameId: g.espnGameId,
+      matchup: `${g.away.abbr} @ ${g.home.abbr}`,
+      awayTeam: g.away.team,
+      homeTeam: g.home.team,
+      awayRecord: g.away.record,
+      homeRecord: g.home.record,
+      awayPitcher: {
+        name: g.awayPitcher.name,
+        ERA: apStats?.ERA || g.awayPitcher.stats?.ERA || 'N/A',
+        HR9: apStats?.HR9 || 'N/A',
+        HRAllowed: apStats?.HRAllowed || 'N/A',
+        IP: apStats?.IP || 'N/A',
+        WHIP: apStats?.WHIP || 'N/A',
+        FBRate: apStats?.FB || 'N/A',
+        GBtoFB: apStats?.GF || 'N/A',
+      },
+      homePitcher: {
+        name: g.homePitcher.name,
+        ERA: hpStats?.ERA || g.homePitcher.stats?.ERA || 'N/A',
+        HR9: hpStats?.HR9 || 'N/A',
+        HRAllowed: hpStats?.HRAllowed || 'N/A',
+        IP: hpStats?.IP || 'N/A',
+        WHIP: hpStats?.WHIP || 'N/A',
+        FBRate: hpStats?.FB || 'N/A',
+        GBtoFB: hpStats?.GF || 'N/A',
+      },
+      homeTeamBatting: homeTeamBatting ? {
+        teamHR: homeTeamBatting.HR,
+        teamHRPerGame: homeTeamBatting.HRPerGame,
+        teamSLG: homeTeamBatting.SLG,
+        teamOPS: homeTeamBatting.OPS,
+      } : 'N/A',
+      awayTeamBatting: awayTeamBatting ? {
+        teamHR: awayTeamBatting.HR,
+        teamHRPerGame: awayTeamBatting.HRPerGame,
+        teamSLG: awayTeamBatting.SLG,
+        teamOPS: awayTeamBatting.OPS,
+      } : 'N/A',
+      homeHRLeader: leaders?.home ? `${leaders.home.hrLeader} (${leaders.home.hrCount} HR)` : 'N/A',
+      awayHRLeader: leaders?.away ? `${leaders.away.hrLeader} (${leaders.away.hrCount} HR)` : 'N/A',
+      overUnder: g.odds.overUnder,
+      startTime: g.startTime,
+      gameNumber: g.gameNumber,
+      weather: weatherMap[g.espnGameId] ? {
+        temp: weatherMap[g.espnGameId].temperature,
+        wind: weatherMap[g.espnGameId].gust,
+      } : null,
+    };
+  });
+
+  const prompt = `You are an elite MLB home run prop analyst. Your current record is ${record.hits}-${record.misses}.
+
+CRITICAL RULES:
+- For topHRCandidate, you MUST ONLY use player names from the data provided below (homeHRLeader, awayHRLeader fields). Do NOT use players from your training data — rosters change every season.
+- If a leader field says "N/A", use null for topHRCandidate.
+- Factor in pitcher HR/9 rate and fly ball tendency heavily. High HR/9 + high fly ball rate = HR-friendly pitcher.
+- A pitcher with HR/9 > 1.50 is very HR-prone. HR/9 < 0.80 is HR-resistant.
+- Ground ball pitchers (G/F > 1.2) suppress HRs. Fly ball pitchers (G/F < 0.9) allow more HRs.
+- Team SLG > .420 and OPS > .750 indicates a power-hitting lineup.
+- Weather: games 75°F+ with wind blowing out favor HRs. Dome/cold games suppress them.
+
+Today's MLB slate with real current-season stats:
 ${JSON.stringify(gamesData, null, 2)}
 
-For each game, suggest whether the game is likely to see home runs. Return a JSON array:
+For each game, analyze HR potential. Return a JSON array:
 [
   {
     "espnGameId": "<ESPN game ID>",
@@ -716,10 +846,10 @@ For each game, suggest whether the game is likely to see home runs. Return a JSO
     "hrOverUnder": <suggested total HRs line, e.g. 1.5 or 2.5>,
     "overUnderPick": "Over" or "Under",
     "confidence": <number 50-99>,
-    "reasoning": "<1-2 sentence specific analysis focusing on HR factors>",
-    "topHRCandidate": "<name of batter most likely to homer, or null>",
+    "reasoning": "<1-2 sentence analysis citing pitcher HR/9, team HR stats, and ballpark/weather>",
+    "topHRCandidate": "<ONLY a player name from the homeHRLeader or awayHRLeader data provided, or null>",
     "topCandidateTeam": "<team abbreviation of top HR candidate>",
-    "odds": "<approximate HR O/U odds if known, or null>"
+    "odds": null
   }
 ]
 
@@ -1199,6 +1329,19 @@ async function autoResolveAll(client) {
   await autoResolveHomeruns(client);
 }
 
+/**
+ * Delete today's analysis for a market type and regenerate it.
+ */
+async function regenerateMarket(client, guildId, marketType) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  console.log(`[MLB] Regenerating ${marketType} for ${today}...`);
+  await mlbDb.deleteAnalysisForToday(marketType, guildId, today);
+  if (marketType === 'nrfi') await generateNrfiAnalysis(client, guildId);
+  else if (marketType === 'strikeout') await generateStrikeoutAnalysis(client, guildId);
+  else if (marketType === 'homerun') await generateHomerunAnalysis(client, guildId);
+  console.log(`[MLB] ${marketType} regeneration complete.`);
+}
+
 module.exports = {
   NRFI_CHANNEL_ID,
   STRIKEOUT_CHANNEL_ID,
@@ -1212,4 +1355,5 @@ module.exports = {
   autoResolveStrikeouts,
   autoResolveHomeruns,
   refreshAnalysisCards,
+  regenerateMarket,
 };

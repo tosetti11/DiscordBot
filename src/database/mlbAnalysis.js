@@ -151,6 +151,28 @@ async function getMessage(date, marketType, guildId) {
   return data || null;
 }
 
+async function deleteAnalysisForToday(marketType, guildId, date) {
+  // Delete analysis entries
+  const { error: entryErr } = await supabase
+    .from('mlb_daily_analysis')
+    .delete()
+    .eq('market_type', marketType)
+    .eq('guild_id', guildId)
+    .eq('analysis_date', date);
+  if (entryErr) throw entryErr;
+
+  // Delete message record so it re-posts
+  const { error: msgErr } = await supabase
+    .from('mlb_analysis_messages')
+    .delete()
+    .eq('market_type', marketType)
+    .eq('guild_id', guildId)
+    .eq('analysis_date', date);
+  if (msgErr) throw msgErr;
+
+  console.log(`[MLB DB] Deleted ${marketType} entries + message for ${date} / ${guildId}`);
+}
+
 module.exports = {
   createAnalysisEntries,
   getAnalysisByDate,
@@ -162,4 +184,5 @@ module.exports = {
   hasAnalysisForToday,
   saveMessage,
   getMessage,
+  deleteAnalysisForToday,
 };
