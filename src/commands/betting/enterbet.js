@@ -491,6 +491,7 @@ async function handleSportSelect(interaction) {
           { label: 'Team Total', value: 'team_total', description: 'Single team over/under', emoji: '🎯' },
           { label: 'NRFI', value: 'nrfi', description: 'No Run First Inning', emoji: '⚾' },
           { label: 'YRFI', value: 'yrfi', description: 'Yes Run First Inning', emoji: '⚾' },
+          { label: 'Home Run', value: 'homerun', description: 'Player/game home run bet', emoji: '💣' },
           { label: 'Double Chance', value: 'double_chance', description: 'Team wins or draw (soccer)', emoji: '⚽' },
           { label: 'Draw No Bet', value: 'draw_no_bet', description: 'Void if draw (soccer)', emoji: '⚽' },
         ])
@@ -530,12 +531,12 @@ async function handleWagerTypeSelect(interaction) {
     });
   }
 
-  // For spread, ask period before opening modal
-  if (session.currentWagerType === 'spread') {
+  // For spread or moneyline, ask period before opening modal
+  if (session.currentWagerType === 'spread' || session.currentWagerType === 'moneyline') {
     return showPeriodSelect(interaction, session);
   }
 
-  // NRFI/YRFI/Double Chance/Draw No Bet skip Over/Under and period — go straight to modal
+  // NRFI/YRFI/Homerun/Double Chance/Draw No Bet skip Over/Under and period — go straight to modal
   await showTeamGameModal(interaction, session);
 }
 
@@ -569,6 +570,7 @@ function showPeriodSelect(interaction, session) {
         { label: '1st Period', value: '1st_period', emoji: '🏒' },
         { label: '2nd Period', value: '2nd_period', emoji: '🏒' },
         { label: '3rd Period', value: '3rd_period', emoji: '🏒' },
+        { label: 'First 3 Innings', value: 'first_3', emoji: '⚾' },
         { label: 'First 5 Innings', value: 'first_5', emoji: '⚾' },
         { label: '1st Inning', value: '1st_inning', emoji: '⚾' },
         { label: '2nd Inning', value: '2nd_inning', emoji: '⚾' },
