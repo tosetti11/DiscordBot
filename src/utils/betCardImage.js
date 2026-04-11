@@ -166,9 +166,9 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
   if (!isParlay && bet.espn_game_id) {
     if (isGolf && bet.player_name) {
-      golfData = await getGolfPlayerRound(bet.player_name, bet.golf_round || null);
+      golfData = bet._golfData || await getGolfPlayerRound(bet.player_name, bet.golf_round || null);
     } else {
-      singleLiveScore = await fetchLiveScore(bet.sport, bet.espn_game_id);
+      singleLiveScore = bet._liveScore || await fetchLiveScore(bet.sport, bet.espn_game_id);
     }
   }
   if (isParlay && bet.parlay_legs?.length) {
