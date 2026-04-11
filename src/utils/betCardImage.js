@@ -2,6 +2,7 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 const { SPORT_NAMES, WAGER_TYPES, PERIODS, FIGHT_METHODS } = require('../config/constants');
 const { formatOdds, calculatePayout } = require('./odds');
+const { getGameSummary } = require('../services/espn');
 
 // ── Register bundled fonts ───────────────────────────────────
 const FONT_PATH = path.join(__dirname, '..', 'fonts', 'Inter-Variable.ttf');
@@ -120,6 +121,23 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
+// ── Live score helper ──────────────────────────────────────
+async function fetchLiveScore(sport, espnGameId) {
+  if (!espnGameId || !sport) return null;
+  try {
+    const summary = await getGameSummary(sport, espnGameId);
+    if (!summary || !summary.home) return null;
+    return {
+      homeAbbr: summary.home.abbreviation || summary.home.name || '',
+      awayAbbr: summary.away.abbreviation || summary.away.name || '',
+      homeScore: summary.home.score ?? 0,
+      awayScore: summary.away.score ?? 0,
+      state: summary.state || 'pre',
+      detail: summary.detail || '',
+    };
+  } catch { return null; }
+}
+
 // ── Main generator ──
 
 /**
@@ -137,6 +155,20 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   const PAD = 20; // horizontal padding
   const INNER = W - PAD * 2;
   const isParlay = bet.bet_type === 'parlay' && bet.parlay_legs?.length > 0;
+
+  // ── Fetch live score data ──
+  let singleLiveScore = null;
+  let legLiveScores = [];
+  if (!isParlay && bet.espn_game_id) {
+    singleLiveScore = await fetchLiveScore(bet.sport, bet.espn_game_id);
+  }
+  if (isParlay && bet.parlay_legs?.length) {
+    legLiveScores = await Promise.all(
+      bet.parlay_legs.map(leg =>
+        leg.espn_game_id ? fetchLiveScore(leg.sport, leg.espn_game_id) : null
+      )
+    );
+  }
 
   const sportName = SPORT_NAMES[bet.sport] || bet.sport || '';
   const wagerLabel = WAGER_TYPES[bet.wager_type] || '';
@@ -177,6 +209,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (bet.team_a && bet.team_b) y += 18;
     if (bet.player_name) y += 18;
     if (bet.event_start_time) y += 18;
+    if (bet.espn_game_id) y += 16;
+    if (singleLiveScore && singleLiveScore.state !== 'pre') y += 30;
   }
 
   // DK-style deduplicated matchup header for parlays (only for same-game parlays)
@@ -209,7 +243,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   // Parlay legs (always expanded)
   if (isParlay) {
     y += 6;
-    for (const leg of bet.parlay_legs) {
+    for (let li = 0; li < bet.parlay_legs.length; li++) {
+      const leg = bet.parlay_legs[li];
       y += 6; // gap between legs
       y += 16; // leg header (status + sport)
       tempCtx.font = 'bold 13px ' + FF;
@@ -222,6 +257,9 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       }
       if (leg.player_name) y += 15;
       if (leg.event_start_time) y += 15;
+      if (leg.espn_game_id) y += 14;
+      const legScoreData = legLiveScores[li];
+      if (legScoreData && legScoreData.state !== 'pre') y += 20;
       if (leg.odds_american) y += 15; // odds line
       y += 6; // bottom padding
     }
@@ -450,6 +488,32 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       ctx.fillText(`⏰ ${bet.event_start_time}`, LEFT_BAR + PAD, curY + 13);
       curY += 18;
     }
+    // ESPN game ID
+    if (bet.espn_game_id) {
+      ctx.font = '10px ' + FF;
+      ctx.fillStyle = C.textMuted;
+      ctx.fillText(`ESPN #${bet.espn_game_id}`, LEFT_BAR + PAD, curY + 11);
+      curY += 16;
+    }
+    // Live score
+    if (singleLiveScore && singleLiveScore.state !== 'pre') {
+      const isLive = singleLiveScore.state === 'in';
+      const scBg = isLive ? 'rgba(67, 181, 129, 0.10)' : 'rgba(128, 128, 128, 0.08)';
+      roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 24, 5);
+      ctx.fillStyle = scBg;
+      ctx.fill();
+      const scoreStr = `${singleLiveScore.awayAbbr} ${singleLiveScore.awayScore}  —  ${singleLiveScore.homeAbbr} ${singleLiveScore.homeScore}`;
+      ctx.font = 'bold 12px ' + FF;
+      ctx.fillStyle = isLive ? C.win : C.textSecondary;
+      ctx.fillText(scoreStr, LEFT_BAR + PAD + 6, curY + 18);
+      if (singleLiveScore.detail) {
+        ctx.font = '10px ' + FF;
+        ctx.fillStyle = isLive ? C.win : C.textMuted;
+        const dw = ctx.measureText(singleLiveScore.detail).width;
+        ctx.fillText(singleLiveScore.detail, W - PAD - dw - 4, curY + 17);
+      }
+      curY += 30;
+    }
   }
 
   // ── DK-style matchup header for parlays ──
@@ -562,6 +626,24 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         ctx.fillStyle = C.textMuted;
         ctx.fillText(`⏰ ${leg.event_start_time}`, legX, curY + 12);
         curY += 15;
+      }
+
+      // ESPN game ID
+      if (leg.espn_game_id) {
+        ctx.font = '9px ' + FF;
+        ctx.fillStyle = C.textMuted;
+        ctx.fillText(`ESPN #${leg.espn_game_id}`, legX, curY + 10);
+        curY += 14;
+      }
+      // Leg live score
+      const legLs = legLiveScores[i];
+      if (legLs && legLs.state !== 'pre') {
+        const isLegLive = legLs.state === 'in';
+        const legScoreStr = `${legLs.awayAbbr} ${legLs.awayScore} — ${legLs.homeAbbr} ${legLs.homeScore}  ${legLs.detail || ''}`;
+        ctx.font = 'bold 10px ' + FF;
+        ctx.fillStyle = isLegLive ? C.win : C.textMuted;
+        ctx.fillText(legScoreStr, legX, curY + 12);
+        curY += 20;
       }
 
       // Leg odds

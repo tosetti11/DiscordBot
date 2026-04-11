@@ -40,7 +40,7 @@ const ESPN_PATHS = {
   kbo: 'baseball/kbo',
   npb: 'baseball/npb',
   // Golf
-  golf_pga: 'golf',
+  golf_pga: 'golf/pga',
   // Motorsport
   nascar: 'racing/nascar',
   f1: 'racing/f1',
@@ -390,19 +390,34 @@ function parsePropDescription(propDesc) {
  * @returns {Object|null} { gameId, game } or null
  */
 async function resolveGameId(sport, teamA, teamB, eventStartTime) {
-  if (!sport || !teamA) return null;
+  if (!sport) return null;
 
   // Derive date string from eventStartTime if possible
   let dateStr = null;
   if (eventStartTime) {
-    try {
-      const d = new Date(eventStartTime);
-      if (!isNaN(d.getTime())) {
-        // Use ET date
-        dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+    // Try ISO parse
+    const d = new Date(eventStartTime);
+    if (!isNaN(d.getTime())) {
+      dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+    } else {
+      // Try "Fri Apr 10 9:41 PM ET" format — extract month+day
+      const MONTH_NUM = { Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12' };
+      const m = eventStartTime.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\b/i);
+      if (m) {
+        const mon = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+        if (MONTH_NUM[mon]) dateStr = `${new Date().getFullYear()}${MONTH_NUM[mon]}${m[2].padStart(2, '0')}`;
       }
-    } catch {}
+    }
   }
+
+  // Golf: tournament is a single event, return it directly
+  if (sport === 'golf_pga') {
+    const games = await getTodaysGames(sport, dateStr || undefined);
+    if (games.length > 0) return { gameId: games[0].id, game: games[0] };
+    return null;
+  }
+
+  if (!teamA) return null;
 
   // Fetch games for the sport on that date (or today)
   const games = await getTodaysGames(sport, dateStr || undefined);
