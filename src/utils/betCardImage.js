@@ -420,16 +420,25 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   ctx.fillText(truncName, nameX, HDR_CONTENT / 2 + 5);
 
   // Status badge (right side)
-  const badgeText = statusLabel;
+  const singleIsLive = !isParlay && singleLiveScore && singleLiveScore.state === 'in' && status === 'open';
+  const golfIsLive = !isParlay && golfData && golfData.roundStatus === 'in' && status === 'open';
+  const betIsLive = singleIsLive || golfIsLive;
+  const badgeText = betIsLive ? '● LIVE' : statusLabel;
   ctx.font = '800 11px ' + FF;
   const badgeW = ctx.measureText(badgeText).width + 20;
   const badgeH = 22;
   const badgeX = W - PAD - badgeW;
   const badgeY = (HDR_CONTENT - badgeH) / 2;
   roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 4);
-  ctx.fillStyle = sc.bgBadge;
+  ctx.fillStyle = betIsLive ? 'rgba(255, 50, 50, 0.25)' : sc.bgBadge;
   ctx.fill();
-  ctx.fillStyle = sc.text;
+  if (betIsLive) {
+    roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 4);
+    ctx.strokeStyle = 'rgba(255, 50, 50, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.fillStyle = betIsLive ? '#FF5555' : sc.text;
   ctx.font = '800 11px ' + FF;
   ctx.fillText(badgeText, badgeX + 10, badgeY + 15);
 
@@ -660,14 +669,41 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       ctx.lineWidth = 2;
       const legStartY = curY;
 
-      // Leg header: status emoji + sport
+      // Leg header: status indicator + sport
       const legSport = (SPORT_NAMES[leg.sport] || leg.sport || '').toUpperCase();
-      const legStatusMap = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void: '⛔' };
-      const legEmoji = legStatusMap[leg.status] || '🟡';
+      const legLsData = legLiveScores[i];
+      const legIsLive = leg.status === 'open' && legLsData && legLsData.state === 'in';
 
-      ctx.font = '13px ' + FF;
-      ctx.fillStyle = C.textPrimary;
-      ctx.fillText(legEmoji, legX, curY + 13);
+      // Draw status indicator
+      if (legIsLive) {
+        // 🔴 LIVE badge instead of yellow dot
+        const badgeX = legX;
+        const badgeY = curY + 2;
+        const badgeW = 38;
+        const badgeH = 14;
+        roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 3);
+        ctx.fillStyle = 'rgba(255, 50, 50, 0.25)';
+        ctx.fill();
+        roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 3);
+        ctx.strokeStyle = 'rgba(255, 50, 50, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Red dot
+        ctx.beginPath();
+        ctx.arc(badgeX + 8, badgeY + badgeH / 2, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#FF3232';
+        ctx.fill();
+        // LIVE text
+        ctx.font = 'bold 8px ' + FF;
+        ctx.fillStyle = '#FF5555';
+        ctx.fillText('LIVE', badgeX + 14, badgeY + 10);
+      } else {
+        const legStatusMap = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void: '⛔' };
+        const legEmoji = legStatusMap[leg.status] || '🟡';
+        ctx.font = '13px ' + FF;
+        ctx.fillStyle = C.textPrimary;
+        ctx.fillText(legEmoji, legX, curY + 13);
+      }
       ctx.font = '600 10px ' + FF;
       ctx.fillStyle = C.textMuted;
       let legTagX = legX + 22;
