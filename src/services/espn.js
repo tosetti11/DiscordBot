@@ -698,6 +698,87 @@ function findPlayer(players, playerName) {
   return null;
 }
 
+/**
+ * Get a golf player's round data from the ESPN scoreboard.
+ * @param {string} playerName - Player display name (e.g. "Si Woo Kim")
+ * @param {number} roundNum - Round number (1-4)
+ * @returns {Object|null} { playerName, overallScore, roundNum, roundScore, roundDisplay, holesCompleted, totalHoles, holeScores, tournamentName, roundStatus }
+ */
+async function getGolfPlayerRound(playerName, roundNum) {
+  if (!playerName) return null;
+  const espnPath = ESPN_PATHS.golf_pga;
+  if (!espnPath) return null;
+
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${today}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const event = json.events?.[0];
+    if (!event) return null;
+
+    const competitors = event.competitions?.[0]?.competitors || [];
+    const norm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+
+    // Find the player (fuzzy)
+    const comp = competitors.find(c => {
+      const dn = (c.athlete?.displayName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+      const fn = (c.athlete?.fullName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+      return dn === norm || fn === norm || dn.includes(norm) || norm.includes(dn);
+    });
+    if (!comp) return null;
+
+    const rounds = comp.linescores || [];
+    const rIdx = (roundNum || rounds.length) - 1;
+    const round = rounds[rIdx];
+
+    // Competition status shows current round info
+    const compStatus = event.competitions?.[0]?.status;
+    const currentRound = compStatus?.period || rounds.length;
+
+    let holesCompleted = 0;
+    let runningScore = 0;
+    const holeScores = [];
+
+    if (round?.linescores?.length) {
+      holesCompleted = round.linescores.length;
+      for (const hole of round.linescores) {
+        runningScore += hole.value || 0;
+        holeScores.push({
+          hole: hole.period,
+          strokes: hole.value,
+          toPar: hole.scoreType?.displayValue || '',
+        });
+      }
+    }
+
+    // Determine round status
+    let roundStatus = 'pre'; // not started
+    if (round?.linescores?.length === 18) roundStatus = 'post'; // complete
+    else if (round?.linescores?.length > 0) roundStatus = 'in'; // in progress
+    else if (roundNum < currentRound) roundStatus = 'post'; // past round with no hole data
+
+    return {
+      playerName: comp.athlete?.displayName || playerName,
+      overallScore: comp.score || 'E',
+      roundNum: rIdx + 1,
+      roundScore: round?.value || (roundStatus === 'in' ? runningScore : null),
+      roundDisplay: round?.displayValue || null,
+      holesCompleted,
+      totalHoles: 18,
+      holeScores,
+      tournamentName: event.name || 'Tournament',
+      roundStatus,
+      position: comp.order || null,
+    };
+  } catch (err) {
+    console.error('[ESPN] Golf player round error:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   ESPN_PATHS,
   getTodaysGames,
@@ -709,5 +790,6 @@ module.exports = {
   resolveResult,
   identifyPickSide,
   findPlayer,
+  getGolfPlayerRound,
   STAT_MAP,
 };

@@ -1,98 +1,62 @@
 /**
- * Test script: Send a mock golf H2H matchup pick card to a test channel.
- * Usage: node scripts/test-golf-card.js
+ * Test script: Generate golf tracker card and send to Discord
+ * Usage: node scripts/test-golf-card.js <channel_id>
  */
 require('dotenv').config();
-const { Client, GatewayIntentBits, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { generateGolfPickCardImage, generateGolfRecapImage, generateGolfTournamentRecapImage } = require('../src/utils/golfPickCardImage');
+const { generateBetCardImage } = require('../src/utils/betCardImage');
+const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
 
-const TEST_CHANNEL = '1471170078161764578';
+const channelId = process.argv[2] || '1471170078161764578';
 
-const mockPick = {
-  id: 'test-001',
-  pick: 'Scottie Scheffler over Rory McIlroy',
-  team_a: 'Scottie Scheffler',
-  team_b: 'Rory McIlroy',
-  player_name: 'Scottie Scheffler',
-  odds_american: -125,
-  confidence: 82,
-  tournament_name: 'Houston Open',
-  prop_description: 'Tournament Matchup \u2022 DraftKings',
-  reasoning: 'Scheffler has 3 top-5 finishes in his last 5 starts and leads the tour in strokes gained tee-to-green. McIlroy has struggled on Bermuda greens this season with a 71.2 scoring avg on similar surfaces.',
-  status: 'pending',
-};
+async function main() {
+  // ── Mock bet that looks like THE-064 ──
+  const mockBet = {
+    id: 'test-golf-demo',
+    slip_number: 'THE-064',
+    sport: 'golf_pga',
+    bet_type: 'single',
+    bet_category: 'player_prop',
+    wager_type: 'prop',
+    pick: 'Over 71.5 Round Score (R3)',
+    player_name: 'Si Woo Kim',
+    team_a: null,
+    team_b: null,
+    odds_american: -115,
+    odds_decimal: 1.87,
+    units: 1,
+    status: 'open',
+    is_whale: false,
+    is_retro: false,
+    golf_round: 3,
+    golf_hole: null,
+    period: 'full_game',
+    event_start_time: 'Sat Apr 11 2:00 PM ET',
+    espn_game_id: '401811941',
+    bet_note: null,
+    created_at: new Date().toISOString(),
+    display_name: 'Tosetti',
+    parlay_legs: [],
+  };
 
-const mockClosedPick = {
-  ...mockPick,
-  id: 'test-002',
-  status: 'win',
-  result_note: 'Scheffler finished T3 (-12), McIlroy T18 (-6)',
-  final_score: 'Scheffler -12 vs McIlroy -6',
-};
+  console.log('Generating card image (fetching LIVE ESPN data)...');
+  const imgBuffer = await generateBetCardImage(mockBet, 'Tosetti', null);
+  console.log('Card generated');
 
-const mockRecord = { wins: 7, losses: 4, pushes: 1 };
-
-const recapPicks = [
-  { pick: 'Scheffler over McIlroy', status: 'win', final_score: '-12 vs -6' },
-  { pick: 'Hovland over Rahm', status: 'loss', final_score: '-8 vs -10' },
-  { pick: 'Clark over Morikawa', status: 'win', final_score: '-9 vs -7' },
-];
-
-async function run() {
-  console.log('Generating images...');
-
-  // Generate all 3 card types
-  const [pickCard, recapCard, tournamentRecap] = await Promise.all([
-    generateGolfPickCardImage(mockPick, mockRecord, 1, 3),
-    generateGolfRecapImage(mockClosedPick, mockRecord),
-    generateGolfTournamentRecapImage(recapPicks, 'Houston Open', mockRecord),
-  ]);
-
-  console.log('Images generated. Connecting to Discord...');
-
+  // Send to Discord
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-
-  client.once('ready', async () => {
-    console.log(`Logged in as ${client.user.tag}`);
-    try {
-      const channel = await client.channels.fetch(TEST_CHANNEL);
-
-      // 1) Pick card
-      await channel.send({
-        content: '\u26f3 **GOLF H2H MATCHUP** — Pick 1/3 (TEST)',
-        files: [new AttachmentBuilder(pickCard, { name: 'golf-pick-test.png' })],
-        components: [
-          new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('test_tail').setLabel('\u26f3 Tail (0)').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('test_fade').setLabel('Fade (0)').setStyle(ButtonStyle.Danger),
-          ),
-        ],
-      });
-      console.log('Sent pick card');
-
-      // 2) Result card
-      await channel.send({
-        content: '\u2705 **GOLF H2H RESULT** (TEST)',
-        files: [new AttachmentBuilder(recapCard, { name: 'golf-recap-test.png' })],
-      });
-      console.log('Sent recap card');
-
-      // 3) Tournament recap
-      await channel.send({
-        content: '\u26f3 **WEEKLY GOLF RECAP** — Houston Open (TEST)',
-        files: [new AttachmentBuilder(tournamentRecap, { name: 'golf-tournament-recap-test.png' })],
-      });
-      console.log('Sent tournament recap');
-
-      console.log('All 3 cards sent! Check the test channel.');
-    } catch (e) {
-      console.error('Error:', e);
-    }
-    client.destroy();
-    process.exit(0);
-  });
-
   await client.login(process.env.DISCORD_TOKEN);
+  console.log('Discord logged in');
+
+  const channel = await client.channels.fetch(channelId);
+  const attachment = new AttachmentBuilder(imgBuffer, { name: 'golf-tracker-demo.png' });
+  await channel.send({
+    content: '🏌️ **Golf Tracker Demo** — Here\'s what THE-064 looks like with live round tracking.\nThis card pulls real-time data from ESPN for Si Woo Kim\'s current round:',
+    files: [attachment],
+  });
+  console.log('Sent to Discord channel', channelId);
+
+  client.destroy();
+  process.exit(0);
 }
 
-run().catch(console.error);
+main().catch(err => { console.error(err); process.exit(1); });

@@ -2,7 +2,7 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 const { SPORT_NAMES, WAGER_TYPES, PERIODS, FIGHT_METHODS } = require('../config/constants');
 const { formatOdds, calculatePayout } = require('./odds');
-const { getGameSummary } = require('../services/espn');
+const { getGameSummary, getGolfPlayerRound } = require('../services/espn');
 
 // ── Register bundled fonts ───────────────────────────────────
 const FONT_PATH = path.join(__dirname, '..', 'fonts', 'Inter-Variable.ttf');
@@ -159,14 +159,31 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   // ── Fetch live score data ──
   let singleLiveScore = null;
   let legLiveScores = [];
+  let golfData = null;
+  let legGolfData = [];
+
+  const isGolf = bet.sport?.startsWith('golf');
+
   if (!isParlay && bet.espn_game_id) {
-    singleLiveScore = await fetchLiveScore(bet.sport, bet.espn_game_id);
+    if (isGolf && bet.player_name) {
+      golfData = await getGolfPlayerRound(bet.player_name, bet.golf_round || null);
+    } else {
+      singleLiveScore = await fetchLiveScore(bet.sport, bet.espn_game_id);
+    }
   }
   if (isParlay && bet.parlay_legs?.length) {
     legLiveScores = await Promise.all(
-      bet.parlay_legs.map(leg =>
-        leg.espn_game_id ? fetchLiveScore(leg.sport, leg.espn_game_id) : null
-      )
+      bet.parlay_legs.map(leg => {
+        if (!leg.espn_game_id) return null;
+        if (leg.sport?.startsWith('golf') && leg.player_name) return null; // handled by legGolfData
+        return fetchLiveScore(leg.sport, leg.espn_game_id);
+      })
+    );
+    legGolfData = await Promise.all(
+      bet.parlay_legs.map(leg => {
+        if (!leg.espn_game_id || !leg.sport?.startsWith('golf') || !leg.player_name) return null;
+        return getGolfPlayerRound(leg.player_name, leg.golf_round || null);
+      })
     );
   }
 
@@ -210,7 +227,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (bet.player_name) y += 18;
     if (bet.event_start_time) y += 18;
     if (bet.espn_game_id) y += 16;
-    if (singleLiveScore && singleLiveScore.state !== 'pre') y += 30;
+    if (golfData && golfData.roundStatus !== 'pre') y += 52; // golf tracker
+    else if (singleLiveScore && singleLiveScore.state !== 'pre') y += 30;
   }
 
   // DK-style deduplicated matchup header for parlays (only for same-game parlays)
@@ -496,7 +514,69 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       curY += 16;
     }
     // Live score
-    if (singleLiveScore && singleLiveScore.state !== 'pre') {
+    if (golfData && golfData.roundStatus !== 'pre') {
+      // ── Golf tracker ──
+      const gIsLive = golfData.roundStatus === 'in';
+      const gIsFinal = golfData.roundStatus === 'post';
+      const gcBg = gIsLive ? 'rgba(67, 181, 129, 0.08)' : 'rgba(128, 128, 128, 0.06)';
+      roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 46, 6);
+      ctx.fillStyle = gcBg;
+      ctx.fill();
+      // Border
+      ctx.strokeStyle = gIsLive ? 'rgba(67, 181, 129, 0.25)' : 'rgba(128, 128, 128, 0.15)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 46, 6);
+      ctx.stroke();
+
+      const gx = LEFT_BAR + PAD + 6;
+      // Top line: "⛳ Thru 14  ·  Score: 70 (+1)"  or  "⛳ R3 Final: 73 (+1)"
+      ctx.font = 'bold 11px ' + FF;
+      ctx.fillStyle = gIsLive ? C.win : C.textSecondary;
+      let gTopText;
+      if (gIsFinal) {
+        gTopText = `⛳ R${golfData.roundNum} Final: ${golfData.roundScore || '—'} (${golfData.roundDisplay || 'E'})`;
+      } else {
+        gTopText = `⛳ Thru ${golfData.holesCompleted}  ·  Score: ${golfData.roundScore || '—'} (${golfData.roundDisplay || 'E'})`;
+      }
+      ctx.fillText(gTopText, gx, curY + 16);
+
+      // Right side: overall position + overall score  
+      const gPosText = golfData.position ? `T${golfData.position}` : '';
+      const gOverall = `${gPosText} (${golfData.overallScore})`.trim();
+      ctx.font = '10px ' + FF;
+      ctx.fillStyle = C.textMuted;
+      const gow = ctx.measureText(gOverall).width;
+      ctx.fillText(gOverall, W - PAD - gow - 4, curY + 16);
+
+      // Progress bar: holes completed
+      const barX = gx;
+      const barY = curY + 26;
+      const barW = INNER - 16;
+      const barH = 12;
+      const pct = golfData.holesCompleted / golfData.totalHoles;
+
+      // BG track
+      roundRect(ctx, barX, barY, barW, barH, 4);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.fill();
+
+      // Filled portion
+      if (pct > 0) {
+        const fillW = Math.max(8, barW * pct);
+        roundRect(ctx, barX, barY, fillW, barH, 4);
+        ctx.fillStyle = gIsLive ? 'rgba(67, 181, 129, 0.5)' : 'rgba(128, 128, 128, 0.35)';
+        ctx.fill();
+      }
+
+      // Progress text centered in bar
+      const gBarText = gIsFinal ? 'COMPLETE' : `${golfData.holesCompleted} / ${golfData.totalHoles} holes`;
+      ctx.font = 'bold 8px ' + FF;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      const gbtW = ctx.measureText(gBarText).width;
+      ctx.fillText(gBarText, barX + (barW - gbtW) / 2, barY + 9);
+
+      curY += 52;
+    } else if (singleLiveScore && singleLiveScore.state !== 'pre') {
       const isLive = singleLiveScore.state === 'in';
       const scBg = isLive ? 'rgba(67, 181, 129, 0.10)' : 'rgba(128, 128, 128, 0.08)';
       roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 24, 5);
