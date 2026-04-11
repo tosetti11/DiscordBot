@@ -22,7 +22,7 @@ async function backfill() {
     .from('bets')
     .select('id, sport, team_a, team_b, event_start_time, bet_category, wager_type')
     .eq('status', 'open')
-    .eq('is_parlay', false)
+    .eq('bet_type', 'single')
     .is('espn_game_id', null);
 
   if (sErr) { console.error('Error fetching singles:', sErr); return; }
