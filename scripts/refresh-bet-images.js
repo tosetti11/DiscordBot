@@ -6,12 +6,10 @@
  *   - Without slip: refreshes ALL open bets missing ESPN game IDs
  */
 require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
 const { resolveGameId } = require('../src/services/espn');
 const { generateBetCardImage } = require('../src/utils/betCardImage');
+const { supabase: supa } = require('../src/config/supabase');
 const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
-
-const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 async function main() {
   const slipArg = process.argv[2]; // optional slip number filter
