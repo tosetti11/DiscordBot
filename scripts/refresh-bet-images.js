@@ -55,7 +55,8 @@ async function main() {
       if (bet.bet_type !== 'parlay') {
         // Single bet — resolve ESPN game ID if missing
         if (!bet.espn_game_id) {
-          const gameId = await resolveGameId(bet.sport, bet.team_a, bet.team_b, bet.event_start_time);
+          const result = await resolveGameId(bet.sport, bet.team_a, bet.team_b, bet.event_start_time);
+          const gameId = result?.gameId || null;
           if (gameId) {
             await supa.from('bets').update({ espn_game_id: gameId }).eq('id', bet.id);
             bet.espn_game_id = gameId;
@@ -71,7 +72,8 @@ async function main() {
         // Parlay — resolve legs
         for (const leg of (bet.parlay_legs || [])) {
           if (!leg.espn_game_id) {
-            const gameId = await resolveGameId(leg.sport, leg.team_a, leg.team_b, leg.event_start_time);
+            const result = await resolveGameId(leg.sport, leg.team_a, leg.team_b, leg.event_start_time);
+            const gameId = result?.gameId || null;
             if (gameId) {
               await supa.from('parlay_legs').update({ espn_game_id: gameId }).eq('id', leg.id);
               leg.espn_game_id = gameId;
