@@ -1456,6 +1456,7 @@ function createWebServer() {
       betNote: bet.bet_note,
       shareLink: bet.share_link || null,
       eventStartTime: bet.event_start_time,
+      espnGameId: bet.espn_game_id || null,
       isWhale: bet.is_whale,
       isRetro: bet.is_retro,
       createdAt: bet.created_at,
@@ -1491,6 +1492,7 @@ function createWebServer() {
           spreadValue: l.spread_value,
           status: l.status,
           eventStartTime: l.event_start_time,
+          espnGameId: l.espn_game_id || null,
           period: l.period || 'full_game',
           fightRound: l.fight_round || null,
           fightMethod: l.fight_method || null,
@@ -3538,6 +3540,20 @@ IMPORTANT RULES:
           };
         });
 
+        // Resolve ESPN game IDs for each parlay leg
+        for (const record of legRecords) {
+          if (record.bet_category !== 'futures' && record.sport) {
+            try {
+              const resolved = await espn.resolveGameId(
+                record.sport, record.team_a, record.team_b, record.event_start_time
+              );
+              if (resolved) record.espn_game_id = resolved.gameId;
+            } catch (e) {
+              console.error('[ESPN] Web parlay leg game ID resolve error:', e.message);
+            }
+          }
+        }
+
         await db.createParlayLegs(legRecords);
         const fullBet = await db.getBet(bet.id);
 
@@ -3682,6 +3698,16 @@ IMPORTANT RULES:
           golf_hole: golfHole ? parseInt(golfHole) : null,
           golf_round: golfRound ? parseInt(golfRound) : null,
         };
+
+        // Resolve ESPN game ID for live tracking
+        if (betCategory !== 'futures' && sport) {
+          try {
+            const resolved = await espn.resolveGameId(sport, safeTeamA, safeTeamB, eventStartTime);
+            if (resolved) betData.espn_game_id = resolved.gameId;
+          } catch (e) {
+            console.error('[ESPN] Web single bet game ID resolve error:', e.message);
+          }
+        }
 
         const bet = await db.createBet(betData, displayName);
 
@@ -4049,6 +4075,115 @@ IMPORTANT RULES:
     } catch (err) {
       console.error('[API] MLB analysis dates error:', err.message);
       res.status(500).json({ error: 'Failed to fetch dates' });
+    }
+  });
+
+  // ─── Live Tracker API ───
+  // Returns live game data for a bet's ESPN game IDs
+  app.get('/api/live-tracker/:betId', authMiddleware, async (req, res) => {
+    try {
+      const bet = await db.getBet(req.params.betId);
+      if (!bet) return res.status(404).json({ error: 'Bet not found' });
+
+      const results = {};
+
+      // For single bets
+      if (bet.espn_game_id && bet.sport) {
+        const games = await espn.getTodaysGames(bet.sport);
+        const game = games.find(g => g.id === bet.espn_game_id);
+        if (game) {
+          const trackerData = {
+            gameId: game.id,
+            state: game.state,
+            period: game.period,
+            clock: game.clock,
+            detail: game.detail,
+            home: { name: game.home.name, abbreviation: game.home.abbreviation, score: game.home.score },
+            away: { name: game.away.name, abbreviation: game.away.abbreviation, score: game.away.score },
+            linescores: game.linescores || { home: [], away: [] },
+          };
+
+          // Add player prop tracking if applicable
+          if (bet.bet_category === 'player_prop' && bet.player_name && bet.prop_description && game.state !== 'pre') {
+            try {
+              const summary = await espn.getGameSummary(bet.sport, bet.espn_game_id);
+              if (summary) {
+                const parsed = espn.parsePropDescription(bet.prop_description);
+                const player = espn.findPlayer(summary.players, bet.player_name);
+                if (parsed && player) {
+                  trackerData.propTracker = {
+                    playerName: bet.player_name,
+                    stat: parsed.stat,
+                    direction: parsed.direction,
+                    line: parsed.line,
+                    current: parseFloat(player.stats?.[parsed.espnKey]) || 0,
+                  };
+                }
+              }
+            } catch (e) {}
+          }
+
+          results.bet = trackerData;
+        }
+      }
+
+      // For parlay legs
+      if (bet.bet_type === 'parlay' && bet.parlay_legs?.length) {
+        results.legs = {};
+        // Group legs by sport to minimize API calls
+        const sportLegs = {};
+        for (const leg of bet.parlay_legs) {
+          if (!leg.espn_game_id || !leg.sport) continue;
+          if (!sportLegs[leg.sport]) sportLegs[leg.sport] = [];
+          sportLegs[leg.sport].push(leg);
+        }
+
+        for (const [sport, legs] of Object.entries(sportLegs)) {
+          const games = await espn.getTodaysGames(sport);
+          for (const leg of legs) {
+            const game = games.find(g => g.id === leg.espn_game_id);
+            if (!game) continue;
+
+            const legData = {
+              gameId: game.id,
+              state: game.state,
+              period: game.period,
+              clock: game.clock,
+              detail: game.detail,
+              home: { name: game.home.name, abbreviation: game.home.abbreviation, score: game.home.score },
+              away: { name: game.away.name, abbreviation: game.away.abbreviation, score: game.away.score },
+              linescores: game.linescores || { home: [], away: [] },
+            };
+
+            // Player prop tracking for parlay legs
+            if (leg.bet_category === 'player_prop' && leg.player_name && leg.prop_description && game.state !== 'pre') {
+              try {
+                const summary = await espn.getGameSummary(sport, leg.espn_game_id);
+                if (summary) {
+                  const parsed = espn.parsePropDescription(leg.prop_description);
+                  const player = espn.findPlayer(summary.players, leg.player_name);
+                  if (parsed && player) {
+                    legData.propTracker = {
+                      playerName: leg.player_name,
+                      stat: parsed.stat,
+                      direction: parsed.direction,
+                      line: parsed.line,
+                      current: parseFloat(player.stats?.[parsed.espnKey]) || 0,
+                    };
+                  }
+                }
+              } catch (e) {}
+            }
+
+            results.legs[leg.id] = legData;
+          }
+        }
+      }
+
+      res.json(results);
+    } catch (err) {
+      console.error('[API] Live tracker error:', err.message);
+      res.status(500).json({ error: 'Failed to fetch live data' });
     }
   });
 

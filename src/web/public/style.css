@@ -2013,6 +2013,179 @@ textarea {
   color: var(--text-muted);
 }
 
+/* ── ESPN Game ID ── */
+.ticket-espn-id {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.2);
+  font-family: 'Courier New', monospace;
+  margin-left: 8px;
+}
+
+/* ── Live Tracker ── */
+.ticket-live-tracker {
+  padding: 10px 18px;
+}
+
+.tracker-loading,
+.tracker-pregame {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px 0;
+}
+
+.tracker-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracker-content.tracker-compact {
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.tracker-status {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tracker-live {
+  color: #ff4444;
+  animation: pulse-live 2s infinite;
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.tracker-final {
+  color: var(--text-muted);
+}
+
+.tracker-score {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.tracker-compact .tracker-score {
+  font-size: 12px;
+  text-align: left;
+}
+
+/* Linescore table (inning-by-inning / quarter-by-quarter) */
+.tracker-linescore {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+.tracker-linescore th,
+.tracker-linescore td {
+  text-align: center;
+  padding: 2px 4px;
+  color: var(--text-secondary);
+  min-width: 18px;
+}
+
+.tracker-linescore th {
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.tracker-linescore .tracker-team-cell {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 30px;
+}
+
+.tracker-linescore .tracker-total-cell {
+  font-weight: 700;
+  color: var(--text-primary);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tracker-compact .tracker-linescore {
+  font-size: 9px;
+}
+
+/* Prop tracker */
+.tracker-prop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.tracker-prop-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tracker-prop-stat {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tracker-prop-line {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.tracker-pace-hit {
+  background: rgba(29, 185, 84, 0.2);
+  color: #1db954;
+}
+
+.tracker-pace-miss {
+  background: rgba(255, 68, 68, 0.2);
+  color: #ff4444;
+}
+
+.tracker-prop-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tracker-prop-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.tracker-prop-fill.tracker-pace-hit {
+  background: #1db954;
+}
+
+.tracker-prop-fill.tracker-pace-miss {
+  background: #ff4444;
+}
+
+/* Leg tracker */
+.ticket-leg-tracker {
+  margin-top: 4px;
+}
+
+.ticket-leg-tracker:empty {
+  display: none;
+}
+
 /* ── Action Buttons ── */
 .ticket-actions {
   display: flex;

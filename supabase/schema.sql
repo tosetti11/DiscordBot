@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS bets (
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'win', 'loss', 'push', 'void')),
   result_note TEXT,
 
+  -- Live tracker
+  espn_game_id TEXT,
+  auto_close_at TIMESTAMPTZ,
+  start_notified BOOLEAN DEFAULT FALSE,
+
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
   closed_at TIMESTAMPTZ,
@@ -78,6 +83,8 @@ CREATE TABLE IF NOT EXISTS parlay_legs (
   odds_decimal DECIMAL(6,3),
 
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'win', 'loss', 'push', 'void')),
+
+  espn_game_id TEXT,
 
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

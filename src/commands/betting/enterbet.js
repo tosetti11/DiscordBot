@@ -272,6 +272,7 @@ function appendShareLink(content, shareLink) {
 }
 const { generateBetCardImage } = require('../../utils/betCardImage');
 const db = require('../../database/queries');
+const espn = require('../../services/espn');
 
 // In-memory store for bet-building sessions (cleared on completion)
 const betSessions = new Map();
@@ -1657,12 +1658,31 @@ async function saveParlayBet(interaction, session) {
 
     // Create parlay legs (set all leg statuses to match overall for retro)
     const retroStatus = session.isRetro ? (session.retroResult || 'win') : 'open';
-    const legRecords = session.legs.map((leg, i) => ({
-      bet_id: bet.id,
-      leg_number: i + 1,
-      ...leg,
-      status: retroStatus,
-    }));
+    const legRecords = [];
+    for (let i = 0; i < session.legs.length; i++) {
+      const leg = session.legs[i];
+      const record = {
+        bet_id: bet.id,
+        leg_number: i + 1,
+        ...leg,
+        status: retroStatus,
+      };
+
+      // Resolve ESPN game ID per leg (skip for retro/futures)
+      if (!session.isRetro && leg.bet_category !== 'futures' && leg.sport) {
+        try {
+          const resolved = await espn.resolveGameId(
+            leg.sport, leg.team_a, leg.team_b,
+            leg.event_start_time
+          );
+          if (resolved) record.espn_game_id = resolved.gameId;
+        } catch (e) {
+          console.error('[ESPN] Parlay leg game ID resolve error:', e.message);
+        }
+      }
+
+      legRecords.push(record);
+    }
 
     await db.createParlayLegs(legRecords);
 
@@ -1761,6 +1781,20 @@ async function saveSingleBet(interaction, legData, units, betNote, shareLink) {
       status: session?.isRetro ? (session.retroResult || 'win') : 'open',
       closed_at: session?.isRetro ? new Date().toISOString() : null,
     };
+
+    // Resolve ESPN game ID for live tracking (skip for retro/futures)
+    if (!session?.isRetro && legData.bet_category !== 'futures' && legData.sport) {
+      try {
+        const resolved = await espn.resolveGameId(
+          legData.sport, legData.team_a, legData.team_b,
+          betData.event_start_time
+        );
+        if (resolved) betData.espn_game_id = resolved.gameId;
+      } catch (e) {
+        console.error('[ESPN] Game ID resolve error:', e.message);
+      }
+    }
+
     console.log('Attempting to create single bet with data:', betData);
 
     const bet = await db.createBet(betData, displayName);

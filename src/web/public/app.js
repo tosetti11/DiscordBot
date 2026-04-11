@@ -2220,6 +2220,10 @@ async function loadCloseBets() {
     bets.forEach(bet => {
       container.appendChild(renderBetCard(bet, showOwner));
     });
+
+    // Start live tracker polling for open bets
+    stopLiveTrackers();
+    startLiveTrackers();
   } catch (e) {
     container.innerHTML = '<p class="empty-state" style="color:var(--text-danger)">Failed to load bets.</p>';
   }
@@ -3146,6 +3150,10 @@ async function loadBets() {
     bets.forEach(bet => {
       container.appendChild(renderBetCard(bet, showingOthers));
     });
+
+    // Start live tracker polling for open bets
+    stopLiveTrackers();
+    startLiveTrackers();
   } catch (e) {
     container.innerHTML = '<p class="empty-state" style="color:var(--text-danger)">Failed to load bets.</p>';
   }
@@ -3258,6 +3266,8 @@ function renderBetCard(bet, showOwner = false) {
         ${legMatchupHtml}
         ${leg.playerName ? `<div class="ticket-leg-player">${esc(leg.playerName)}${leg.propDescription ? ' — ' + esc(leg.propDescription) : ''}</div>` : ''}
         ${leg.eventStartTime ? `<div class="ticket-leg-time">⏰ ${esc(leg.eventStartTime)}</div>` : ''}
+        <div class="ticket-leg-tracker" id="leg-tracker-${leg.id}"></div>
+        ${leg.espnGameId ? `<div class="ticket-espn-id">ESPN: ${esc(leg.espnGameId)}</div>` : ''}
         ${legActions}
       </div>`;
     }).join('');
@@ -3349,11 +3359,18 @@ function renderBetCard(bet, showOwner = false) {
       </div>
     </div>
 
+    ${(bet.espnGameId || bet.legs?.some(l => l.espnGameId)) ? `
+    <div class="ticket-divider"></div>
+    <div class="ticket-live-tracker" id="tracker-${bet.id}" data-bet-id="${bet.id}" data-has-espn="true">
+      <div class="tracker-loading">Loading live data...</div>
+    </div>` : ''}
+
     <div class="ticket-divider"></div>
 
     <div class="ticket-footer">
       <div class="ticket-footer-left">
         ${slipDisplay ? `<span class="ticket-slip">#${esc(slipDisplay)}</span>` : ''}
+        ${bet.espnGameId && !isParlay ? `<span class="ticket-espn-id">ESPN: ${esc(bet.espnGameId)}</span>` : ''}
       </div>
       <div class="ticket-footer-right">
         <span class="ticket-date">${esc(date)} ${esc(time)}</span>
@@ -3387,6 +3404,152 @@ function toggleTicketLegs(toggleEl) {
       if (body.classList.contains('legs-open')) body.style.maxHeight = 'none';
     }, { once: true });
   }
+}
+
+// ─── Live Tracker System ─────────
+const liveTrackerIntervals = new Map();
+
+function startLiveTrackers() {
+  // Clear any existing trackers
+  for (const id of liveTrackerIntervals.values()) clearInterval(id);
+  liveTrackerIntervals.clear();
+
+  // Find all tracker elements on the page
+  const trackers = document.querySelectorAll('.ticket-live-tracker[data-has-espn="true"]');
+  trackers.forEach(el => {
+    const betId = el.dataset.betId;
+    if (!betId) return;
+
+    // Fetch immediately
+    fetchLiveTracker(betId);
+
+    // Then poll every 30s
+    const intervalId = setInterval(() => fetchLiveTracker(betId), 30000);
+    liveTrackerIntervals.set(betId, intervalId);
+  });
+}
+
+function stopLiveTrackers() {
+  for (const id of liveTrackerIntervals.values()) clearInterval(id);
+  liveTrackerIntervals.clear();
+}
+
+async function fetchLiveTracker(betId) {
+  const el = document.getElementById(`tracker-${betId}`);
+  if (!el) return;
+
+  try {
+    const res = await fetch(`/api/live-tracker/${betId}`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+
+    // Render tracker for single bet
+    if (data.bet) {
+      renderBetTracker(el, data.bet, false);
+    } else if (data.legs && Object.keys(data.legs).length > 0) {
+      // Parlay — render per-leg trackers
+      for (const [legId, legData] of Object.entries(data.legs)) {
+        const legEl = document.getElementById(`leg-tracker-${legId}`);
+        if (legEl) renderBetTracker(legEl, legData, true);
+      }
+      // Clear the main tracker area for parlays (legs have their own)
+      el.innerHTML = '';
+      el.style.display = 'none';
+    } else {
+      el.innerHTML = '<div class="tracker-pregame">Waiting for game to start...</div>';
+    }
+
+    // Stop polling if all games are final
+    const allFinal = checkAllFinal(data);
+    if (allFinal) {
+      const intervalId = liveTrackerIntervals.get(betId);
+      if (intervalId) {
+        clearInterval(intervalId);
+        liveTrackerIntervals.delete(betId);
+      }
+    }
+  } catch (e) {
+    // Silently fail — don't break the ticket
+    el.innerHTML = '';
+  }
+}
+
+function checkAllFinal(data) {
+  if (data.bet && data.bet.state !== 'post') return false;
+  if (data.legs) {
+    for (const leg of Object.values(data.legs)) {
+      if (leg.state !== 'post') return false;
+    }
+  }
+  return true;
+}
+
+function renderBetTracker(el, gameData, isLeg) {
+  if (!gameData) { el.innerHTML = ''; return; }
+
+  const { state, home, away, detail, clock, period, linescores, propTracker } = gameData;
+
+  if (state === 'pre') {
+    el.innerHTML = '<div class="tracker-pregame">Waiting for game to start...</div>';
+    return;
+  }
+
+  const isLive = state === 'in';
+  const isFinal = state === 'post';
+
+  // Status indicator
+  const statusHtml = isLive
+    ? `<span class="tracker-status tracker-live">🔴 LIVE${detail ? ' — ' + esc(detail) : ''}</span>`
+    : `<span class="tracker-status tracker-final">🏁 FINAL</span>`;
+
+  // Score line
+  const scoreHtml = `<div class="tracker-score">${esc(away.abbreviation)} ${away.score} — ${esc(home.abbreviation)} ${home.score}</div>`;
+
+  // Period scores (linescore)
+  let linescoreHtml = '';
+  const homeLS = linescores?.home || [];
+  const awayLS = linescores?.away || [];
+  if (homeLS.length > 0) {
+    const headers = homeLS.map((_, i) => `<th>${i + 1}</th>`).join('');
+    const awayScores = awayLS.map(s => `<td>${s.displayValue || s.value || 0}</td>`).join('');
+    const homeScores = homeLS.map(s => `<td>${s.displayValue || s.value || 0}</td>`).join('');
+    linescoreHtml = `
+      <table class="tracker-linescore">
+        <thead><tr><th></th>${headers}<th>T</th></tr></thead>
+        <tbody>
+          <tr><td class="tracker-team-cell">${esc(away.abbreviation)}</td>${awayScores}<td class="tracker-total-cell">${away.score}</td></tr>
+          <tr><td class="tracker-team-cell">${esc(home.abbreviation)}</td>${homeScores}<td class="tracker-total-cell">${home.score}</td></tr>
+        </tbody>
+      </table>`;
+  }
+
+  // Prop tracker
+  let propHtml = '';
+  if (propTracker) {
+    const pct = propTracker.line > 0 ? Math.round((propTracker.current / propTracker.line) * 100) : 0;
+    const onPace = propTracker.direction === 'over'
+      ? propTracker.current > propTracker.line
+      : propTracker.current < propTracker.line;
+    const paceClass = onPace ? 'tracker-pace-hit' : 'tracker-pace-miss';
+    propHtml = `
+      <div class="tracker-prop">
+        <span class="tracker-prop-name">${esc(propTracker.playerName)}</span>
+        <span class="tracker-prop-stat">${propTracker.current} ${esc(propTracker.stat)}</span>
+        <span class="tracker-prop-line ${paceClass}">${propTracker.direction === 'over' ? 'O' : 'U'} ${propTracker.line}</span>
+        <div class="tracker-prop-bar"><div class="tracker-prop-fill ${paceClass}" style="width:${Math.min(pct, 100)}%"></div></div>
+      </div>`;
+  }
+
+  const compact = isLeg ? ' tracker-compact' : '';
+  el.innerHTML = `
+    <div class="tracker-content${compact}">
+      ${statusHtml}
+      ${scoreHtml}
+      ${linescoreHtml}
+      ${propHtml}
+    </div>`;
 }
 
 // ─── Toggle Stats Panel ─────────

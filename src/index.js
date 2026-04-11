@@ -187,108 +187,400 @@ client.once(Events.ClientReady, (c) => {
     }, 30 * 60_000); // 30 minutes
   }
 
-  // ─── Live Scoreboard Poller [DISABLED] ───
-  // Feature dormant. To re-enable: uncomment this setInterval block and the console.log below it.
-  // Also re-enable: placeholder posting in server.js (~lines 2596, 2687), 📡 button in app.js (~line 2547),
-  //   sidebar link in index.html (~line 84)
-  // Related files: src/services/espn.js, src/utils/scoreboardImage.js, src/database/scoreboards.js
-  /* setInterval(async () => {
+  // ─── Live Bet Tracker & Auto-Close System ───
+  // Polls ESPN for live game data, auto-resolves bets, sends game start notifications
+  const db = require('./database/queries');
+  const { generateBetCardImage } = require('./utils/betCardImage');
+  const { supabase: supa } = require('./config/supabase');
+
+  // Polling tier intervals
+  const FAST_INTERVAL = 30_000;    // 30s — team game bets (NBA, NFL, NHL, etc.)
+  const STANDARD_INTERVAL = 60_000; // 60s — player props (need game summary)
+  const SLOW_INTERVAL = 300_000;   // 5min — golf, tennis, etc.
+  const AUTO_CLOSE_DELAY = 60 * 60_000; // 1 hour
+
+  // Track which bets we've already notified about game start
+  const startNotifiedCache = new Set();
+
+  // ── Game Start Notification Poller (every 60s) ──
+  setInterval(async () => {
     try {
-      const active = await scoreboardDb.getActiveScoreboards();
-      if (active.length === 0) return;
+      // Get all open bets with ESPN game IDs that haven't been start-notified
+      const { data: openBets } = await supa
+        .from('bets')
+        .select('id, discord_id, pick, espn_game_id, sport, start_notified, event_start_time, bet_type, slip_number')
+        .eq('status', 'open')
+        .eq('start_notified', false)
+        .not('espn_game_id', 'is', null);
 
-      for (const sb of active) {
-        try {
-          // Fetch latest game data
-          const games = await espn.getTodaysGames(sb.sport);
-          const game = games.find(g => g.id === sb.espn_game_id);
-          if (!game) continue;
+      if (!openBets?.length) return;
 
-          // Build prop tracking data if there are linked bets
-          let props = [];
-          if (sb.bet_ids && sb.bet_ids.length > 0 && game.state === 'in') {
-            const db = require('./database/queries');
-            const summary = await espn.getGameSummary(sb.sport, sb.espn_game_id);
+      // Also check parlay legs for games about to start
+      const { data: openLegs } = await supa
+        .from('parlay_legs')
+        .select('id, bet_id, pick, espn_game_id, sport, event_start_time')
+        .eq('status', 'open')
+        .not('espn_game_id', 'is', null);
 
-            for (const betId of sb.bet_ids) {
-              try {
-                const bet = await db.getBet(betId);
-                if (!bet) continue;
-
-                // Single bet props
-                if (bet.bet_category === 'player_prop' && bet.player_name && bet.prop_description) {
-                  const parsed = espn.parsePropDescription(bet.prop_description);
-                  if (parsed && summary) {
-                    const playerData = findPlayer(summary.players, bet.player_name);
-                    const currentStat = playerData?.stats?.[parsed.espnKey];
-                    const numStat = parseFloat(currentStat) || 0;
-                    props.push({
-                      playerName: bet.player_name,
-                      direction: parsed.direction,
-                      line: parsed.line,
-                      stat: parsed.stat,
-                      currentStat: numStat,
-                      status: getStatStatus(parsed.direction, parsed.line, numStat, game.state === 'post'),
-                    });
-                  }
-                }
-
-                // Parlay leg props
-                if (bet.parlay_legs) {
-                  for (const leg of bet.parlay_legs) {
-                    if (leg.bet_category === 'player_prop' && leg.player_name && leg.prop_description) {
-                      const parsed = espn.parsePropDescription(leg.prop_description);
-                      if (parsed && summary) {
-                        const playerData = findPlayer(summary.players, leg.player_name);
-                        const currentStat = playerData?.stats?.[parsed.espnKey];
-                        const numStat = parseFloat(currentStat) || 0;
-                        props.push({
-                          playerName: leg.player_name,
-                          direction: parsed.direction,
-                          line: parsed.line,
-                          stat: parsed.stat,
-                          currentStat: numStat,
-                          status: getStatStatus(parsed.direction, parsed.line, numStat, game.state === 'post'),
-                        });
-                      }
-                    }
-                  }
-                }
-              } catch (e) {}
-            }
-          }
-
-          // Generate updated image
-          const imgBuffer = await generateScoreboardImage(game, props);
-          const { AttachmentBuilder } = require('discord.js');
-          const attachment = new AttachmentBuilder(imgBuffer, { name: 'scoreboard.png' });
-
-          // Edit Discord message
-          const channel = await client.channels.fetch(sb.channel_id);
-          const msg = await channel.messages.fetch(sb.message_id);
-          await msg.edit({ files: [attachment] });
-          await scoreboardDb.touchScoreboard(sb.id);
-
-          // If game is final, end the scoreboard
-          if (game.completed || game.state === 'post') {
-            await scoreboardDb.endScoreboard(sb.id);
-            await msg.edit({
-              content: `📡 **Final Score** — ${game.away.abbreviation} ${game.away.score}, ${game.home.abbreviation} ${game.home.score}`,
-              files: [attachment],
-            });
-          }
-        } catch (e) {
-          console.error(`[Scoreboard Poller] Error updating ${sb.id}:`, e.message);
+      // Collect unique sport/gameId combos to check
+      const gameChecks = new Map();
+      for (const bet of openBets) {
+        if (bet.espn_game_id && bet.sport) {
+          const key = `${bet.sport}:${bet.espn_game_id}`;
+          if (!gameChecks.has(key)) gameChecks.set(key, { sport: bet.sport, gameId: bet.espn_game_id });
+        }
+      }
+      for (const leg of (openLegs || [])) {
+        if (leg.espn_game_id && leg.sport) {
+          const key = `${leg.sport}:${leg.espn_game_id}`;
+          if (!gameChecks.has(key)) gameChecks.set(key, { sport: leg.sport, gameId: leg.espn_game_id });
         }
       }
 
-      // Cleanup stale scoreboards
-      await scoreboardDb.cleanupStaleScoreboards();
+      // Batch-fetch scoreboards by sport
+      const sportGames = new Map();
+      const uniqueSports = [...new Set([...gameChecks.values()].map(g => g.sport))];
+      for (const sport of uniqueSports) {
+        try {
+          const games = await espn.getTodaysGames(sport);
+          sportGames.set(sport, games);
+        } catch (e) {}
+      }
+
+      // Check for games that are now live
+      for (const bet of openBets) {
+        if (startNotifiedCache.has(bet.id)) continue;
+        const games = sportGames.get(bet.sport) || [];
+        const game = games.find(g => g.id === bet.espn_game_id);
+        if (!game) continue;
+
+        if (game.state === 'in') {
+          // Game is LIVE — notify user
+          startNotifiedCache.add(bet.id);
+          try {
+            await supa.from('bets').update({ start_notified: true }).eq('id', bet.id);
+            const user = await client.users.fetch(bet.discord_id).catch(() => null);
+            if (user) {
+              await user.send(`🔴 **LIVE** — Your bet \`${bet.slip_number}\` is in play!\n> ${bet.pick}`).catch(() => {});
+            }
+          } catch (e) {
+            console.error('[LiveTracker] Start notification error:', e.message);
+          }
+        }
+      }
     } catch (err) {
-      console.error('[Scoreboard Poller] Error:', err.message);
+      console.error('[LiveTracker] Game start check error:', err.message);
     }
-  }, 60_000); */
-  // console.log('   📡 Scoreboard poller started (60s interval)');
+  }, 60_000);
+  console.log('   🔔 Game start notification poller started (60s interval)');
+
+  // ── Auto-Resolve Poller (every 30s) ──
+  // Checks finished games, resolves single bets and parlay legs, sets auto-close timer
+  setInterval(async () => {
+    try {
+      // Get open single bets with ESPN game IDs
+      const { data: openSingles } = await supa
+        .from('bets')
+        .select('*')
+        .eq('status', 'open')
+        .eq('bet_type', 'single')
+        .not('espn_game_id', 'is', null)
+        .is('auto_close_at', null);
+
+      // Get open parlay legs with ESPN game IDs
+      const { data: openLegs } = await supa
+        .from('parlay_legs')
+        .select('*')
+        .eq('status', 'open')
+        .not('espn_game_id', 'is', null);
+
+      // Collect all unique sport/gameId combos
+      const allItems = [...(openSingles || []), ...(openLegs || [])];
+      if (allItems.length === 0) return;
+
+      const sportSet = new Set();
+      for (const item of allItems) {
+        if (item.sport) sportSet.add(item.sport);
+      }
+
+      // Fetch scoreboards
+      const sportGames = new Map();
+      for (const sport of sportSet) {
+        try {
+          const games = await espn.getTodaysGames(sport);
+          sportGames.set(sport, games);
+        } catch (e) {}
+      }
+
+      // Cache game summaries (for props/HR resolution)
+      const summaryCache = new Map();
+      async function getSummary(sport, gameId) {
+        const key = `${sport}:${gameId}`;
+        if (summaryCache.has(key)) return summaryCache.get(key);
+        const summary = await espn.getGameSummary(sport, gameId);
+        summaryCache.set(key, summary);
+        return summary;
+      }
+
+      // ── Resolve single bets ──
+      for (const bet of (openSingles || [])) {
+        const games = sportGames.get(bet.sport) || [];
+        const game = games.find(g => g.id === bet.espn_game_id);
+        if (!game || game.state !== 'post') continue;
+
+        // Get summary if needed for props/HR
+        let summary = null;
+        if (['prop', 'homerun'].includes(bet.wager_type)) {
+          summary = await getSummary(bet.sport, bet.espn_game_id);
+        }
+
+        const result = espn.resolveResult({
+          wagerType: bet.wager_type,
+          pick: bet.pick,
+          teamA: bet.team_a,
+          teamB: bet.team_b,
+          spreadValue: bet.spread_value,
+          playerName: bet.player_name,
+          propDescription: bet.prop_description,
+          sport: bet.sport,
+          game,
+          summary,
+          period: bet.period,
+        });
+
+        if (result) {
+          // Set auto-close timer (1 hour from now)
+          const autoCloseAt = new Date(Date.now() + AUTO_CLOSE_DELAY).toISOString();
+          await supa.from('bets').update({
+            auto_close_at: autoCloseAt,
+            result_note: `Auto-resolved: ${result} (ESPN ${bet.espn_game_id})`,
+          }).eq('id', bet.id);
+
+          // Notify user
+          try {
+            const user = await client.users.fetch(bet.discord_id).catch(() => null);
+            if (user) {
+              const emoji = result === 'win' ? '✅' : result === 'loss' ? '❌' : '🔄';
+              const scoreText = `${game.away.abbreviation} ${game.away.score} — ${game.home.abbreviation} ${game.home.score}`;
+              await user.send(
+                `🏁 **Game Over** — ${scoreText}\n${emoji} \`${bet.slip_number}\` looks like a **${result.toUpperCase()}**!\n> ${bet.pick}\n\n⏰ Auto-closing in 1 hour. Close manually with \`/closebet\` to override.`
+              ).catch(() => {});
+            }
+          } catch (e) {}
+
+          console.log(`[LiveTracker] Single bet ${bet.slip_number} auto-resolved: ${result}`);
+        }
+      }
+
+      // ── Resolve parlay legs ──
+      const parlayBetsToCheck = new Set();
+      for (const leg of (openLegs || [])) {
+        const games = sportGames.get(leg.sport) || [];
+        const game = games.find(g => g.id === leg.espn_game_id);
+        if (!game || game.state !== 'post') continue;
+
+        let summary = null;
+        if (['prop', 'homerun'].includes(leg.wager_type)) {
+          summary = await getSummary(leg.sport, leg.espn_game_id);
+        }
+
+        const result = espn.resolveResult({
+          wagerType: leg.wager_type,
+          pick: leg.pick,
+          teamA: leg.team_a,
+          teamB: leg.team_b,
+          spreadValue: leg.spread_value,
+          playerName: leg.player_name,
+          propDescription: leg.prop_description,
+          sport: leg.sport,
+          game,
+          summary,
+          period: leg.period,
+        });
+
+        if (result) {
+          await db.updateParlayLegStatus(leg.id, result);
+          parlayBetsToCheck.add(leg.bet_id);
+          console.log(`[LiveTracker] Parlay leg ${leg.id} resolved: ${result}`);
+        }
+      }
+
+      // ── Check if any parlays are fully resolved ──
+      for (const betId of parlayBetsToCheck) {
+        try {
+          const bet = await db.getBet(betId);
+          if (!bet || bet.status !== 'open') continue;
+
+          const legs = bet.parlay_legs || [];
+          const allResolved = legs.every(l => l.status !== 'open');
+          if (!allResolved) continue;
+
+          // Determine overall parlay result
+          const hasLoss = legs.some(l => l.status === 'loss');
+          const allWinOrPush = legs.every(l => l.status === 'win' || l.status === 'push');
+          const allVoid = legs.every(l => l.status === 'void');
+
+          let parlayResult;
+          if (hasLoss) parlayResult = 'loss';
+          else if (allVoid) parlayResult = 'void';
+          else if (allWinOrPush) parlayResult = 'win';
+          else parlayResult = 'loss'; // Shouldn't hit but safety
+
+          // Set auto-close timer
+          const autoCloseAt = new Date(Date.now() + AUTO_CLOSE_DELAY).toISOString();
+          await supa.from('bets').update({
+            auto_close_at: autoCloseAt,
+            result_note: `Auto-resolved: ${parlayResult} (all ${legs.length} legs resolved)`,
+          }).eq('id', betId);
+
+          // Notify user
+          try {
+            const user = await client.users.fetch(bet.discord_id).catch(() => null);
+            if (user) {
+              const emoji = parlayResult === 'win' ? '✅' : parlayResult === 'loss' ? '❌' : '🔄';
+              const legSummary = legs.map(l => {
+                const le = l.status === 'win' ? '✅' : l.status === 'loss' ? '❌' : '🔄';
+                return `${le} ${l.pick}`;
+              }).join('\n');
+              await user.send(
+                `🏁 **All Legs Complete** — \`${bet.slip_number}\`\n${emoji} Parlay looks like a **${parlayResult.toUpperCase()}**!\n\n${legSummary}\n\n⏰ Auto-closing in 1 hour. Close manually with \`/closebet\` to override.`
+              ).catch(() => {});
+            }
+          } catch (e) {}
+
+          console.log(`[LiveTracker] Parlay ${bet.slip_number} all legs resolved: ${parlayResult}`);
+        } catch (e) {
+          console.error('[LiveTracker] Parlay check error:', e.message);
+        }
+      }
+    } catch (err) {
+      console.error('[LiveTracker] Auto-resolve error:', err.message);
+    }
+  }, FAST_INTERVAL);
+  console.log('   📡 Live bet tracker & auto-resolve started (30s interval)');
+
+  // ── Auto-Close Timer (every 60s) ──
+  // Closes bets whose 1-hour grace period has expired
+  setInterval(async () => {
+    try {
+      const now = new Date().toISOString();
+      const { data: pendingBets } = await supa
+        .from('bets')
+        .select('*, parlay_legs(*)')
+        .eq('status', 'open')
+        .not('auto_close_at', 'is', null)
+        .lte('auto_close_at', now);
+
+      if (!pendingBets?.length) return;
+
+      for (const bet of pendingBets) {
+        try {
+          let result;
+          if (bet.bet_type === 'parlay') {
+            const legs = bet.parlay_legs || [];
+            const hasLoss = legs.some(l => l.status === 'loss');
+            const allWinOrPush = legs.every(l => l.status === 'win' || l.status === 'push');
+            const allVoid = legs.every(l => l.status === 'void');
+            if (hasLoss) result = 'loss';
+            else if (allVoid) result = 'void';
+            else if (allWinOrPush) result = 'win';
+            else result = 'loss';
+          } else {
+            // Single bet — parse result from result_note
+            const match = bet.result_note?.match(/Auto-resolved: (\w+)/);
+            result = match?.[1] || null;
+          }
+
+          if (!result) continue;
+
+          // Close the bet
+          await db.closeBet(bet.id, result, bet.result_note);
+
+          // Close any remaining open parlay legs with same status
+          if (bet.bet_type === 'parlay') {
+            for (const leg of (bet.parlay_legs || [])) {
+              if (leg.status === 'open') {
+                await db.updateParlayLegStatus(leg.id, result);
+              }
+            }
+          }
+
+          // Clear auto_close_at
+          await supa.from('bets').update({ auto_close_at: null }).eq('id', bet.id);
+
+          // Update Discord message
+          try {
+            const fullBet = await db.getBet(bet.id);
+            const guild = client.guilds.cache.get(bet.guild_id);
+            let displayName = bet.discord_id;
+            if (guild) {
+              const member = await guild.members.fetch(bet.discord_id).catch(() => null);
+              displayName = member?.displayName || bet.discord_id;
+            }
+            const avatar = (await client.users.fetch(bet.discord_id).catch(() => null))?.displayAvatarURL() || '';
+
+            const imgBuffer = await generateBetCardImage(fullBet, displayName, avatar);
+            const { AttachmentBuilder } = require('discord.js');
+            const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+
+            const channel = await client.channels.fetch(bet.channel_id).catch(() => null);
+            if (channel && bet.message_id) {
+              const msg = await channel.messages.fetch(bet.message_id).catch(() => null);
+              if (msg) {
+                if (result === 'win') {
+                  // Delete old message, post fresh one
+                  await msg.delete().catch(() => {});
+                  const newMsg = await channel.send({
+                    content: `✅ **AUTO-CLOSED** — ${displayName}'s bet \`${bet.slip_number}\` is a **WIN**!`,
+                    files: [attachment],
+                  });
+                  await db.updateBetMessageId(bet.id, newMsg.id);
+                } else {
+                  await msg.edit({ files: [attachment], components: [] }).catch(() => {});
+                }
+              }
+            }
+
+            // Delete mirror message if exists
+            if (bet.mirror_channel_id && bet.mirror_message_id) {
+              try {
+                const mirrorChannel = await client.channels.fetch(bet.mirror_channel_id);
+                const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+                await mirrorMsg.delete();
+              } catch (e) {}
+              await supa.from('bets').update({ mirror_message_id: null }).eq('id', bet.id);
+            }
+          } catch (e) {
+            console.error(`[AutoClose] Discord update error for ${bet.slip_number}:`, e.message);
+          }
+
+          // Recalculate roles
+          if (guildId) {
+            try {
+              const guild = await client.guilds.fetch(guildId);
+              await roleManager.recalculateRoles(guild);
+            } catch (e) {}
+          }
+
+          // Notify user
+          try {
+            const user = await client.users.fetch(bet.discord_id).catch(() => null);
+            if (user) {
+              const emoji = result === 'win' ? '✅' : result === 'loss' ? '❌' : '🔄';
+              await user.send(`${emoji} **Auto-closed** \`${bet.slip_number}\` as **${result.toUpperCase()}**`).catch(() => {});
+            }
+          } catch (e) {}
+
+          console.log(`[AutoClose] Bet ${bet.slip_number} auto-closed as ${result}`);
+        } catch (e) {
+          console.error(`[AutoClose] Error closing ${bet.slip_number}:`, e.message);
+        }
+      }
+    } catch (err) {
+      console.error('[AutoClose] Timer error:', err.message);
+    }
+  }, 60_000);
+  console.log('   ⏰ Auto-close timer started (60s interval, 1hr grace period)');
 
   // ─── AI Pick of the Day Scheduler ───
   const AI_GUILD_ID = process.env.DISCORD_GUILD_ID;

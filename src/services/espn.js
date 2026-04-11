@@ -149,6 +149,13 @@ async function getTodaysGames(sport, dateStr) {
           spread: comp.odds[0].details || '',
           overUnder: comp.odds[0].overUnder || null,
         } : null,
+        // Linescores for inning/quarter tracking
+        linescores: {
+          home: home.linescores || [],
+          away: away.linescores || [],
+        },
+        // Raw event for advanced access
+        _raw: event,
       };
     }).filter(Boolean);
 
@@ -358,6 +365,300 @@ function parsePropDescription(propDesc) {
   return { direction, line, stat: statName, espnKey };
 }
 
+/**
+ * Resolve ESPN game ID for a bet based on team names, sport, and date.
+ * Tries the event_start_time date first, then today.
+ * @param {string} sport - Our internal sport key
+ * @param {string} teamA - Team A name
+ * @param {string} teamB - Team B name (optional)
+ * @param {string} [eventStartTime] - ISO/free-text start time (used to derive date)
+ * @returns {Object|null} { gameId, game } or null
+ */
+async function resolveGameId(sport, teamA, teamB, eventStartTime) {
+  if (!sport || !teamA) return null;
+
+  // Derive date string from eventStartTime if possible
+  let dateStr = null;
+  if (eventStartTime) {
+    try {
+      const d = new Date(eventStartTime);
+      if (!isNaN(d.getTime())) {
+        // Use ET date
+        dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+      }
+    } catch {}
+  }
+
+  // Fetch games for the sport on that date (or today)
+  const games = await getTodaysGames(sport, dateStr || undefined);
+  if (!games.length) return null;
+
+  // Try matching teamA first
+  let game = matchTeamToGame(teamA, games);
+  // If no match and teamB exists, try teamB
+  if (!game && teamB) {
+    game = matchTeamToGame(teamB, games);
+  }
+
+  if (game) return { gameId: game.id, game };
+  return null;
+}
+
+/**
+ * Auto-resolve a bet or parlay leg result based on ESPN final game data.
+ * Returns the computed result or null if unresolvable.
+ *
+ * @param {Object} params
+ * @param {string} params.wagerType - moneyline, spread, total, etc.
+ * @param {string} params.pick - The pick text (e.g., "Lakers -4.5", "Over 220.5")
+ * @param {string} params.teamA - Team A name
+ * @param {string} params.teamB - Team B name
+ * @param {number|null} params.spreadValue - Spread/line value
+ * @param {string|null} params.playerName - For player props
+ * @param {string|null} params.propDescription - For player props (e.g., "Over 25.5 Points")
+ * @param {string} params.sport - Sport key
+ * @param {Object} params.game - ESPN game object (from scoreboard, must be state='post')
+ * @param {Object} [params.summary] - ESPN game summary (needed for player props / HR)
+ * @param {string} [params.period] - Period for the bet (full_game, first_3, first_5, 1st_half, etc.)
+ * @returns {string|null} 'win', 'loss', 'push', or null if can't determine
+ */
+function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName, propDescription, sport, game, summary, period }) {
+  if (!game || game.state !== 'post') return null;
+
+  const homeScore = game.home?.score ?? 0;
+  const awayScore = game.away?.score ?? 0;
+
+  // Determine which team the user picked (home or away)
+  const pickTeamSide = identifyPickSide(pick, teamA, teamB, game);
+
+  switch (wagerType) {
+    case 'moneyline': {
+      if (!pickTeamSide) return null;
+      const pickScore = pickTeamSide === 'home' ? homeScore : awayScore;
+      const oppScore = pickTeamSide === 'home' ? awayScore : homeScore;
+      if (pickScore > oppScore) return 'win';
+      if (pickScore < oppScore) return 'loss';
+      return 'push';
+    }
+
+    case 'spread': {
+      if (!pickTeamSide || spreadValue == null) return null;
+      const pickScore = pickTeamSide === 'home' ? homeScore : awayScore;
+      const oppScore = pickTeamSide === 'home' ? awayScore : homeScore;
+      const adjusted = pickScore + parseFloat(spreadValue);
+      if (adjusted > oppScore) return 'win';
+      if (adjusted < oppScore) return 'loss';
+      return 'push';
+    }
+
+    case 'total': {
+      if (spreadValue == null) return null;
+      const totalScore = homeScore + awayScore;
+      const line = parseFloat(spreadValue);
+      const isOver = /over/i.test(pick);
+      if (isOver && totalScore > line) return 'win';
+      if (isOver && totalScore < line) return 'loss';
+      if (!isOver && totalScore < line) return 'win';
+      if (!isOver && totalScore > line) return 'loss';
+      return 'push';
+    }
+
+    case 'team_total': {
+      if (spreadValue == null || !pickTeamSide) return null;
+      const teamScore = pickTeamSide === 'home' ? homeScore : awayScore;
+      const line = parseFloat(spreadValue);
+      const isOver = /over/i.test(pick);
+      if (isOver && teamScore > line) return 'win';
+      if (isOver && teamScore < line) return 'loss';
+      if (!isOver && teamScore < line) return 'win';
+      if (!isOver && teamScore > line) return 'loss';
+      return 'push';
+    }
+
+    case 'nrfi': {
+      // NRFI = No Run First Inning — need linescore
+      const linescores = getLinescores(game);
+      if (!linescores) return null;
+      const homeR1 = parseFloat(linescores.home?.[0]?.displayValue || linescores.home?.[0]?.value || '0');
+      const awayR1 = parseFloat(linescores.away?.[0]?.displayValue || linescores.away?.[0]?.value || '0');
+      return (homeR1 === 0 && awayR1 === 0) ? 'win' : 'loss';
+    }
+
+    case 'yrfi': {
+      const linescores = getLinescores(game);
+      if (!linescores) return null;
+      const homeR1 = parseFloat(linescores.home?.[0]?.displayValue || linescores.home?.[0]?.value || '0');
+      const awayR1 = parseFloat(linescores.away?.[0]?.displayValue || linescores.away?.[0]?.value || '0');
+      return (homeR1 > 0 || awayR1 > 0) ? 'win' : 'loss';
+    }
+
+    case 'homerun': {
+      // Need box score for HR data
+      if (!summary) return null;
+      const totalHRs = countGameHomers(summary);
+      if (totalHRs === null) return null;
+
+      // Yes/No HR bet
+      if (/^yes\b/i.test(pick)) return totalHRs > 0 ? 'win' : 'loss';
+      if (/^no\b/i.test(pick)) return totalHRs === 0 ? 'win' : 'loss';
+
+      // Over/Under HR bet
+      if (spreadValue != null) {
+        const line = parseFloat(spreadValue);
+        const isOver = /over/i.test(pick);
+        if (isOver && totalHRs > line) return 'win';
+        if (isOver && totalHRs < line) return 'loss';
+        if (!isOver && totalHRs < line) return 'win';
+        if (!isOver && totalHRs > line) return 'loss';
+        return 'push';
+      }
+      return null;
+    }
+
+    case 'prop': {
+      // Player prop — need game summary with box score
+      if (!summary || !playerName || !propDescription) return null;
+      const parsed = parsePropDescription(propDescription);
+      if (!parsed) return null;
+
+      const playerData = findPlayer(summary.players, playerName);
+      if (!playerData) return null;
+
+      const statVal = parseFloat(playerData.stats?.[parsed.espnKey]) || 0;
+      if (parsed.direction === 'over') {
+        if (statVal > parsed.line) return 'win';
+        if (statVal < parsed.line) return 'loss';
+        return 'push';
+      } else {
+        if (statVal < parsed.line) return 'win';
+        if (statVal > parsed.line) return 'loss';
+        return 'push';
+      }
+    }
+
+    case 'double_chance': {
+      // Pick covers 2 of 3 outcomes — e.g., "Home/Draw", "Away/Draw", "Home/Away"
+      if (homeScore > awayScore) {
+        return /home|1/i.test(pick) ? 'win' : 'loss';
+      } else if (awayScore > homeScore) {
+        return /away|2/i.test(pick) ? 'win' : 'loss';
+      } else {
+        // Draw
+        return /draw|x/i.test(pick) ? 'win' : 'loss';
+      }
+    }
+
+    case 'draw_no_bet': {
+      if (homeScore === awayScore) return 'push'; // Draw = push
+      if (!pickTeamSide) return null;
+      const pickScore = pickTeamSide === 'home' ? homeScore : awayScore;
+      const oppScore = pickTeamSide === 'home' ? awayScore : homeScore;
+      return pickScore > oppScore ? 'win' : 'loss';
+    }
+
+    case 'futures':
+      return null; // Cannot auto-resolve futures
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * Identify which side (home/away) the user's pick is on
+ */
+function identifyPickSide(pick, teamA, teamB, game) {
+  if (!pick || !game) return null;
+
+  const pickLower = pick.toLowerCase();
+  const homeNames = [
+    game.home.name?.toLowerCase(),
+    game.home.abbreviation?.toLowerCase(),
+    game.home.shortName?.toLowerCase(),
+  ].filter(Boolean);
+  const awayNames = [
+    game.away.name?.toLowerCase(),
+    game.away.abbreviation?.toLowerCase(),
+    game.away.shortName?.toLowerCase(),
+  ].filter(Boolean);
+
+  // Also check teamA/teamB against game sides
+  if (teamA) {
+    const tA = teamA.toLowerCase();
+    if (homeNames.some(n => n.includes(tA) || tA.includes(n))) {
+      // teamA is home — check if pick mentions teamA
+      if (pickLower.includes(tA) || homeNames.some(n => pickLower.includes(n))) return 'home';
+    }
+    if (awayNames.some(n => n.includes(tA) || tA.includes(n))) {
+      if (pickLower.includes(tA) || awayNames.some(n => pickLower.includes(n))) return 'away';
+    }
+  }
+  if (teamB) {
+    const tB = teamB.toLowerCase();
+    if (homeNames.some(n => n.includes(tB) || tB.includes(n))) {
+      if (pickLower.includes(tB) || homeNames.some(n => pickLower.includes(n))) return 'home';
+    }
+    if (awayNames.some(n => n.includes(tB) || tB.includes(n))) {
+      if (pickLower.includes(tB) || awayNames.some(n => pickLower.includes(n))) return 'away';
+    }
+  }
+
+  // Direct pick text match
+  if (homeNames.some(n => pickLower.includes(n))) return 'home';
+  if (awayNames.some(n => pickLower.includes(n))) return 'away';
+
+  return null;
+}
+
+/**
+ * Extract linescore data from a game object
+ */
+function getLinescores(game) {
+  // Direct linescores from our parsed object
+  if (game.linescores && (game.linescores.home?.length || game.linescores.away?.length)) {
+    return game.linescores;
+  }
+  // Fallback to raw event
+  if (!game._raw) return null;
+  const comp = game._raw?.competitions?.[0];
+  if (!comp) return null;
+  const home = comp.competitors?.find(c => c.homeAway === 'home');
+  const away = comp.competitors?.find(c => c.homeAway === 'away');
+  return {
+    home: home?.linescores || [],
+    away: away?.linescores || [],
+  };
+}
+
+/**
+ * Count total home runs in a game from ESPN box score summary
+ */
+function countGameHomers(summary) {
+  if (!summary?.players) return null;
+  let total = 0;
+  for (const key of Object.keys(summary.players)) {
+    const player = summary.players[key];
+    if (player?.stats?.hr) {
+      total += parseInt(player.stats.hr) || 0;
+    }
+  }
+  return total;
+}
+
+/**
+ * Find player in game summary players object (fuzzy)
+ */
+function findPlayer(players, playerName) {
+  if (!players || !playerName) return null;
+  const norm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+  if (players[norm]) return players[norm];
+  for (const key of Object.keys(players)) {
+    if (typeof key === 'string' && key.includes(norm)) return players[key];
+    if (typeof key === 'string' && norm.includes(key)) return players[key];
+  }
+  return null;
+}
+
 module.exports = {
   ESPN_PATHS,
   getTodaysGames,
@@ -365,5 +666,9 @@ module.exports = {
   getAllTodaysGames,
   matchTeamToGame,
   parsePropDescription,
+  resolveGameId,
+  resolveResult,
+  identifyPickSide,
+  findPlayer,
   STAT_MAP,
 };
