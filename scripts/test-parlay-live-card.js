@@ -11,41 +11,73 @@ const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
 const espn = require('../src/services/espn');
 const originalGetGameSummary = espn.getGameSummary;
 
-// Mock live scores for the 4 NRFI legs (using actual ESPN game IDs from THE-065)
-const MOCK_SCORES = {
-  // MIA @ DET — Top 3rd, 0-0 (NRFI looking good)
+// Mock game summaries with linescores for the 4 NRFI legs
+const MOCK_SUMMARIES = {
+  // MIA @ DET — Top 3rd, 0-0 in 1st inning (NRFI win — 1st inning complete, 0-0)
   '401814895': {
-    home: { abbreviation: 'DET', name: 'Tigers', score: 0 },
+    home: { abbreviation: 'DET', name: 'Tigers', score: 1 },
     away: { abbreviation: 'MIA', name: 'Marlins', score: 0 },
     state: 'in',
+    period: 3,
     detail: 'Top 3rd',
+    linescores: {
+      home: [{ displayValue: '0' }, { displayValue: '1' }],
+      away: [{ displayValue: '0' }, { displayValue: '0' }],
+    },
   },
-  // PIT @ CHC — Bot 5th, 2-1 (NRFI already resolved, run scored in 3rd)
+  // PIT @ CHC — Bot 5th, 1st inning had runs (NRFI loss)
   '401814901': {
-    home: { abbreviation: 'CHC', name: 'Cubs', score: 2 },
-    away: { abbreviation: 'PIT', name: 'Pirates', score: 1 },
+    home: { abbreviation: 'CHC', name: 'Cubs', score: 3 },
+    away: { abbreviation: 'PIT', name: 'Pirates', score: 2 },
     state: 'in',
+    period: 5,
     detail: 'Bot 5th',
+    linescores: {
+      home: [{ displayValue: '1' }, { displayValue: '0' }, { displayValue: '2' }, { displayValue: '0' }],
+      away: [{ displayValue: '0' }, { displayValue: '1' }, { displayValue: '0' }, { displayValue: '1' }],
+    },
   },
-  // MIN @ TOR — Top 1st (just started)
+  // MIN @ TOR — Top 1st (just started, no 1st inning data yet)
   '401814896': {
     home: { abbreviation: 'TOR', name: 'Blue Jays', score: 0 },
     away: { abbreviation: 'MIN', name: 'Twins', score: 0 },
     state: 'in',
+    period: 1,
     detail: 'Top 1st',
+    linescores: {
+      home: [],
+      away: [],
+    },
   },
-  // ARI @ PHI — Final 3-2 
+  // ARI @ PHI — Final, 1st inning was 0-0 (NRFI win)
   '401814892': {
     home: { abbreviation: 'PHI', name: 'Phillies', score: 3 },
     away: { abbreviation: 'ARI', name: 'D-backs', score: 2 },
     state: 'post',
+    period: 9,
     detail: 'Final',
+    linescores: {
+      home: [{ displayValue: '0' }, { displayValue: '0' }, { displayValue: '2' }, { displayValue: '0' }, { displayValue: '1' }, { displayValue: '0' }, { displayValue: '0' }, { displayValue: '0' }, { displayValue: '0' }],
+      away: [{ displayValue: '0' }, { displayValue: '0' }, { displayValue: '0' }, { displayValue: '1' }, { displayValue: '0' }, { displayValue: '0' }, { displayValue: '1' }, { displayValue: '0' }, { displayValue: '0' }],
+    },
   },
+};
+
+// Correct leg statuses based on mock data:
+// MIA@DET: 1st inning 0-0, game in 3rd → NRFI win
+// PIT@CHC: 1st inning CHC 1, PIT 0 → NRFI loss (run scored)
+// MIN@TOR: still in 1st inning → open (unresolved)
+// ARI@PHI: 1st inning 0-0, game final → NRFI win
+const LEG_STATUSES = {
+  '401814895': 'win',
+  '401814901': 'loss',
+  '401814896': 'open',
+  '401814892': 'win',
 };
 
 // Override getGameSummary to return mock data
 espn.getGameSummary = async function(sport, gameId) {
-  if (MOCK_SCORES[gameId]) return MOCK_SCORES[gameId];
+  if (MOCK_SUMMARIES[gameId]) return MOCK_SUMMARIES[gameId];
   return originalGetGameSummary(sport, gameId);
 };
 
@@ -69,7 +101,12 @@ const TEST_CHANNEL = '1471170078161764578';
     }
 
     console.log(`Found ${bet.slip_number}: ${bet.parlay_legs.length} legs, status=${bet.status}`);
+    
+    // Override leg statuses with mock-correct values
     for (const leg of bet.parlay_legs) {
+      if (LEG_STATUSES[leg.espn_game_id]) {
+        leg.status = LEG_STATUSES[leg.espn_game_id];
+      }
       console.log(`  Leg: ${leg.pick} | espn_game_id=${leg.espn_game_id} | status=${leg.status}`);
     }
 

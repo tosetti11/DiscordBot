@@ -122,11 +122,46 @@ function wrapText(ctx, text, maxWidth) {
 }
 
 // ── Live score helper ──────────────────────────────────────
-async function fetchLiveScore(sport, espnGameId) {
+async function fetchLiveScore(sport, espnGameId, wagerType) {
   if (!espnGameId || !sport) return null;
   try {
     const summary = await getGameSummary(sport, espnGameId);
     if (!summary || !summary.home) return null;
+
+    const isNrfi = wagerType === 'nrfi' || wagerType === 'yrfi';
+
+    if (isNrfi) {
+      // NRFI/YRFI: show only 1st inning runs
+      const homeInning1 = summary.linescores?.home?.[0];
+      const awayInning1 = summary.linescores?.away?.[0];
+      if (!homeInning1 && !awayInning1) {
+        // No 1st inning data yet — game hasn't started or no linescore
+        return {
+          homeAbbr: summary.home.abbreviation || summary.home.name || '',
+          awayAbbr: summary.away.abbreviation || summary.away.name || '',
+          homeScore: '-',
+          awayScore: '-',
+          state: summary.state || 'pre',
+          detail: summary.detail || '',
+          isNrfi: true,
+        };
+      }
+      const homeR1 = parseFloat(homeInning1?.displayValue || homeInning1?.value || '0');
+      const awayR1 = parseFloat(awayInning1?.displayValue || awayInning1?.value || '0');
+      // Determine if 1st inning is complete (game past inning 1)
+      const inning = summary.period || 0;
+      const firstInningDone = inning > 1 || summary.state === 'post';
+      return {
+        homeAbbr: summary.home.abbreviation || summary.home.name || '',
+        awayAbbr: summary.away.abbreviation || summary.away.name || '',
+        homeScore: homeR1,
+        awayScore: awayR1,
+        state: summary.state || 'pre',
+        detail: firstInningDone ? '1st Inn Complete' : summary.detail || '',
+        isNrfi: true,
+      };
+    }
+
     return {
       homeAbbr: summary.home.abbreviation || summary.home.name || '',
       awayAbbr: summary.away.abbreviation || summary.away.name || '',
@@ -168,7 +203,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (isGolf && bet.player_name) {
       golfData = bet._golfData || await getGolfPlayerRound(bet.player_name, bet.golf_round || null);
     } else {
-      singleLiveScore = bet._liveScore || await fetchLiveScore(bet.sport, bet.espn_game_id);
+      singleLiveScore = bet._liveScore || await fetchLiveScore(bet.sport, bet.espn_game_id, bet.wager_type);
     }
   }
   if (isParlay && bet.parlay_legs?.length) {
@@ -176,7 +211,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       bet.parlay_legs.map(leg => {
         if (!leg.espn_game_id) return null;
         if (leg.sport?.startsWith('golf') && leg.player_name) return null; // handled by legGolfData
-        return fetchLiveScore(leg.sport, leg.espn_game_id);
+        return fetchLiveScore(leg.sport, leg.espn_game_id, leg.wager_type);
       })
     );
     legGolfData = await Promise.all(
@@ -582,7 +617,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 24, 5);
       ctx.fillStyle = scBg;
       ctx.fill();
-      const scoreStr = `${singleLiveScore.awayAbbr} ${singleLiveScore.awayScore}  —  ${singleLiveScore.homeAbbr} ${singleLiveScore.homeScore}`;
+      const prefix = singleLiveScore.isNrfi ? '1st: ' : '';
+      const scoreStr = `${prefix}${singleLiveScore.awayAbbr} ${singleLiveScore.awayScore}  —  ${singleLiveScore.homeAbbr} ${singleLiveScore.homeScore}`;
       ctx.font = 'bold 12px ' + FF;
       ctx.fillStyle = isLive ? C.win : C.textSecondary;
       ctx.fillText(scoreStr, LEFT_BAR + PAD + 6, curY + 18);
@@ -719,7 +755,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       const legLs = legLiveScores[i];
       if (legLs && legLs.state !== 'pre') {
         const isLegLive = legLs.state === 'in';
-        const legScoreStr = `${legLs.awayAbbr} ${legLs.awayScore} — ${legLs.homeAbbr} ${legLs.homeScore}  ${legLs.detail || ''}`;
+        const prefix = legLs.isNrfi ? '1st: ' : '';
+        const legScoreStr = `${prefix}${legLs.awayAbbr} ${legLs.awayScore} — ${legLs.homeAbbr} ${legLs.homeScore}  ${legLs.detail || ''}`;
         ctx.font = 'bold 10px ' + FF;
         ctx.fillStyle = isLegLive ? C.win : C.textMuted;
         ctx.fillText(legScoreStr, legX, curY + 12);
