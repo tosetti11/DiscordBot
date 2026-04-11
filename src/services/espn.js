@@ -322,9 +322,9 @@ const STAT_MAP = {
   'points': 'pts',
   'rebounds': 'reb',
   'assists': 'ast',
-  '3-pointers': 'fg3',
-  '3 pointers': 'fg3',
-  'threes': 'fg3',
+  '3-pointers': '3pt',
+  '3 pointers': '3pt',
+  'threes': '3pt',
   'steals': 'stl',
   'blocks': 'blk',
   'turnovers': 'to',
@@ -335,20 +335,27 @@ const STAT_MAP = {
   'touchdowns': 'td',
   'interceptions': 'int',
   'completions': 'cmp',
-  // Baseball
+  // Baseball (ESPN keys)
   'strikeouts': 'k',
   'hits': 'h',
   'home runs': 'hr',
   'rbis': 'rbi',
   'runs': 'r',
-  'total bases': 'tb',
-  'stolen bases': 'sb',
   'walks': 'bb',
+  // Baseball (MLB Stats API keys — not in ESPN box score)
+  'total bases': 'totalBases',
+  'stolen bases': 'stolenBases',
+  'doubles': 'doubles',
+  'triples': 'triples',
+  'caught stealing': 'caughtStealing',
   // Hockey
   'goals': 'g',
   'saves': 'sv',
   'shots': 'sog',
 };
+
+// Stats that require MLB Stats API (not available in ESPN box score)
+const MLB_API_STATS = new Set(['totalBases', 'stolenBases', 'doubles', 'triples', 'caughtStealing']);
 
 /**
  * Parse a prop description into structured data
@@ -563,7 +570,26 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       const playerData = findPlayer(summary.players, playerName);
       if (!playerData) return null;
 
-      const statVal = parseFloat(playerData.stats?.[parsed.espnKey]) || 0;
+      let statVal;
+      const rawStat = playerData.stats?.[parsed.espnKey];
+
+      // Handle "made-attempted" format (e.g. NBA 3pt: "3-7")
+      if (typeof rawStat === 'string' && rawStat.includes('-') && /^\d+-\d+$/.test(rawStat)) {
+        statVal = parseFloat(rawStat.split('-')[0]) || 0;
+      } else {
+        statVal = parseFloat(rawStat) || 0;
+      }
+
+      // If ESPN doesn't have this stat and it's an MLB game, try MLB Stats API
+      if (statVal === 0 && MLB_API_STATS.has(parsed.espnKey) && ['mlb', 'kbo', 'npb'].includes(sport)) {
+        // Will be resolved by the poller which passes mlbPlayerStats
+        if (summary._mlbStats) {
+          statVal = parseFloat(summary._mlbStats[parsed.espnKey]) || 0;
+        } else {
+          return null; // Can't resolve yet — need MLB API data
+        }
+      }
+
       if (parsed.direction === 'over') {
         if (statVal > parsed.line) return 'win';
         if (statVal < parsed.line) return 'loss';
@@ -779,6 +805,93 @@ async function getGolfPlayerRound(playerName, roundNum) {
   }
 }
 
+// ── MLB Stats API (free, no auth) ──────────────────────────
+// Used for stats ESPN doesn't provide: totalBases, stolenBases, doubles, triples
+const MLB_API_TTL = 60_000; // 60s cache
+
+/**
+ * Find the MLB Stats API gamePk for a game using ESPN game ID or team names.
+ * @param {string} espnGameId - ESPN event ID
+ * @param {string} dateStr - YYYYMMDD date
+ * @param {string} [teamA] - Team name for matching
+ * @param {string} [teamB] - Team name for matching
+ * @returns {number|null} MLB gamePk
+ */
+async function findMlbGamePk(espnGameId, dateStr, teamA, teamB) {
+  const ds = dateStr || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const cacheKey = `mlb-schedule:${ds}`;
+  let games;
+  const cached = getCached(cacheKey, MLB_API_TTL);
+  if (cached) {
+    games = cached;
+  } else {
+    try {
+      const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${ds}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const json = await res.json();
+      games = json.dates?.[0]?.games || [];
+      setCache(cacheKey, games);
+    } catch { return null; }
+  }
+  if (!games.length) return null;
+
+  // Match by team name
+  const needle = (teamA || '').toLowerCase();
+  const needle2 = (teamB || '').toLowerCase();
+  for (const g of games) {
+    const home = (g.teams?.home?.team?.name || '').toLowerCase();
+    const away = (g.teams?.away?.team?.name || '').toLowerCase();
+    if (needle && (home.includes(needle) || away.includes(needle) || needle.includes(home.split(' ').pop()) || needle.includes(away.split(' ').pop()))) return g.gamePk;
+    if (needle2 && (home.includes(needle2) || away.includes(needle2) || needle2.includes(home.split(' ').pop()) || needle2.includes(away.split(' ').pop()))) return g.gamePk;
+  }
+  return games.length === 1 ? games[0].gamePk : null;
+}
+
+/**
+ * Get player batting stats from MLB Stats API live feed.
+ * Returns stats object with totalBases, stolenBases, etc.
+ * @param {number} gamePk - MLB game primary key
+ * @param {string} playerName - Player name for fuzzy match
+ * @returns {Object|null} batting stats object
+ */
+async function getMlbPlayerStats(gamePk, playerName) {
+  if (!gamePk || !playerName) return null;
+  const cacheKey = `mlb-live:${gamePk}`;
+  let liveData;
+  const cached = getCached(cacheKey, MLB_API_TTL);
+  if (cached) {
+    liveData = cached;
+  } else {
+    try {
+      const url = `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const json = await res.json();
+      liveData = json.liveData;
+      setCache(cacheKey, liveData);
+    } catch { return null; }
+  }
+
+  const boxscore = liveData?.boxscore;
+  if (!boxscore) return null;
+
+  const norm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+
+  // Search both teams
+  for (const side of ['home', 'away']) {
+    const players = boxscore.teams?.[side]?.players || {};
+    for (const p of Object.values(players)) {
+      const pName = (p.person?.fullName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+      if (pName === norm || pName.includes(norm) || norm.includes(pName)) {
+        // Return batting stats with pitching fallback if no batting
+        return p.stats?.batting || p.stats?.pitching || null;
+      }
+    }
+  }
+  return null;
+}
+
 module.exports = {
   ESPN_PATHS,
   getTodaysGames,
@@ -791,5 +904,8 @@ module.exports = {
   identifyPickSide,
   findPlayer,
   getGolfPlayerRound,
+  findMlbGamePk,
+  getMlbPlayerStats,
+  MLB_API_STATS,
   STAT_MAP,
 };

@@ -349,6 +349,31 @@ client.once(Events.ClientReady, (c) => {
         return summary;
       }
 
+      // Cache MLB Stats API lookups
+      const mlbGamePkCache = new Map();
+      async function getMlbStats(bet, summary) {
+        if (!['mlb', 'kbo', 'npb'].includes(bet.sport)) return summary;
+        if (!bet.prop_description) return summary;
+        const parsed = espn.parsePropDescription(bet.prop_description);
+        if (!parsed || !espn.MLB_API_STATS.has(parsed.espnKey)) return summary;
+
+        // Need MLB data for this prop
+        const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const pkKey = `${bet.team_a}:${bet.team_b}:${dateStr}`;
+        let gamePk = mlbGamePkCache.get(pkKey);
+        if (gamePk === undefined) {
+          gamePk = await espn.findMlbGamePk(bet.espn_game_id, dateStr, bet.team_a, bet.team_b);
+          mlbGamePkCache.set(pkKey, gamePk);
+        }
+        if (!gamePk) return summary;
+
+        const mlbStats = await espn.getMlbPlayerStats(gamePk, bet.player_name);
+        if (mlbStats && summary) {
+          summary._mlbStats = mlbStats;
+        }
+        return summary;
+      }
+
       // ── Resolve single bets ──
       for (const bet of (openSingles || [])) {
         const game = allGames.find(g => g.id === bet.espn_game_id);
@@ -358,6 +383,7 @@ client.once(Events.ClientReady, (c) => {
         let summary = null;
         if (['prop', 'homerun'].includes(bet.wager_type)) {
           summary = await getSummary(bet.sport, bet.espn_game_id);
+          summary = await getMlbStats(bet, summary);
         }
 
         const result = espn.resolveResult({
@@ -407,6 +433,7 @@ client.once(Events.ClientReady, (c) => {
         let summary = null;
         if (['prop', 'homerun'].includes(leg.wager_type)) {
           summary = await getSummary(leg.sport, leg.espn_game_id);
+          summary = await getMlbStats(leg, summary);
         }
 
         const result = espn.resolveResult({
