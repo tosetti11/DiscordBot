@@ -341,6 +341,9 @@ const STAT_MAP = {
   'home runs': 'hr',
   'rbis': 'rbi',
   'runs': 'r',
+  'total bases': 'tb',
+  'stolen bases': 'sb',
+  'walks': 'bb',
   // Hockey
   'goals': 'g',
   'saves': 'sv',
@@ -354,15 +357,27 @@ const STAT_MAP = {
 function parsePropDescription(propDesc) {
   if (!propDesc) return null;
 
+  // Standard: "Over 2.5 Hits", "Under 4.5 Strikeouts"
   const match = propDesc.match(/^(over|under)\s+([\d.]+)\s+(.+)$/i);
-  if (!match) return null;
+  if (match) {
+    const direction = match[1].toLowerCase();
+    const line = parseFloat(match[2]);
+    const statName = match[3].toLowerCase().trim();
+    const espnKey = STAT_MAP[statName] || statName;
+    return { direction, line, stat: statName, espnKey };
+  }
 
-  const direction = match[1].toLowerCase();
-  const line = parseFloat(match[2]);
-  const statName = match[3].toLowerCase().trim();
-  const espnKey = STAT_MAP[statName] || statName;
+  // ALT props: "ALT Hits 1+", "ALT Total Bases 2+", "ALT Strikeouts 5+"
+  const altMatch = propDesc.match(/^ALT\s+(.+?)\s+(\d+)\+$/i);
+  if (altMatch) {
+    const statName = altMatch[1].toLowerCase().trim();
+    const threshold = parseInt(altMatch[2], 10);
+    const espnKey = STAT_MAP[statName] || statName;
+    // "ALT Hits 1+" means >= 1, which is equivalent to Over 0.5
+    return { direction: 'over', line: threshold - 0.5, stat: statName, espnKey };
+  }
 
-  return { direction, line, stat: statName, espnKey };
+  return null;
 }
 
 /**

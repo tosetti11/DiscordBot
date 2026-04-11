@@ -555,9 +555,9 @@ client.once(Events.ClientReady, (c) => {
           }
 
           // Recalculate roles
-          if (guildId) {
+          if (bet.guild_id) {
             try {
-              const guild = await client.guilds.fetch(guildId);
+              const guild = await client.guilds.fetch(bet.guild_id);
               await roleManager.recalculateRoles(guild);
             } catch (e) {}
           }
