@@ -199,8 +199,9 @@ client.once(Events.ClientReady, (c) => {
   const SLOW_INTERVAL = 300_000;   // 5min — golf, tennis, etc.
   const AUTO_CLOSE_DELAY = 60 * 60_000; // 1 hour
 
-  // Parse event_start_time (handles ISO or "Fri Apr 10 9:41 PM ET" format) → YYYYMMDD ET string
-  const MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+  // Parse event_start_time → YYYYMMDD for ESPN scoreboard lookup
+  // Handles ISO dates and "Fri Apr 10 9:41 PM ET" human-readable format
+  const MONTH_NUM = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
   function eventDateStr(eventStartTime) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
     if (!eventStartTime) return today;
@@ -209,17 +210,13 @@ client.once(Events.ClientReady, (c) => {
     if (!isNaN(iso.getTime())) {
       return iso.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
     }
-    // Try "Fri Apr 10 9:41 PM ET" format
-    const m = eventStartTime.match(/(\w{3})\s+(\d+)\s+(\d+):(\d+)\s+(AM|PM)\s+ET/i);
+    // Extract month+day directly from "Fri Apr 10 ..." — the date in the text IS the ET date
+    const m = eventStartTime.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\b/i);
     if (m) {
-      let hr = parseInt(m[3]);
-      if (m[5].toUpperCase() === 'PM' && hr !== 12) hr += 12;
-      if (m[5].toUpperCase() === 'AM' && hr === 12) hr = 0;
-      const now = new Date();
-      const d = new Date(now.getFullYear(), MONTHS[m[1]], parseInt(m[2]), hr, parseInt(m[4]));
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-      }
+      const mon = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+      const month = MONTH_NUM[mon];
+      const day = m[2].padStart(2, '0');
+      if (month) return `${new Date().getFullYear()}${month}${day}`;
     }
     return today;
   }
