@@ -701,7 +701,9 @@ function getPeriodScores(game, period) {
 function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName, propDescription, sport, game, summary, period }) {
   if (!game) return null;
   // Golf tournaments stay 'in' for days — resolve per-round via summary._golfRoundScore
-  if (game.state !== 'post' && sport !== 'golf_pga') return null;
+  // NRFI/YRFI can resolve after 1st inning (game state 'in')
+  const earlyResolve = sport === 'golf_pga' || wagerType === 'nrfi' || wagerType === 'yrfi';
+  if (game.state !== 'post' && !earlyResolve) return null;
 
   // Compute scores based on period — use linescore data for period bets
   let homeScore, awayScore;

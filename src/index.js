@@ -315,13 +315,14 @@ client.once(Events.ClientReady, (c) => {
   setInterval(async () => {
     try {
       // Get open bets with ESPN game IDs and message IDs (so we can edit)
+      // Include both single bets (espn_game_id set) and parlays (espn_game_id on legs)
       const { data: liveBets } = await supa
         .from('bets')
         .select('*, parlay_legs(*)')
         .eq('status', 'open')
-        .not('espn_game_id', 'is', null)
         .not('message_id', 'is', null)
-        .eq('start_notified', true);  // game has started
+        .eq('start_notified', true)
+        .or('espn_game_id.not.is.null,bet_type.eq.parlay');
 
       if (!liveBets?.length) return;
 
@@ -329,9 +330,32 @@ client.once(Events.ClientReady, (c) => {
         try {
           // Check if game is still live
           const isGolf = bet.sport?.startsWith('golf');
+          const isParlay = bet.bet_type === 'parlay';
           let isLive = false;
 
-          if (isGolf) {
+          if (isParlay) {
+            // For parlays, check each leg's game status and build a composite hash
+            const legs = bet.parlay_legs || [];
+            const hashParts = [];
+            for (const leg of legs) {
+              if (!leg.espn_game_id) continue;
+              const dateStr = eventDateStr(leg.event_start_time || bet.event_start_time);
+              const games = await espn.getTodaysGames(leg.sport, dateStr);
+              const game = games.find(g => g.id === leg.espn_game_id);
+              if (game && (game.state === 'in' || game.state === 'post')) {
+                hashParts.push(`${leg.espn_game_id}:${game.home?.score}:${game.away?.score}:${game.state}`);
+                if (game.state === 'in') isLive = true;
+              }
+            }
+            if (hashParts.length) {
+              const hash = hashParts.join('|');
+              if (cardUpdateTracker.get(bet.id) === hash) continue;
+              cardUpdateTracker.set(bet.id, hash);
+              // At least one game changed — regenerate
+            } else {
+              continue; // No legs have live/post data yet
+            }
+          } else if (isGolf) {
             const golfData = await espn.getGolfPlayerRound(bet.player_name, bet.golf_round || null);
             if (golfData && (golfData.roundStatus === 'in' || golfData.roundStatus === 'post')) {
               // Build a quick hash to avoid re-editing when nothing changed
@@ -356,7 +380,7 @@ client.once(Events.ClientReady, (c) => {
             }
           }
 
-          if (!isLive) continue;
+          if (!isLive && !isParlay) continue;
 
           // Re-generate card image
           const fullBet = await db.getBet(bet.id);
@@ -623,7 +647,9 @@ client.once(Events.ClientReady, (c) => {
           continue; // Skip normal resolution path for golf
         }
 
-        if (game.state !== 'post') continue;
+        // NRFI/YRFI can resolve mid-game (after 1st inning); others need game over
+        const earlyResolveSingle = ['nrfi', 'yrfi'].includes(bet.wager_type);
+        if (game.state !== 'post' && !earlyResolveSingle) continue;
 
         // Get summary if needed for props/HR
         let summary = null;
@@ -700,7 +726,9 @@ client.once(Events.ClientReady, (c) => {
           continue;
         }
 
-        if (game.state !== 'post') continue;
+        // NRFI/YRFI can resolve mid-game (after 1st inning); others need game over
+        const earlyResolveLeg = ['nrfi', 'yrfi'].includes(leg.wager_type);
+        if (game.state !== 'post' && !earlyResolveLeg) continue;
 
         let summary = null;
         if (['prop', 'homerun'].includes(leg.wager_type)) {
