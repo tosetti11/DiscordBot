@@ -268,8 +268,18 @@ client.once(Events.ClientReady, (c) => {
       for (const key of sportDateSet) {
         const [sport, dateStr] = key.split(':');
         try {
-          const games = await espn.getTodaysGames(sport, dateStr);
-          notifGames.push(...games);
+          if (sport === 'golf_pga') {
+            // Golf events are filtered out by getTodaysGames (no home/away) — fetch directly
+            for (const bet of openBets) {
+              if (bet.sport === 'golf_pga' && bet.espn_game_id) {
+                const golfGame = await espn.getGolfEventStatus(bet.espn_game_id, dateStr);
+                if (golfGame && !notifGames.find(g => g.id === golfGame.id)) notifGames.push(golfGame);
+              }
+            }
+          } else {
+            const games = await espn.getTodaysGames(sport, dateStr);
+            notifGames.push(...games);
+          }
         } catch (e) {}
       }
 
@@ -334,8 +344,18 @@ client.once(Events.ClientReady, (c) => {
       for (const key of sportDateSet) {
         const [sport, dateStr] = key.split(':');
         try {
-          const games = await espn.getTodaysGames(sport, dateStr);
-          allGames.push(...games);
+          if (sport === 'golf_pga') {
+            // Golf events are filtered out by getTodaysGames (no home/away) — fetch directly
+            for (const item of allItems) {
+              if (item.sport === 'golf_pga' && item.espn_game_id) {
+                const golfGame = await espn.getGolfEventStatus(item.espn_game_id, dateStr);
+                if (golfGame && !allGames.find(g => g.id === golfGame.id)) allGames.push(golfGame);
+              }
+            }
+          } else {
+            const games = await espn.getTodaysGames(sport, dateStr);
+            allGames.push(...games);
+          }
         } catch (e) {}
       }
 

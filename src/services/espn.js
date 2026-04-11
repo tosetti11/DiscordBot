@@ -168,6 +168,56 @@ async function getTodaysGames(sport, dateStr) {
 }
 
 /**
+ * Get a golf event as a lightweight game-like object for the pollers.
+ * Golf events are filtered out by getTodaysGames() (no home/away teams),
+ * so this fetches the tournament directly from the scoreboard API.
+ * Returns an object shaped like a team game but with minimal dummy team data.
+ * @param {string} gameId - ESPN event ID
+ * @param {string} [dateStr] - YYYYMMDD date
+ * @returns {Object|null} Game-like object with id, state, sport
+ */
+async function getGolfEventStatus(gameId, dateStr) {
+  const espnPath = ESPN_PATHS.golf_pga;
+  if (!espnPath) return null;
+
+  const today = dateStr || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+  const cacheKey = `golf-event:${today}`;
+  let events;
+  const cached = getCached(cacheKey, SCOREBOARD_TTL);
+  if (cached) {
+    events = cached;
+  } else {
+    try {
+      const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${today}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const json = await res.json();
+      events = json.events || [];
+      setCache(cacheKey, events);
+    } catch { return null; }
+  }
+
+  const event = events.find(e => e.id === gameId) || events[0];
+  if (!event) return null;
+
+  const status = event.status || {};
+  const statusType = status.type || {};
+
+  return {
+    id: event.id,
+    sport: 'golf_pga',
+    name: event.name || 'Golf Tournament',
+    state: statusType.state || 'pre',
+    completed: statusType.completed || false,
+    detail: statusType.shortDetail || statusType.detail || '',
+    // Dummy home/away so resolveResult doesn't crash — golf uses prop resolution only
+    home: { name: event.name || 'Field', abbreviation: 'GOLF', score: 0 },
+    away: { name: '', abbreviation: '', score: 0 },
+    linescores: { home: [], away: [] },
+  };
+}
+
+/**
  * Get detailed game summary with box score + player stats
  * @param {string} sport - Our internal sport value
  * @param {string} gameId - ESPN event ID
@@ -1092,6 +1142,7 @@ module.exports = {
   resolveResult,
   identifyPickSide,
   findPlayer,
+  getGolfEventStatus,
   getPeriodScores,
   getGolfPlayerRound,
   findMlbGamePk,
