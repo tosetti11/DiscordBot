@@ -385,7 +385,21 @@ client.once(Events.ClientReady, (c) => {
               const games = await espn.getTodaysGames(leg.sport, dateStr);
               const game = games.find(g => g.id === leg.espn_game_id);
               if (game && (game.state === 'in' || game.state === 'post')) {
-                hashParts.push(`${leg.espn_game_id}:${game.home?.score}:${game.away?.score}:${game.state}`);
+                let hashPart = `${leg.espn_game_id}:${game.home?.score}:${game.away?.score}:${game.state}`;
+                // Include prop stat in hash for prop legs
+                if (leg.wager_type === 'prop' && leg.player_name && leg.prop_description) {
+                  try {
+                    const parsed = espn.parsePropDescription(leg.prop_description, leg.sport);
+                    if (parsed) {
+                      const summary = await espn.getGameSummary(leg.sport, leg.espn_game_id);
+                      const player = summary ? espn.findPlayer(summary.players, leg.player_name) : null;
+                      let sv = player?.stats?.[parsed.espnKey];
+                      if (typeof sv === 'string' && /^\d+-\d+$/.test(sv)) sv = sv.split('-')[0];
+                      hashPart += `:ps${sv ?? ''}`;
+                    }
+                  } catch {}
+                }
+                hashParts.push(hashPart);
                 if (game.state === 'in') isLive = true;
               }
             }
@@ -415,7 +429,20 @@ client.once(Events.ClientReady, (c) => {
             const games = await espn.getTodaysGames(bet.sport, dateStr);
             const game = games.find(g => g.id === bet.espn_game_id);
             if (game && game.state === 'in') {
-              const hash = `${game.home?.score}:${game.away?.score}`;
+              let hash = `${game.home?.score}:${game.away?.score}`;
+              // Include prop stat in hash for prop bets
+              if (bet.wager_type === 'prop' && bet.player_name && bet.prop_description) {
+                try {
+                  const parsed = espn.parsePropDescription(bet.prop_description, bet.sport);
+                  if (parsed) {
+                    const summary = await espn.getGameSummary(bet.sport, bet.espn_game_id);
+                    const player = summary ? espn.findPlayer(summary.players, bet.player_name) : null;
+                    let sv = player?.stats?.[parsed.espnKey];
+                    if (typeof sv === 'string' && /^\d+-\d+$/.test(sv)) sv = sv.split('-')[0];
+                    hash += `:ps${sv ?? ''}`;
+                  }
+                } catch {}
+              }
               if (cardUpdateTracker.get(bet.id) === hash) continue;
               cardUpdateTracker.set(bet.id, hash);
               isLive = true;

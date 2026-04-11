@@ -2,7 +2,7 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 const { SPORT_NAMES, WAGER_TYPES, PERIODS, FIGHT_METHODS } = require('../config/constants');
 const { formatOdds, calculatePayout } = require('./odds');
-const { getGameSummary, getGolfPlayerRound } = require('../services/espn');
+const { getGameSummary, getGolfPlayerRound, parsePropDescription, findPlayer, MLB_API_STATS, findMlbGamePk, getMlbPlayerStats, COMPUTED_STATS } = require('../services/espn');
 
 // ── Register bundled fonts ───────────────────────────────────
 const FONT_PATH = path.join(__dirname, '..', 'fonts', 'Inter-Variable.ttf');
@@ -173,6 +173,62 @@ async function fetchLiveScore(sport, espnGameId, wagerType) {
   } catch { return null; }
 }
 
+// ── Live prop stat helper ──────────────────────────────────
+async function fetchLivePropStat(sport, espnGameId, playerName, propDescription) {
+  if (!espnGameId || !sport || !playerName || !propDescription) return null;
+  try {
+    const parsed = parsePropDescription(propDescription, sport);
+    if (!parsed) return null;
+
+    const summary = await getGameSummary(sport, espnGameId);
+    if (!summary || !summary.state || summary.state === 'pre') return null;
+
+    let statVal = null;
+
+    // Try ESPN box score first
+    const playerData = findPlayer(summary.players, playerName);
+    if (playerData) {
+      const rawStat = playerData.stats?.[parsed.espnKey];
+      if (typeof rawStat === 'string' && rawStat.includes('-') && /^\d+-\d+$/.test(rawStat)) {
+        statVal = parseFloat(rawStat.split('-')[0]) || 0;
+      } else if (rawStat !== undefined) {
+        statVal = parseFloat(rawStat) || 0;
+      }
+      // Try computed stats (e.g. hockey points = G+A, anytime TD)
+      if ((statVal === null || statVal === 0) && COMPUTED_STATS[parsed.espnKey] && playerData.stats) {
+        const computed = COMPUTED_STATS[parsed.espnKey](playerData.stats);
+        if (computed !== null) statVal = computed;
+      }
+    }
+
+    // For MLB API stats (totalBases, stolenBases, etc.), use MLB Stats API
+    if ((statVal === null || statVal === 0) && MLB_API_STATS.has(parsed.espnKey) && ['mlb', 'kbo', 'npb'].includes(sport)) {
+      try {
+        const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const gamePk = await findMlbGamePk(espnGameId, dateStr);
+        if (gamePk) {
+          const mlbStats = await getMlbPlayerStats(gamePk, playerName);
+          if (mlbStats) {
+            statVal = parseFloat(mlbStats[parsed.espnKey]) || 0;
+          }
+        }
+      } catch { /* MLB API unavailable, keep ESPN value */ }
+    }
+
+    if (statVal === null) return null;
+
+    // Build a friendly label from the prop description stat portion
+    const label = parsed.stat.replace(/\b\w/g, c => c.toUpperCase());
+
+    return {
+      label,           // e.g. "Total Bases", "Strikeouts"
+      current: statVal, // e.g. 2
+      line: parsed.line, // e.g. 1.5
+      direction: parsed.direction, // 'over' or 'under'
+    };
+  } catch { return null; }
+}
+
 // ── Main generator ──
 
 /**
@@ -222,6 +278,22 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     );
   }
 
+  // ── Fetch live prop stat data ──
+  let singlePropStat = null;
+  let legPropStats = [];
+
+  if (!isParlay && bet.wager_type === 'prop' && bet.espn_game_id && bet.player_name && bet.prop_description) {
+    singlePropStat = bet._propStat || await fetchLivePropStat(bet.sport, bet.espn_game_id, bet.player_name, bet.prop_description);
+  }
+  if (isParlay && bet.parlay_legs?.length) {
+    legPropStats = await Promise.all(
+      bet.parlay_legs.map(leg => {
+        if (leg.wager_type !== 'prop' || !leg.espn_game_id || !leg.player_name || !leg.prop_description) return null;
+        return fetchLivePropStat(leg.sport, leg.espn_game_id, leg.player_name, leg.prop_description);
+      })
+    );
+  }
+
   const sportName = SPORT_NAMES[bet.sport] || bet.sport || '';
   const wagerLabel = WAGER_TYPES[bet.wager_type] || '';
   const status = bet.status || 'open';
@@ -264,6 +336,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (bet.espn_game_id) y += 16;
     if (golfData && golfData.roundStatus !== 'pre') y += 52; // golf tracker
     else if (singleLiveScore && singleLiveScore.state !== 'pre') y += 30;
+    if (singlePropStat) y += 24; // prop stat progress
   }
 
   // DK-style deduplicated matchup header for parlays (only for same-game parlays)
@@ -313,6 +386,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       if (leg.espn_game_id) y += 14;
       const legScoreData = legLiveScores[li];
       if (legScoreData && legScoreData.state !== 'pre') y += 20;
+      if (legPropStats[li]) y += 18; // prop stat progress
       if (leg.odds_american) y += 15; // odds line
       y += 6; // bottom padding
     }
@@ -639,6 +713,23 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       }
       curY += 30;
     }
+    // Prop stat progress (single bet)
+    if (singlePropStat) {
+      const pIsLive = singleLiveScore && singleLiveScore.state === 'in';
+      const pBg = pIsLive ? 'rgba(255, 135, 50, 0.08)' : 'rgba(128, 128, 128, 0.06)';
+      roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 18, 4);
+      ctx.fillStyle = pBg;
+      ctx.fill();
+      // "📊 Total Bases: 2 / Over 1.5"
+      const dirLabel = singlePropStat.direction === 'over' ? 'O' : 'U';
+      const propText = `📊 ${singlePropStat.label}: ${singlePropStat.current}  ·  ${dirLabel} ${singlePropStat.line}`;
+      ctx.font = 'bold 11px ' + FF;
+      const hitting = (singlePropStat.direction === 'over' && singlePropStat.current > singlePropStat.line) ||
+                      (singlePropStat.direction === 'under' && singlePropStat.current < singlePropStat.line);
+      ctx.fillStyle = hitting ? C.win : C.accent;
+      ctx.fillText(propText, LEFT_BAR + PAD + 6, curY + 15);
+      curY += 24;
+    }
   }
 
   // ── DK-style matchup header for parlays ──
@@ -797,6 +888,18 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         ctx.fillStyle = isLegLive ? C.win : C.textMuted;
         ctx.fillText(legScoreStr, legX, curY + 12);
         curY += 20;
+      }
+      // Leg prop stat progress
+      const legPs = legPropStats[i];
+      if (legPs) {
+        const dirLabel = legPs.direction === 'over' ? 'O' : 'U';
+        const lpText = `📊 ${legPs.label}: ${legPs.current} · ${dirLabel} ${legPs.line}`;
+        ctx.font = 'bold 9px ' + FF;
+        const legHitting = (legPs.direction === 'over' && legPs.current > legPs.line) ||
+                           (legPs.direction === 'under' && legPs.current < legPs.line);
+        ctx.fillStyle = legHitting ? C.win : C.accent;
+        ctx.fillText(lpText, legX, curY + 12);
+        curY += 18;
       }
 
       // Leg odds
