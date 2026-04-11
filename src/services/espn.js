@@ -412,8 +412,17 @@ async function resolveGameId(sport, teamA, teamB, eventStartTime) {
 
   // Golf: tournament is a single event, return it directly
   if (sport === 'golf_pga') {
-    const games = await getTodaysGames(sport, dateStr || undefined);
-    if (games.length > 0) return { gameId: games[0].id, game: games[0] };
+    const espnPath = ESPN_PATHS[sport];
+    if (!espnPath) return null;
+    const ds = dateStr || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+    const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${ds}`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const json = await res.json();
+      const event = json.events?.[0];
+      if (event) return { gameId: event.id, game: { id: event.id, sport, name: event.name, state: event.status?.type?.state || 'pre' } };
+    } catch {}
     return null;
   }
 
