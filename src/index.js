@@ -388,6 +388,23 @@ client.once(Events.ClientReady, (c) => {
           } else {
             console.log(`[CardUpdate] Could not fetch channel ${bet.channel_id} for ${bet.slip_number}`);
           }
+
+          // Also update mirror message (king/community open slips)
+          if (bet.mirror_channel_id && bet.mirror_message_id) {
+            try {
+              const mirrorAttachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+              const mirrorCh = await client.channels.fetch(bet.mirror_channel_id).catch(() => null);
+              if (mirrorCh) {
+                const mirrorMsg = await mirrorCh.messages.fetch(bet.mirror_message_id).catch(() => null);
+                if (mirrorMsg) {
+                  await mirrorMsg.edit({ files: [mirrorAttachment] }).catch((e) => {
+                    console.error(`[CardUpdate] Mirror edit failed for ${bet.slip_number}:`, e.message);
+                  });
+                  console.log(`[CardUpdate] ✅ Updated mirror for ${bet.slip_number}`);
+                }
+              }
+            } catch (e) {}
+          }
         } catch (e) {
           console.error(`[CardUpdate] Error updating ${bet.slip_number}:`, e.message);
         }
