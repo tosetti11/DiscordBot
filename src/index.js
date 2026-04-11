@@ -233,7 +233,7 @@ client.once(Events.ClientReady, (c) => {
         .select('id, discord_id, pick, espn_game_id, sport, start_notified, event_start_time, bet_type, slip_number')
         .eq('status', 'open')
         .eq('start_notified', false)
-        .not('espn_game_id', 'is', null);
+        .or('espn_game_id.not.is.null,bet_type.eq.parlay');
 
       if (!openBets?.length) return;
 
@@ -300,6 +300,48 @@ client.once(Events.ClientReady, (c) => {
             }
           } catch (e) {
             console.error('[LiveTracker] Start notification error:', e.message);
+          }
+        }
+      }
+
+      // Check parlays: if any leg's game is live, mark the parlay as start_notified
+      const parlayBets = openBets.filter(b => b.bet_type === 'parlay' && !startNotifiedCache.has(b.id));
+      if (parlayBets.length > 0) {
+        const parlayIds = parlayBets.map(b => b.id);
+        const { data: parlayLegs } = await supa
+          .from('parlay_legs')
+          .select('bet_id, espn_game_id, sport, event_start_time')
+          .in('bet_id', parlayIds)
+          .not('espn_game_id', 'is', null);
+
+        // Build map of bet_id → legs
+        const legsByBet = {};
+        for (const leg of (parlayLegs || [])) {
+          if (!legsByBet[leg.bet_id]) legsByBet[leg.bet_id] = [];
+          legsByBet[leg.bet_id].push(leg);
+        }
+
+        for (const bet of parlayBets) {
+          const legs = legsByBet[bet.id] || [];
+          let anyLive = false;
+          for (const leg of legs) {
+            const game = notifGames.find(g => g.id === leg.espn_game_id);
+            if (game && (game.state === 'in' || game.state === 'post')) {
+              anyLive = true;
+              break;
+            }
+          }
+          if (anyLive) {
+            startNotifiedCache.add(bet.id);
+            try {
+              await supa.from('bets').update({ start_notified: true }).eq('id', bet.id);
+              const user = await client.users.fetch(bet.discord_id).catch(() => null);
+              if (user) {
+                await user.send(`🔴 **LIVE** — Your parlay \`${bet.slip_number}\` is in play!`).catch(() => {});
+              }
+            } catch (e) {
+              console.error('[LiveTracker] Parlay start notification error:', e.message);
+            }
           }
         }
       }
