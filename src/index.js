@@ -649,6 +649,7 @@ client.once(Events.ClientReady, (c) => {
 
         // NRFI/YRFI can resolve mid-game (after 1st inning); others need game over
         const earlyResolveSingle = ['nrfi', 'yrfi'].includes(bet.wager_type);
+        if (game.state === 'pre') continue; // no games started yet
         if (game.state !== 'post' && !earlyResolveSingle) continue;
 
         // Get summary if needed for props/HR
@@ -728,6 +729,7 @@ client.once(Events.ClientReady, (c) => {
 
         // NRFI/YRFI can resolve mid-game (after 1st inning); others need game over
         const earlyResolveLeg = ['nrfi', 'yrfi'].includes(leg.wager_type);
+        if (game.state === 'pre') continue;
         if (game.state !== 'post' && !earlyResolveLeg) continue;
 
         let summary = null;

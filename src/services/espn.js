@@ -701,8 +701,10 @@ function getPeriodScores(game, period) {
 function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName, propDescription, sport, game, summary, period }) {
   if (!game) return null;
   // Golf tournaments stay 'in' for days — resolve per-round via summary._golfRoundScore
-  // NRFI/YRFI can resolve after 1st inning (game state 'in')
-  const earlyResolve = sport === 'golf_pga' || wagerType === 'nrfi' || wagerType === 'yrfi';
+  // NRFI/YRFI can resolve after 1st inning (game must be at least 'in', not 'pre')
+  const isNrfiType = wagerType === 'nrfi' || wagerType === 'yrfi';
+  if (isNrfiType && game.state === 'pre') return null;  // game hasn't started
+  const earlyResolve = sport === 'golf_pga' || isNrfiType;
   if (game.state !== 'post' && !earlyResolve) return null;
 
   // Compute scores based on period — use linescore data for period bets
@@ -765,20 +767,40 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
     }
 
     case 'nrfi': {
-      // NRFI = No Run First Inning — need linescore
+      // NRFI = No Run First Inning — need 1st inning linescore data to exist
       const linescores = getLinescores(game);
       if (!linescores) return null;
-      const homeR1 = parseFloat(linescores.home?.[0]?.displayValue || linescores.home?.[0]?.value || '0');
-      const awayR1 = parseFloat(linescores.away?.[0]?.displayValue || linescores.away?.[0]?.value || '0');
+      // Make sure 1st inning data actually exists (not just empty arrays)
+      const homeInning1 = linescores.home?.[0];
+      const awayInning1 = linescores.away?.[0];
+      if (!homeInning1 && !awayInning1) return null; // no 1st inning data yet
+      const homeR1 = parseFloat(homeInning1?.displayValue || homeInning1?.value || '0');
+      const awayR1 = parseFloat(awayInning1?.displayValue || awayInning1?.value || '0');
+      // Only resolve once BOTH halves of the 1st inning are done (need bottom of 1st)
+      // If game is still in the 1st inning, wait — unless game is already past inning 1
+      if (game.state === 'in') {
+        const inning = game._raw?.competitions?.[0]?.status?.period || 0;
+        if (inning <= 1) return null; // still in 1st inning, wait
+      }
       return (homeR1 === 0 && awayR1 === 0) ? 'win' : 'loss';
     }
 
     case 'yrfi': {
       const linescores = getLinescores(game);
       if (!linescores) return null;
-      const homeR1 = parseFloat(linescores.home?.[0]?.displayValue || linescores.home?.[0]?.value || '0');
-      const awayR1 = parseFloat(linescores.away?.[0]?.displayValue || linescores.away?.[0]?.value || '0');
-      return (homeR1 > 0 || awayR1 > 0) ? 'win' : 'loss';
+      const homeInning1 = linescores.home?.[0];
+      const awayInning1 = linescores.away?.[0];
+      if (!homeInning1 && !awayInning1) return null;
+      const homeR1 = parseFloat(homeInning1?.displayValue || homeInning1?.value || '0');
+      const awayR1 = parseFloat(awayInning1?.displayValue || awayInning1?.value || '0');
+      // YRFI can resolve early if a run scores in top of 1st
+      if (homeR1 > 0 || awayR1 > 0) return 'win';
+      // But can only confirm loss after full 1st inning
+      if (game.state === 'in') {
+        const inning = game._raw?.competitions?.[0]?.status?.period || 0;
+        if (inning <= 1) return null; // still in 1st inning
+      }
+      return 'loss';
     }
 
     case 'homerun': {
