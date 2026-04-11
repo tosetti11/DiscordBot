@@ -500,7 +500,13 @@ const STAT_MAP = {
   'goals against': 'ga',
   'shots against': 'sa',
   'save percentage': 'sv%',
+  // Golf
+  'round score': 'golf_round_score',
+  'score': 'golf_round_score',
 };
+
+// Stats that require special golf handling (not in standard box score)
+const GOLF_STATS = new Set(['golf_round_score']);
 
 /**
  * Sport-specific stat key overrides.
@@ -693,7 +699,9 @@ function getPeriodScores(game, period) {
  * Supports computed stats (hockey points = G+A, football anytime TD).
  */
 function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName, propDescription, sport, game, summary, period }) {
-  if (!game || game.state !== 'post') return null;
+  if (!game) return null;
+  // Golf tournaments stay 'in' for days — resolve per-round via summary._golfRoundScore
+  if (game.state !== 'post' && sport !== 'golf_pga') return null;
 
   // Compute scores based on period — use linescore data for period bets
   let homeScore, awayScore;
@@ -707,8 +715,8 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
     awayScore = game.away?.score ?? 0;
   }
 
-  // Determine which team the user picked (home or away)
-  const pickTeamSide = identifyPickSide(pick, teamA, teamB, game);
+  // Determine which team the user picked (home or away) — skip for golf (no teams)
+  const pickTeamSide = sport === 'golf_pga' ? null : identifyPickSide(pick, teamA, teamB, game);
 
   switch (wagerType) {
     case 'moneyline': {
@@ -799,6 +807,21 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       if (!summary || !playerName || !propDescription) return null;
       const parsed = parsePropDescription(propDescription, sport);
       if (!parsed) return null;
+
+      // Golf round score — resolved from golf scoreboard, not box score
+      if (GOLF_STATS.has(parsed.espnKey) && sport === 'golf_pga') {
+        if (summary?._golfRoundScore === undefined) return null;
+        const statVal = summary._golfRoundScore;
+        if (parsed.direction === 'over') {
+          if (statVal > parsed.line) return 'win';
+          if (statVal < parsed.line) return 'loss';
+          return 'push';
+        } else {
+          if (statVal < parsed.line) return 'win';
+          if (statVal > parsed.line) return 'loss';
+          return 'push';
+        }
+      }
 
       const playerData = findPlayer(summary.players, playerName);
       if (!playerData) return null;
@@ -1148,6 +1171,7 @@ module.exports = {
   findMlbGamePk,
   getMlbPlayerStats,
   MLB_API_STATS,
+  GOLF_STATS,
   STAT_MAP,
   SPORT_STAT_OVERRIDES,
   COMPUTED_STATS,

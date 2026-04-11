@@ -397,7 +397,55 @@ client.once(Events.ClientReady, (c) => {
       // ── Resolve single bets ──
       for (const bet of (openSingles || [])) {
         const game = allGames.find(g => g.id === bet.espn_game_id);
-        if (!game || game.state !== 'post') continue;
+        if (!game) continue;
+
+        // Golf props: resolve when the player's round is complete (not when tournament ends)
+        if (bet.sport === 'golf_pga' && bet.wager_type === 'prop') {
+          if (game.state === 'pre') continue; // tournament hasn't started
+          const parsed = espn.parsePropDescription(bet.prop_description, bet.sport);
+          if (!parsed) continue;
+
+          if (espn.GOLF_STATS.has(parsed.espnKey)) {
+            // Fetch player's current round data
+            const roundData = await espn.getGolfPlayerRound(bet.player_name);
+            if (!roundData || roundData.roundStatus !== 'post') continue; // round not done yet
+
+            // Build a fake summary with the golf round score injected
+            const summary = { players: {}, _golfRoundScore: roundData.roundScore };
+            // Add dummy player so findPlayer succeeds
+            const normName = bet.player_name.toLowerCase().replace(/[^a-z ]/g, '').trim();
+            summary.players[normName] = { name: bet.player_name, stats: {} };
+
+            const result = espn.resolveResult({
+              wagerType: bet.wager_type, pick: bet.pick, teamA: bet.team_a, teamB: bet.team_b,
+              spreadValue: bet.spread_value, playerName: bet.player_name,
+              propDescription: bet.prop_description, sport: bet.sport, game, summary,
+              period: bet.period,
+            });
+
+            if (result) {
+              const autoCloseAt = new Date(Date.now() + AUTO_CLOSE_DELAY).toISOString();
+              await supa.from('bets').update({
+                auto_close_at: autoCloseAt,
+                result_note: `Auto-resolved: ${result} (Golf R${roundData.roundNum}: ${roundData.roundScore} strokes)`,
+              }).eq('id', bet.id);
+
+              try {
+                const user = await client.users.fetch(bet.discord_id).catch(() => null);
+                if (user) {
+                  const emoji = result === 'win' ? '✅' : result === 'loss' ? '❌' : '🔄';
+                  await user.send(
+                    `⛳ **Round Complete** — ${roundData.playerName} shot ${roundData.roundScore} (R${roundData.roundNum})\n${emoji} \`${bet.slip_number}\` looks like a **${result.toUpperCase()}**!\n> ${bet.pick}\n\n⏰ Auto-closing in 1 hour. Close manually with \`/closebet\` to override.`
+                  ).catch(() => {});
+                }
+              } catch (e) {}
+              console.log(`[LiveTracker] Golf bet ${bet.slip_number} auto-resolved: ${result} (R${roundData.roundNum}: ${roundData.roundScore})`);
+            }
+          }
+          continue; // Skip normal resolution path for golf
+        }
+
+        if (game.state !== 'post') continue;
 
         // Get summary if needed for props/HR
         let summary = null;
@@ -448,7 +496,33 @@ client.once(Events.ClientReady, (c) => {
       const parlayBetsToCheck = new Set();
       for (const leg of (openLegs || [])) {
         const game = allGames.find(g => g.id === leg.espn_game_id);
-        if (!game || game.state !== 'post') continue;
+        if (!game) continue;
+
+        // Golf parlay leg: resolve when round is complete
+        if (leg.sport === 'golf_pga' && leg.wager_type === 'prop') {
+          if (game.state === 'pre') continue;
+          const parsed = espn.parsePropDescription(leg.prop_description, leg.sport);
+          if (parsed && espn.GOLF_STATS.has(parsed.espnKey)) {
+            const roundData = await espn.getGolfPlayerRound(leg.player_name);
+            if (!roundData || roundData.roundStatus !== 'post') continue;
+            const summary = { players: {}, _golfRoundScore: roundData.roundScore };
+            const normName = leg.player_name.toLowerCase().replace(/[^a-z ]/g, '').trim();
+            summary.players[normName] = { name: leg.player_name, stats: {} };
+            const result = espn.resolveResult({
+              wagerType: leg.wager_type, pick: leg.pick, teamA: leg.team_a, teamB: leg.team_b,
+              spreadValue: leg.spread_value, playerName: leg.player_name,
+              propDescription: leg.prop_description, sport: leg.sport, game, summary, period: leg.period,
+            });
+            if (result) {
+              await db.updateParlayLegStatus(leg.id, result);
+              parlayBetsToCheck.add(leg.bet_id);
+              console.log(`[LiveTracker] Golf parlay leg ${leg.id} resolved: ${result} (R${roundData.roundNum}: ${roundData.roundScore})`);
+            }
+          }
+          continue;
+        }
+
+        if (game.state !== 'post') continue;
 
         let summary = null;
         if (['prop', 'homerun'].includes(leg.wager_type)) {
