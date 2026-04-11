@@ -199,6 +199,31 @@ client.once(Events.ClientReady, (c) => {
   const SLOW_INTERVAL = 300_000;   // 5min — golf, tennis, etc.
   const AUTO_CLOSE_DELAY = 60 * 60_000; // 1 hour
 
+  // Parse event_start_time (handles ISO or "Fri Apr 10 9:41 PM ET" format) → YYYYMMDD ET string
+  const MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+  function eventDateStr(eventStartTime) {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+    if (!eventStartTime) return today;
+    // Try ISO parse first
+    const iso = new Date(eventStartTime);
+    if (!isNaN(iso.getTime())) {
+      return iso.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+    }
+    // Try "Fri Apr 10 9:41 PM ET" format
+    const m = eventStartTime.match(/(\w{3})\s+(\d+)\s+(\d+):(\d+)\s+(AM|PM)\s+ET/i);
+    if (m) {
+      let hr = parseInt(m[3]);
+      if (m[5].toUpperCase() === 'PM' && hr !== 12) hr += 12;
+      if (m[5].toUpperCase() === 'AM' && hr === 12) hr = 0;
+      const now = new Date();
+      const d = new Date(now.getFullYear(), MONTHS[m[1]], parseInt(m[2]), hr, parseInt(m[4]));
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+      }
+    }
+    return today;
+  }
+
   // Track which bets we've already notified about game start
   const startNotifiedCache = new Set();
 
@@ -240,14 +265,7 @@ client.once(Events.ClientReady, (c) => {
       // Batch-fetch scoreboards by sport+date
       const sportDateSet = new Set();
       for (const { sport, eventStartTime } of gameChecks.values()) {
-        let dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-        if (eventStartTime) {
-          try {
-            const d = new Date(eventStartTime);
-            if (!isNaN(d.getTime())) dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-          } catch {}
-        }
-        sportDateSet.add(`${sport}:${dateStr}`);
+        sportDateSet.add(`${sport}:${eventDateStr(eventStartTime)}`);
       }
       const notifGames = [];
       for (const key of sportDateSet) {
@@ -311,17 +329,7 @@ client.once(Events.ClientReady, (c) => {
       const sportDateSet = new Set();
       for (const item of allItems) {
         if (!item.sport) continue;
-        // Derive ET date from event_start_time; fall back to today
-        let dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-        if (item.event_start_time) {
-          try {
-            const d = new Date(item.event_start_time);
-            if (!isNaN(d.getTime())) {
-              dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-            }
-          } catch {}
-        }
-        sportDateSet.add(`${item.sport}:${dateStr}`);
+        sportDateSet.add(`${item.sport}:${eventDateStr(item.event_start_time)}`);
       }
 
       // Fetch scoreboards per sport+date
