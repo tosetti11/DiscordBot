@@ -309,6 +309,84 @@ client.once(Events.ClientReady, (c) => {
   }, 60_000);
   console.log('   🔔 Game start notification poller started (60s interval)');
 
+  // ── Live Card Update Poller (every 5min) ──
+  // Refreshes card images for open bets whose games are live
+  const cardUpdateTracker = new Map(); // betId → last card hash (to skip no-change edits)
+  setInterval(async () => {
+    try {
+      // Get open bets with ESPN game IDs and message IDs (so we can edit)
+      const { data: liveBets } = await supa
+        .from('bets')
+        .select('*, parlay_legs(*)')
+        .eq('status', 'open')
+        .not('espn_game_id', 'is', null)
+        .not('message_id', 'is', null)
+        .eq('start_notified', true);  // game has started
+
+      if (!liveBets?.length) return;
+
+      for (const bet of liveBets) {
+        try {
+          // Check if game is still live
+          const isGolf = bet.sport?.startsWith('golf');
+          let isLive = false;
+
+          if (isGolf) {
+            const golfData = await espn.getGolfPlayerRound(bet.player_name, bet.golf_round || null);
+            if (golfData && (golfData.roundStatus === 'in' || golfData.roundStatus === 'post')) {
+              // Build a quick hash to avoid re-editing when nothing changed
+              const hash = `${golfData.holesCompleted}:${golfData.roundScore}:${golfData.position}`;
+              if (cardUpdateTracker.get(bet.id) === hash) continue;
+              cardUpdateTracker.set(bet.id, hash);
+              isLive = true;
+            }
+          } else {
+            const dateStr = eventDateStr(bet.event_start_time);
+            const games = await espn.getTodaysGames(bet.sport, dateStr);
+            const game = games.find(g => g.id === bet.espn_game_id);
+            if (game && game.state === 'in') {
+              const hash = `${game.home?.score}:${game.away?.score}`;
+              if (cardUpdateTracker.get(bet.id) === hash) continue;
+              cardUpdateTracker.set(bet.id, hash);
+              isLive = true;
+            }
+          }
+
+          if (!isLive) continue;
+
+          // Re-generate card image
+          const fullBet = await db.getBet(bet.id);
+          if (!fullBet || fullBet.status !== 'open') continue;
+
+          const guild = client.guilds.cache.get(bet.guild_id);
+          let displayName = bet.discord_id;
+          if (guild) {
+            const member = await guild.members.fetch(bet.discord_id).catch(() => null);
+            displayName = member?.displayName || bet.discord_id;
+          }
+          const avatar = (await client.users.fetch(bet.discord_id).catch(() => null))?.displayAvatarURL() || '';
+
+          const imgBuffer = await generateBetCardImage(fullBet, displayName, avatar);
+          const { AttachmentBuilder } = require('discord.js');
+          const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+
+          const channel = await client.channels.fetch(bet.channel_id).catch(() => null);
+          if (channel && bet.message_id) {
+            const msg = await channel.messages.fetch(bet.message_id).catch(() => null);
+            if (msg) {
+              await msg.edit({ files: [attachment] }).catch(() => {});
+            }
+          }
+        } catch (e) {
+          // Silently skip individual bet errors
+        }
+      }
+    } catch (err) {
+      console.error('[LiveTracker] Card update error:', err.message);
+    }
+  }, SLOW_INTERVAL);
+  console.log('   🖼️  Live card update poller started (5min interval)');
+
   // ── Auto-Resolve Poller (every 30s) ──
   // Checks finished games, resolves single bets and parlay legs, sets auto-close timer
   setInterval(async () => {
