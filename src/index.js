@@ -222,36 +222,46 @@ client.once(Events.ClientReady, (c) => {
         .eq('status', 'open')
         .not('espn_game_id', 'is', null);
 
-      // Collect unique sport/gameId combos to check
+      // Collect unique sport/gameId combos to check, with dates
       const gameChecks = new Map();
       for (const bet of openBets) {
         if (bet.espn_game_id && bet.sport) {
           const key = `${bet.sport}:${bet.espn_game_id}`;
-          if (!gameChecks.has(key)) gameChecks.set(key, { sport: bet.sport, gameId: bet.espn_game_id });
+          if (!gameChecks.has(key)) gameChecks.set(key, { sport: bet.sport, gameId: bet.espn_game_id, eventStartTime: bet.event_start_time });
         }
       }
       for (const leg of (openLegs || [])) {
         if (leg.espn_game_id && leg.sport) {
           const key = `${leg.sport}:${leg.espn_game_id}`;
-          if (!gameChecks.has(key)) gameChecks.set(key, { sport: leg.sport, gameId: leg.espn_game_id });
+          if (!gameChecks.has(key)) gameChecks.set(key, { sport: leg.sport, gameId: leg.espn_game_id, eventStartTime: leg.event_start_time });
         }
       }
 
-      // Batch-fetch scoreboards by sport
-      const sportGames = new Map();
-      const uniqueSports = [...new Set([...gameChecks.values()].map(g => g.sport))];
-      for (const sport of uniqueSports) {
+      // Batch-fetch scoreboards by sport+date
+      const sportDateSet = new Set();
+      for (const { sport, eventStartTime } of gameChecks.values()) {
+        let dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+        if (eventStartTime) {
+          try {
+            const d = new Date(eventStartTime);
+            if (!isNaN(d.getTime())) dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+          } catch {}
+        }
+        sportDateSet.add(`${sport}:${dateStr}`);
+      }
+      const notifGames = [];
+      for (const key of sportDateSet) {
+        const [sport, dateStr] = key.split(':');
         try {
-          const games = await espn.getTodaysGames(sport);
-          sportGames.set(sport, games);
+          const games = await espn.getTodaysGames(sport, dateStr);
+          notifGames.push(...games);
         } catch (e) {}
       }
 
       // Check for games that are now live
       for (const bet of openBets) {
         if (startNotifiedCache.has(bet.id)) continue;
-        const games = sportGames.get(bet.sport) || [];
-        const game = games.find(g => g.id === bet.espn_game_id);
+        const game = notifGames.find(g => g.id === bet.espn_game_id);
         if (!game) continue;
 
         if (game.state === 'in') {
@@ -294,21 +304,33 @@ client.once(Events.ClientReady, (c) => {
         .eq('status', 'open')
         .not('espn_game_id', 'is', null);
 
-      // Collect all unique sport/gameId combos
+      // Collect unique sport+date combos so we fetch the right scoreboards
       const allItems = [...(openSingles || []), ...(openLegs || [])];
       if (allItems.length === 0) return;
 
-      const sportSet = new Set();
+      const sportDateSet = new Set();
       for (const item of allItems) {
-        if (item.sport) sportSet.add(item.sport);
+        if (!item.sport) continue;
+        // Derive ET date from event_start_time; fall back to today
+        let dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+        if (item.event_start_time) {
+          try {
+            const d = new Date(item.event_start_time);
+            if (!isNaN(d.getTime())) {
+              dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+            }
+          } catch {}
+        }
+        sportDateSet.add(`${item.sport}:${dateStr}`);
       }
 
-      // Fetch scoreboards
-      const sportGames = new Map();
-      for (const sport of sportSet) {
+      // Fetch scoreboards per sport+date
+      const allGames = []; // flat array of all fetched games
+      for (const key of sportDateSet) {
+        const [sport, dateStr] = key.split(':');
         try {
-          const games = await espn.getTodaysGames(sport);
-          sportGames.set(sport, games);
+          const games = await espn.getTodaysGames(sport, dateStr);
+          allGames.push(...games);
         } catch (e) {}
       }
 
@@ -324,8 +346,7 @@ client.once(Events.ClientReady, (c) => {
 
       // ── Resolve single bets ──
       for (const bet of (openSingles || [])) {
-        const games = sportGames.get(bet.sport) || [];
-        const game = games.find(g => g.id === bet.espn_game_id);
+        const game = allGames.find(g => g.id === bet.espn_game_id);
         if (!game || game.state !== 'post') continue;
 
         // Get summary if needed for props/HR
@@ -375,8 +396,7 @@ client.once(Events.ClientReady, (c) => {
       // ── Resolve parlay legs ──
       const parlayBetsToCheck = new Set();
       for (const leg of (openLegs || [])) {
-        const games = sportGames.get(leg.sport) || [];
-        const game = games.find(g => g.id === leg.espn_game_id);
+        const game = allGames.find(g => g.id === leg.espn_game_id);
         if (!game || game.state !== 'post') continue;
 
         let summary = null;
