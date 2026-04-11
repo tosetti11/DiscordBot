@@ -378,7 +378,7 @@ client.once(Events.ClientReady, (c) => {
             }
           }
         } catch (e) {
-          // Silently skip individual bet errors
+          console.error(`[CardUpdate] Error updating ${bet.slip_number}:`, e.message);
         }
       }
     } catch (err) {
