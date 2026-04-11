@@ -336,9 +336,13 @@ client.once(Events.ClientReady, (c) => {
             if (golfData && (golfData.roundStatus === 'in' || golfData.roundStatus === 'post')) {
               // Build a quick hash to avoid re-editing when nothing changed
               const hash = `${golfData.holesCompleted}:${golfData.roundScore}:${golfData.position}`;
-              if (cardUpdateTracker.get(bet.id) === hash) continue;
+              if (cardUpdateTracker.get(bet.id) === hash) {
+                console.log(`[CardUpdate] ${bet.slip_number} no change (${hash}), skipping`);
+                continue;
+              }
               cardUpdateTracker.set(bet.id, hash);
               isLive = true;
+              console.log(`[CardUpdate] ${bet.slip_number} golf update: thru ${golfData.holesCompleted}, score ${golfData.roundScore}`);
             }
           } else {
             const dateStr = eventDateStr(bet.event_start_time);
@@ -374,8 +378,15 @@ client.once(Events.ClientReady, (c) => {
           if (channel && bet.message_id) {
             const msg = await channel.messages.fetch(bet.message_id).catch(() => null);
             if (msg) {
-              await msg.edit({ files: [attachment] }).catch(() => {});
+              await msg.edit({ files: [attachment] }).catch((e) => {
+                console.error(`[CardUpdate] Discord edit failed for ${bet.slip_number}:`, e.message);
+              });
+              console.log(`[CardUpdate] ✅ Updated card for ${bet.slip_number}`);
+            } else {
+              console.log(`[CardUpdate] Could not fetch message ${bet.message_id} for ${bet.slip_number}`);
             }
+          } else {
+            console.log(`[CardUpdate] Could not fetch channel ${bet.channel_id} for ${bet.slip_number}`);
           }
         } catch (e) {
           console.error(`[CardUpdate] Error updating ${bet.slip_number}:`, e.message);
