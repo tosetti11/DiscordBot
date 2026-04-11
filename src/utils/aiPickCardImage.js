@@ -86,7 +86,7 @@ function getBrandLogo() {
 /**
  * Generate the AI Pick of the Day card
  */
-async function generateAiPickCardImage(pick, record, streak, totalUnits) {
+async function generateAiPickCardImage(pick, record, streak, totalUnits, liveScore) {
   const brandLogo = await getBrandLogo();
   const W = 520;
   const PAD = 24;
@@ -124,6 +124,10 @@ async function generateAiPickCardImage(pick, record, streak, totalUnits) {
   // Odds box
   y += 48;
   y += 12;
+
+  // Live score bar (if game is live or final)
+  const showLive = liveScore && liveScore.state && liveScore.state !== 'pre';
+  if (showLive) y += 32;
 
   // Confidence meter
   y += 40;
@@ -315,6 +319,34 @@ async function generateAiPickCardImage(pick, record, streak, totalUnits) {
 
   curY += 48;
   curY += 12;
+
+  // ── Live Score Bar ──
+  if (showLive) {
+    const isLive = liveScore.state === 'in';
+    const scBg = isLive ? 'rgba(63, 185, 80, 0.10)' : 'rgba(128, 128, 128, 0.08)';
+    roundRect(ctx, PAD, curY, INNER, 26, 6);
+    ctx.fillStyle = scBg;
+    ctx.fill();
+    roundRect(ctx, PAD, curY, INNER, 26, 6);
+    ctx.strokeStyle = isLive ? 'rgba(63, 185, 80, 0.25)' : 'rgba(128, 128, 128, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const scoreStr = `${liveScore.awayAbbr} ${liveScore.awayScore}  —  ${liveScore.homeAbbr} ${liveScore.homeScore}`;
+    ctx.font = `bold 12px ${FF}`;
+    ctx.fillStyle = isLive ? C.green : C.gray;
+    ctx.fillText(scoreStr, PAD + 10, curY + 18);
+
+    if (liveScore.detail) {
+      const badge = isLive ? '🔴 ' : '';
+      const detailStr = `${badge}${liveScore.detail}`;
+      ctx.font = `500 10px ${FF}`;
+      ctx.fillStyle = isLive ? C.green : C.muted;
+      const dw = ctx.measureText(detailStr).width;
+      ctx.fillText(detailStr, W - PAD - dw - 8, curY + 17);
+    }
+    curY += 32;
+  }
 
   // ── Confidence meter ──
   ctx.font = `700 11px ${FF}`;

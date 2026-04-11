@@ -409,6 +409,78 @@ client.once(Events.ClientReady, (c) => {
           console.error(`[CardUpdate] Error updating ${bet.slip_number}:`, e.message);
         }
       }
+
+      // ── AI Pick of the Day live updates ──
+      try {
+        const aiPicksDb = require('./database/aiPicks');
+        const { generateAiPickCardImage } = require('./utils/aiPickCardImage');
+        const pendingPicks = await aiPicksDb.getPendingAiPicks();
+
+        for (const pick of pendingPicks) {
+          if (!pick.espn_game_id || !pick.espn_sport || !pick.message_id) continue;
+
+          try {
+            const dateStr = eventDateStr(pick.event_start_time || pick.pick_date);
+            const games = await espn.getTodaysGames(pick.espn_sport, dateStr);
+            const game = games.find(g => g.id === pick.espn_game_id);
+            if (!game || game.state === 'pre') continue;
+
+            // Build live score data
+            const liveScore = {
+              homeAbbr: game.home?.abbreviation || game.home?.name || '',
+              awayAbbr: game.away?.abbreviation || game.away?.name || '',
+              homeScore: game.home?.score ?? 0,
+              awayScore: game.away?.score ?? 0,
+              state: game.state,
+              detail: game.detail || '',
+            };
+
+            const hash = `ai:${liveScore.awayScore}:${liveScore.homeScore}:${game.state}`;
+            if (cardUpdateTracker.get(pick.id) === hash) continue;
+            cardUpdateTracker.set(pick.id, hash);
+
+            // Get record data for card
+            const record = await aiPicksDb.getAiPickRecord(pick.guild_id);
+            const streak = await aiPicksDb.getAiPickStreak(pick.guild_id);
+            const totalUnits = await aiPickService.calculateTotalUnits(pick.guild_id);
+
+            const imgBuffer = await generateAiPickCardImage(pick, record, streak, totalUnits, liveScore);
+            const { AttachmentBuilder } = require('discord.js');
+            const attachment = new AttachmentBuilder(imgBuffer, { name: 'ai-pick.png' });
+
+            // Update original message
+            const channel = await client.channels.fetch(pick.channel_id).catch(() => null);
+            if (channel && pick.message_id) {
+              const msg = await channel.messages.fetch(pick.message_id).catch(() => null);
+              if (msg) {
+                await msg.edit({ files: [attachment] }).catch((e) => {
+                  console.error(`[CardUpdate] AI pick edit failed:`, e.message);
+                });
+                console.log(`[CardUpdate] ✅ Updated AI pick (${liveScore.awayAbbr} ${liveScore.awayScore}-${liveScore.homeScore} ${liveScore.homeAbbr})`);
+              }
+            }
+
+            // Update mirror message
+            if (pick.mirror_channel_id && pick.mirror_message_id) {
+              try {
+                const mirrorAttachment = new AttachmentBuilder(imgBuffer, { name: 'ai-pick.png' });
+                const mirrorCh = await client.channels.fetch(pick.mirror_channel_id).catch(() => null);
+                if (mirrorCh) {
+                  const mirrorMsg = await mirrorCh.messages.fetch(pick.mirror_message_id).catch(() => null);
+                  if (mirrorMsg) {
+                    await mirrorMsg.edit({ files: [mirrorAttachment] }).catch(() => {});
+                    console.log(`[CardUpdate] ✅ Updated AI pick mirror`);
+                  }
+                }
+              } catch (e) {}
+            }
+          } catch (e) {
+            console.error(`[CardUpdate] AI pick error:`, e.message);
+          }
+        }
+      } catch (e) {
+        console.error('[CardUpdate] AI picks section error:', e.message);
+      }
     } catch (err) {
       console.error('[LiveTracker] Card update error:', err.message);
     }
