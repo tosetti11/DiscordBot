@@ -354,7 +354,7 @@ client.once(Events.ClientReady, (c) => {
       async function getMlbStats(bet, summary) {
         if (!['mlb', 'kbo', 'npb'].includes(bet.sport)) return summary;
         if (!bet.prop_description) return summary;
-        const parsed = espn.parsePropDescription(bet.prop_description);
+        const parsed = espn.parsePropDescription(bet.prop_description, bet.sport);
         if (!parsed || !espn.MLB_API_STATS.has(parsed.espnKey)) return summary;
 
         // Need MLB data for this prop

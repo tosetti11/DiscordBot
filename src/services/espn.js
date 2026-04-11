@@ -230,25 +230,69 @@ async function getGameSummary(sport, gameId) {
     for (const teamStats of boxPlayers) {
       for (const statGroup of (teamStats.statistics || [])) {
         const labels = statGroup.labels || [];
+        const catName = (statGroup.name || statGroup.type || '').toLowerCase();
         for (const athlete of (statGroup.athletes || [])) {
           const name = athlete.athlete?.displayName || '';
           const playerId = athlete.athlete?.id || '';
-          const stats = {};
+          const newStats = {};
           (athlete.stats || []).forEach((val, i) => {
-            if (labels[i]) stats[labels[i].toLowerCase()] = val;
+            if (labels[i]) {
+              const key = labels[i].toLowerCase();
+              newStats[key] = val;
+              // Add category-prefixed version for disambiguation (e.g. passing_yds vs rushing_yds)
+              if (catName) newStats[`${catName}_${key}`] = val;
+            }
           });
-          game.players[playerId] = {
-            name,
-            id: playerId,
-            teamId: teamStats.team?.id,
-            stats,
-          };
-          // Also index by normalized name for fuzzy matching
-          const normName = name.toLowerCase().replace(/[^a-z ]/g, '').trim();
-          game.players[normName] = game.players[playerId];
+
+          // Parse compound stat formats (NFL)
+          if (newStats['c/att']) {
+            const parts = newStats['c/att'].split('/');
+            newStats['completions'] = parts[0];
+            newStats['pass_attempts'] = parts[1];
+          }
+          if (typeof newStats['sacks'] === 'string' && newStats['sacks'].includes('-')) {
+            const parts = newStats['sacks'].split('-');
+            newStats['times_sacked'] = parts[0];
+            newStats['sack_yards_lost'] = parts[1];
+          }
+          if (typeof newStats['fg'] === 'string' && newStats['fg'].includes('/')) {
+            const parts = newStats['fg'].split('/');
+            newStats['fg_made'] = parts[0];
+            newStats['fg_attempted'] = parts[1];
+          }
+          if (typeof newStats['xp'] === 'string' && newStats['xp'].includes('/')) {
+            const parts = newStats['xp'].split('/');
+            newStats['xp_made'] = parts[0];
+            newStats['xp_attempted'] = parts[1];
+          }
+
+          // Merge with existing player data (player may appear in multiple categories, e.g. NFL QB in passing + rushing)
+          const existing = game.players[playerId];
+          if (existing) {
+            Object.assign(existing.stats, newStats);
+          } else {
+            const playerObj = {
+              name,
+              id: playerId,
+              teamId: teamStats.team?.id,
+              stats: newStats,
+            };
+            game.players[playerId] = playerObj;
+            // Also index by normalized name for fuzzy matching
+            const normName = name.toLowerCase().replace(/[^a-z ]/g, '').trim();
+            game.players[normName] = playerObj;
+          }
         }
       }
     }
+
+    // Capture linescores for period-based resolution
+    const headerHome = header?.competitors?.find(c => c.homeAway === 'home');
+    const headerAway = header?.competitors?.find(c => c.homeAway === 'away');
+    game.linescores = {
+      home: headerHome?.linescores || [],
+      away: headerAway?.linescores || [],
+    };
 
     setCache(cacheKey, game);
     return game;
@@ -315,7 +359,9 @@ function matchTeamToGame(teamName, games) {
 }
 
 /**
- * Map a stat category name from a bet prop to ESPN box score label
+ * Map a stat category name from a bet prop to ESPN box score label.
+ * Football stats use category-prefixed keys (passing_yds, rushing_yds, etc.)
+ * because the same label (YDS, TD) appears in multiple ESPN box score categories.
  */
 const STAT_MAP = {
   // Basketball
@@ -328,13 +374,51 @@ const STAT_MAP = {
   'steals': 'stl',
   'blocks': 'blk',
   'turnovers': 'to',
-  // Football
-  'passing yards': 'yds',
-  'rushing yards': 'yds',
-  'receiving yards': 'yds',
-  'touchdowns': 'td',
+  // Football — category-prefixed to avoid YDS/TD collisions across passing/rushing/receiving
+  'passing yards': 'passing_yds',
+  'pass yards': 'passing_yds',
+  'rushing yards': 'rushing_yds',
+  'rush yards': 'rushing_yds',
+  'receiving yards': 'receiving_yds',
+  'rec yards': 'receiving_yds',
+  'completions': 'completions',           // parsed from C/ATT
+  'pass attempts': 'pass_attempts',       // parsed from C/ATT
+  'passing attempts': 'pass_attempts',
+  'rush attempts': 'car',
+  'carries': 'car',
+  'rushing attempts': 'car',
+  'receptions': 'rec',
+  'targets': 'tgts',
+  'passing touchdowns': 'passing_td',
+  'passing tds': 'passing_td',
+  'pass touchdowns': 'passing_td',
+  'rushing touchdowns': 'rushing_td',
+  'rushing tds': 'rushing_td',
+  'rush touchdowns': 'rushing_td',
+  'receiving touchdowns': 'receiving_td',
+  'receiving tds': 'receiving_td',
+  'touchdowns': 'anytime_td',            // computed: sum of all non-passing _td keys
+  'tds': 'anytime_td',
+  'anytime td': 'anytime_td',
+  'anytime touchdown': 'anytime_td',
   'interceptions': 'int',
-  'completions': 'cmp',
+  'interceptions thrown': 'passing_int',
+  'ints thrown': 'passing_int',
+  'field goals made': 'fg_made',          // parsed from FG "5/5"
+  'fg made': 'fg_made',
+  'fgs made': 'fg_made',
+  'field goals attempted': 'fg_attempted',
+  'fg attempted': 'fg_attempted',
+  'fgs attempted': 'fg_attempted',
+  'extra points': 'xp_made',             // parsed from XP "2/2"
+  'extra points made': 'xp_made',
+  'xp made': 'xp_made',
+  'passer rating': 'rtg',
+  'qbr': 'qbr',
+  'tackles': 'tot',
+  'solo tackles': 'solo',
+  'sacks': 'defensive_sacks',
+  'kicking points': 'kicking_pts',
   // Baseball (ESPN keys)
   'strikeouts': 'k',
   'hits': 'h',
@@ -351,7 +435,53 @@ const STAT_MAP = {
   // Hockey
   'goals': 'g',
   'saves': 'sv',
-  'shots': 'sog',
+  'shots': 's',
+  'shots on goal': 's',
+  'blocked shots': 'bs',
+  'penalty minutes': 'pim',
+  'pims': 'pim',
+  'faceoff wins': 'fw',
+  'faceoffs won': 'fw',
+  'plus minus': '+/-',
+  'plus/minus': '+/-',
+  'takeaways': 'tk',
+  'giveaways': 'gv',
+  'time on ice': 'toi',
+  'goals against': 'ga',
+  'shots against': 'sa',
+  'save percentage': 'sv%',
+};
+
+/**
+ * Sport-specific stat key overrides.
+ * Some stat names (assists, blocks, hits) map to different ESPN labels per sport.
+ */
+const SPORT_STAT_OVERRIDES = {
+  nhl: { 'assists': 'a', 'blocks': 'bs', 'hits': 'ht', 'points': 'pts' },
+};
+
+/**
+ * Computed/derived stats — used when the raw ESPN key doesn't exist in box score.
+ * Each function receives the player's full stats object and returns a numeric value or null.
+ */
+const COMPUTED_STATS = {
+  'pts': (stats) => {
+    // Hockey: goals + assists (PTS not in ESPN hockey box score)
+    if (stats.g !== undefined || stats.a !== undefined) {
+      return (parseFloat(stats.g) || 0) + (parseFloat(stats.a) || 0);
+    }
+    return null;
+  },
+  'anytime_td': (stats) => {
+    // Football: sum of all scoring TDs (rushing + receiving + return TDs, NOT passing TDs)
+    let total = 0;
+    for (const [key, val] of Object.entries(stats)) {
+      if (key.endsWith('_td') && key !== 'passing_td') {
+        total += parseFloat(val) || 0;
+      }
+    }
+    return total > 0 ? total : null;
+  },
 };
 
 // Stats that require MLB Stats API (not available in ESPN box score)
@@ -360,9 +490,12 @@ const MLB_API_STATS = new Set(['totalBases', 'stolenBases', 'doubles', 'triples'
 /**
  * Parse a prop description into structured data
  * e.g. "Over 25.5 Points" → { direction: 'over', line: 25.5, stat: 'points', espnKey: 'pts' }
+ * @param {string} propDesc - The prop description text
+ * @param {string} [sport] - Sport key for sport-specific stat key overrides
  */
-function parsePropDescription(propDesc) {
+function parsePropDescription(propDesc, sport) {
   if (!propDesc) return null;
+  const overrides = (sport && SPORT_STAT_OVERRIDES[sport]) || {};
 
   // Standard: "Over 2.5 Hits", "Under 4.5 Strikeouts"
   const match = propDesc.match(/^(over|under)\s+([\d.]+)\s+(.+)$/i);
@@ -370,7 +503,7 @@ function parsePropDescription(propDesc) {
     const direction = match[1].toLowerCase();
     const line = parseFloat(match[2]);
     const statName = match[3].toLowerCase().trim();
-    const espnKey = STAT_MAP[statName] || statName;
+    const espnKey = overrides[statName] || STAT_MAP[statName] || statName;
     return { direction, line, stat: statName, espnKey };
   }
 
@@ -379,7 +512,7 @@ function parsePropDescription(propDesc) {
   if (altMatch) {
     const statName = altMatch[1].toLowerCase().trim();
     const threshold = parseInt(altMatch[2], 10);
-    const espnKey = STAT_MAP[statName] || statName;
+    const espnKey = overrides[statName] || STAT_MAP[statName] || statName;
     // "ALT Hits 1+" means >= 1, which is equivalent to Over 0.5
     return { direction: 'over', line: threshold - 0.5, stat: statName, espnKey };
   }
@@ -451,28 +584,78 @@ async function resolveGameId(sport, teamA, teamB, eventStartTime) {
 }
 
 /**
+ * Get scores for a specific period/quarter from linescore data.
+ * @param {Object} game - Game object with linescores
+ * @param {string} period - Period key (full_game, 1st_quarter, 1st_half, etc.)
+ * @returns {Object|null} { home, away } scores for the period
+ */
+function getPeriodScores(game, period) {
+  if (!period || period === 'full_game') {
+    return { home: game.home?.score ?? 0, away: game.away?.score ?? 0 };
+  }
+
+  const linescores = getLinescores(game);
+  if (!linescores) return null;
+
+  // Map period to linescore array indices
+  const PERIOD_INDICES = {
+    '1st_quarter': [0],
+    '2nd_quarter': [1],
+    '3rd_quarter': [2],
+    '4th_quarter': [3],
+    '1st_half': [0, 1],
+    '1st_period': [0],
+    '2nd_period': [1],
+    '3rd_period': [2],
+    'first_3': [0, 1, 2],
+    'first_5': [0, 1, 2, 3, 4],
+    '1st_inning': [0],
+    '2nd_inning': [1],
+    '3rd_inning': [2],
+    '4th_inning': [3],
+    '5th_inning': [4],
+  };
+
+  let indices = PERIOD_INDICES[period];
+
+  // 2nd_half: index 2 through end (includes OT)
+  if (period === '2nd_half') {
+    const maxLen = Math.max(linescores.home?.length || 0, linescores.away?.length || 0);
+    indices = [];
+    for (let i = 2; i < maxLen; i++) indices.push(i);
+  }
+
+  if (!indices || !indices.length) return null;
+
+  const sumScores = (ls, idxs) => idxs.reduce((sum, i) => {
+    return sum + (parseFloat(ls?.[i]?.displayValue || ls?.[i]?.value || '0') || 0);
+  }, 0);
+
+  return {
+    home: sumScores(linescores.home, indices),
+    away: sumScores(linescores.away, indices),
+  };
+}
+
+/**
  * Auto-resolve a bet or parlay leg result based on ESPN final game data.
- * Returns the computed result or null if unresolvable.
- *
- * @param {Object} params
- * @param {string} params.wagerType - moneyline, spread, total, etc.
- * @param {string} params.pick - The pick text (e.g., "Lakers -4.5", "Over 220.5")
- * @param {string} params.teamA - Team A name
- * @param {string} params.teamB - Team B name
- * @param {number|null} params.spreadValue - Spread/line value
- * @param {string|null} params.playerName - For player props
- * @param {string|null} params.propDescription - For player props (e.g., "Over 25.5 Points")
- * @param {string} params.sport - Sport key
- * @param {Object} params.game - ESPN game object (from scoreboard, must be state='post')
- * @param {Object} [params.summary] - ESPN game summary (needed for player props / HR)
- * @param {string} [params.period] - Period for the bet (full_game, first_3, first_5, 1st_half, etc.)
- * @returns {string|null} 'win', 'loss', 'push', or null if can't determine
+ * Supports period-based bets (1st_quarter, 1st_half, etc.) using linescore data.
+ * Supports computed stats (hockey points = G+A, football anytime TD).
  */
 function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName, propDescription, sport, game, summary, period }) {
   if (!game || game.state !== 'post') return null;
 
-  const homeScore = game.home?.score ?? 0;
-  const awayScore = game.away?.score ?? 0;
+  // Compute scores based on period — use linescore data for period bets
+  let homeScore, awayScore;
+  if (period && period !== 'full_game') {
+    const periodScores = getPeriodScores(game, period);
+    if (!periodScores) return null; // Can't resolve period bet without linescore data
+    homeScore = periodScores.home;
+    awayScore = periodScores.away;
+  } else {
+    homeScore = game.home?.score ?? 0;
+    awayScore = game.away?.score ?? 0;
+  }
 
   // Determine which team the user picked (home or away)
   const pickTeamSide = identifyPickSide(pick, teamA, teamB, game);
@@ -564,7 +747,7 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
     case 'prop': {
       // Player prop — need game summary with box score
       if (!summary || !playerName || !propDescription) return null;
-      const parsed = parsePropDescription(propDescription);
+      const parsed = parsePropDescription(propDescription, sport);
       if (!parsed) return null;
 
       const playerData = findPlayer(summary.players, playerName);
@@ -578,6 +761,12 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
         statVal = parseFloat(rawStat.split('-')[0]) || 0;
       } else {
         statVal = parseFloat(rawStat) || 0;
+      }
+
+      // Try computed/derived stats if raw value is 0 (e.g. hockey points = G+A, anytime TD)
+      if (statVal === 0 && COMPUTED_STATS[parsed.espnKey] && playerData.stats) {
+        const computed = COMPUTED_STATS[parsed.espnKey](playerData.stats);
+        if (computed !== null) statVal = computed;
       }
 
       // If ESPN doesn't have this stat and it's an MLB game, try MLB Stats API
@@ -903,9 +1092,12 @@ module.exports = {
   resolveResult,
   identifyPickSide,
   findPlayer,
+  getPeriodScores,
   getGolfPlayerRound,
   findMlbGamePk,
   getMlbPlayerStats,
   MLB_API_STATS,
   STAT_MAP,
+  SPORT_STAT_OVERRIDES,
+  COMPUTED_STATS,
 };
