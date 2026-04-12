@@ -386,16 +386,23 @@ client.once(Events.ClientReady, (c) => {
               const game = games.find(g => g.id === leg.espn_game_id);
               if (game && (game.state === 'in' || game.state === 'post')) {
                 let hashPart = `${leg.espn_game_id}:${game.home?.score}:${game.away?.score}:${game.state}`;
-                // Include prop stat in hash for prop legs
-                if (leg.wager_type === 'prop' && leg.player_name && leg.prop_description) {
+                // Include prop stat + batting line in hash
+                if (leg.player_name && leg.espn_game_id) {
                   try {
-                    const parsed = espn.parsePropDescription(leg.prop_description, leg.sport);
-                    if (parsed) {
-                      const summary = await espn.getGameSummary(leg.sport, leg.espn_game_id);
-                      const player = summary ? espn.findPlayer(summary.players, leg.player_name) : null;
-                      let sv = player?.stats?.[parsed.espnKey];
-                      if (typeof sv === 'string' && /^\d+-\d+$/.test(sv)) sv = sv.split('-')[0];
-                      hashPart += `:ps${sv ?? ''}`;
+                    const summary = await espn.getGameSummary(leg.sport, leg.espn_game_id);
+                    const player = summary ? espn.findPlayer(summary.players, leg.player_name) : null;
+                    if (player?.stats) {
+                      // Batting line hash (h-ab changes each AB)
+                      if (player.stats['h-ab']) hashPart += `:bl${player.stats['h-ab']}`;
+                      // Prop stat hash
+                      if (leg.wager_type === 'prop' && leg.prop_description) {
+                        const parsed = espn.parsePropDescription(leg.prop_description, leg.sport);
+                        if (parsed) {
+                          let sv = player.stats[parsed.espnKey];
+                          if (typeof sv === 'string' && /^\d+-\d+$/.test(sv)) sv = sv.split('-')[0];
+                          hashPart += `:ps${sv ?? ''}`;
+                        }
+                      }
                     }
                   } catch {}
                 }
@@ -430,16 +437,21 @@ client.once(Events.ClientReady, (c) => {
             const game = games.find(g => g.id === bet.espn_game_id);
             if (game && game.state === 'in') {
               let hash = `${game.home?.score}:${game.away?.score}`;
-              // Include prop stat in hash for prop bets
-              if (bet.wager_type === 'prop' && bet.player_name && bet.prop_description) {
+              // Include prop stat + batting line in hash
+              if (bet.player_name && bet.espn_game_id) {
                 try {
-                  const parsed = espn.parsePropDescription(bet.prop_description, bet.sport);
-                  if (parsed) {
-                    const summary = await espn.getGameSummary(bet.sport, bet.espn_game_id);
-                    const player = summary ? espn.findPlayer(summary.players, bet.player_name) : null;
-                    let sv = player?.stats?.[parsed.espnKey];
-                    if (typeof sv === 'string' && /^\d+-\d+$/.test(sv)) sv = sv.split('-')[0];
-                    hash += `:ps${sv ?? ''}`;
+                  const summary = await espn.getGameSummary(bet.sport, bet.espn_game_id);
+                  const player = summary ? espn.findPlayer(summary.players, bet.player_name) : null;
+                  if (player?.stats) {
+                    if (player.stats['h-ab']) hash += `:bl${player.stats['h-ab']}`;
+                    if (bet.wager_type === 'prop' && bet.prop_description) {
+                      const parsed = espn.parsePropDescription(bet.prop_description, bet.sport);
+                      if (parsed) {
+                        let sv = player.stats[parsed.espnKey];
+                        if (typeof sv === 'string' && /^\d+-\d+$/.test(sv)) sv = sv.split('-')[0];
+                        hash += `:ps${sv ?? ''}`;
+                      }
+                    }
                   }
                 } catch {}
               }

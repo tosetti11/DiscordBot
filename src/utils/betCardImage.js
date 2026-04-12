@@ -173,6 +173,45 @@ async function fetchLiveScore(sport, espnGameId, wagerType) {
   } catch { return null; }
 }
 
+// ── Batting line helper (MLB only) ─────────────────────────
+async function fetchBattingLine(sport, espnGameId, playerName) {
+  if (!espnGameId || !playerName || !['mlb', 'kbo', 'npb'].includes(sport)) return null;
+  try {
+    // Check game is live/post first
+    const summary = await getGameSummary(sport, espnGameId);
+    if (!summary || summary.state === 'pre') return null;
+
+    const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const gamePk = await findMlbGamePk(espnGameId, dateStr);
+    if (!gamePk) return null;
+
+    const stats = await getMlbPlayerStats(gamePk, playerName);
+    if (!stats || stats.atBats === undefined) return null;
+
+    // Use the MLB API summary field directly if available (e.g. "0-3 | BB, 2 K")
+    if (stats.summary) {
+      // Clean up: replace " | " with "  " for cleaner display
+      return stats.summary.replace(/\s*\|\s*/g, '  ');
+    }
+
+    // Fallback: build manually
+    const h = stats.hits || 0;
+    const ab = stats.atBats || 0;
+    let line = `${h}-${ab}`;
+    const parts = [];
+    if (stats.homeRuns > 0) parts.push(`${stats.homeRuns} HR`);
+    if (stats.doubles > 0) parts.push(`${stats.doubles} 2B`);
+    if (stats.triples > 0) parts.push(`${stats.triples} 3B`);
+    if (stats.baseOnBalls > 0) parts.push(`${stats.baseOnBalls > 1 ? stats.baseOnBalls + ' ' : ''}BB`);
+    if (stats.strikeOuts > 0) parts.push(`${stats.strikeOuts > 1 ? stats.strikeOuts + ' ' : ''}K`);
+    if (stats.rbi > 0) parts.push(`${stats.rbi} RBI`);
+    if (stats.runs > 0) parts.push(`${stats.runs} R`);
+    if (stats.stolenBases > 0) parts.push(`${stats.stolenBases} SB`);
+    if (parts.length) line += '  ' + parts.join(', ');
+    return line;
+  } catch { return null; }
+}
+
 // ── Live prop stat helper ──────────────────────────────────
 async function fetchLivePropStat(sport, espnGameId, playerName, propDescription) {
   if (!espnGameId || !sport || !playerName || !propDescription) return null;
@@ -294,6 +333,22 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     );
   }
 
+  // ── Fetch batting line data (MLB only) ──
+  let singleBattingLine = null;
+  let legBattingLines = [];
+
+  if (!isParlay && bet.espn_game_id && bet.player_name && ['mlb', 'kbo', 'npb'].includes(bet.sport)) {
+    singleBattingLine = await fetchBattingLine(bet.sport, bet.espn_game_id, bet.player_name);
+  }
+  if (isParlay && bet.parlay_legs?.length) {
+    legBattingLines = await Promise.all(
+      bet.parlay_legs.map(leg => {
+        if (!leg.espn_game_id || !leg.player_name || !['mlb', 'kbo', 'npb'].includes(leg.sport)) return null;
+        return fetchBattingLine(leg.sport, leg.espn_game_id, leg.player_name);
+      })
+    );
+  }
+
   const sportName = SPORT_NAMES[bet.sport] || bet.sport || '';
   const wagerLabel = WAGER_TYPES[bet.wager_type] || '';
   const status = bet.status || 'open';
@@ -337,6 +392,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (golfData && golfData.roundStatus !== 'pre') y += 52; // golf tracker
     else if (singleLiveScore && singleLiveScore.state !== 'pre') y += 30;
     if (singlePropStat) y += 24; // prop stat progress
+    if (singleBattingLine) y += 16; // batting line
   }
 
   // DK-style deduplicated matchup header for parlays (only for same-game parlays)
@@ -387,6 +443,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       const legScoreData = legLiveScores[li];
       if (legScoreData && legScoreData.state !== 'pre') y += 20;
       if (legPropStats[li]) y += 18; // prop stat progress
+      if (legBattingLines[li]) y += 16; // batting line
       if (leg.odds_american) y += 15; // odds line
       y += 6; // bottom padding
     }
@@ -730,6 +787,13 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       ctx.fillText(propText, LEFT_BAR + PAD + 6, curY + 15);
       curY += 24;
     }
+    // Batting line (single bet, MLB only)
+    if (singleBattingLine) {
+      ctx.font = '600 10px ' + FF;
+      ctx.fillStyle = '#8BA3C7';
+      ctx.fillText(`🏏 ${singleBattingLine}`, LEFT_BAR + PAD + 6, curY + 12);
+      curY += 16;
+    }
   }
 
   // ── DK-style matchup header for parlays ──
@@ -900,6 +964,15 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         ctx.fillStyle = legHitting ? C.win : C.accent;
         ctx.fillText(lpText, legX, curY + 12);
         curY += 18;
+      }
+
+      // Leg batting line (MLB only)
+      const legBl = legBattingLines[i];
+      if (legBl) {
+        ctx.font = '600 9px ' + FF;
+        ctx.fillStyle = '#8BA3C7';
+        ctx.fillText(`🏏 ${legBl}`, legX, curY + 11);
+        curY += 16;
       }
 
       // Leg odds
