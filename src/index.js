@@ -354,6 +354,7 @@ client.once(Events.ClientReady, (c) => {
   // ── Live Card Update Poller (every 5min) ──
   // Refreshes card images for open bets whose games are live
   const cardUpdateTracker = new Map(); // betId → last card hash (to skip no-change edits)
+  const cardFinalRendered = new Set(); // betIds that have been rendered in final state — skip forever
   setInterval(async () => {
     try {
       // Get open bets with ESPN game IDs and message IDs (so we can edit)
@@ -370,10 +371,12 @@ client.once(Events.ClientReady, (c) => {
 
       for (const bet of liveBets) {
         try {
+          if (cardFinalRendered.has(bet.id)) continue; // Already rendered in final state
           // Check if game is still live
           const isGolf = bet.sport?.startsWith('golf');
           const isParlay = bet.bet_type === 'parlay';
           let isLive = false;
+          let allGamesPost = true; // Track if every game is 'post' (final)
 
           if (isParlay) {
             // For parlays, check each leg's game status and build a composite hash
@@ -385,6 +388,7 @@ client.once(Events.ClientReady, (c) => {
               const games = await espn.getTodaysGames(leg.sport, dateStr);
               const game = games.find(g => g.id === leg.espn_game_id);
               if (game && (game.state === 'in' || game.state === 'post')) {
+                if (game.state !== 'post') allGamesPost = false;
                 let hashPart = `${leg.espn_game_id}:${game.home?.score}:${game.away?.score}:${game.state}`;
                 // Include prop stat + batting line in hash
                 if (leg.player_name && leg.espn_game_id) {
@@ -412,7 +416,10 @@ client.once(Events.ClientReady, (c) => {
             }
             if (hashParts.length) {
               const hash = hashParts.join('|');
-              if (cardUpdateTracker.get(bet.id) === hash) continue;
+              if (cardUpdateTracker.get(bet.id) === hash) {
+                if (allGamesPost) cardFinalRendered.add(bet.id);
+                continue;
+              }
               cardUpdateTracker.set(bet.id, hash);
               // At least one game changed — regenerate
             } else {
@@ -421,9 +428,11 @@ client.once(Events.ClientReady, (c) => {
           } else if (isGolf) {
             const golfData = await espn.getGolfPlayerRound(bet.player_name, bet.golf_round || null);
             if (golfData && (golfData.roundStatus === 'in' || golfData.roundStatus === 'post')) {
+              if (golfData.roundStatus !== 'post') allGamesPost = false;
               // Build a quick hash to avoid re-editing when nothing changed
               const hash = `${golfData.holesCompleted}:${golfData.roundScore}:${golfData.position}`;
               if (cardUpdateTracker.get(bet.id) === hash) {
+                if (allGamesPost) cardFinalRendered.add(bet.id);
                 console.log(`[CardUpdate] ${bet.slip_number} no change (${hash}), skipping`);
                 continue;
               }
@@ -436,6 +445,7 @@ client.once(Events.ClientReady, (c) => {
             const games = await espn.getTodaysGames(bet.sport, dateStr);
             const game = games.find(g => g.id === bet.espn_game_id);
             if (game && (game.state === 'in' || game.state === 'post')) {
+              if (game.state !== 'post') allGamesPost = false;
               let hash = `${game.home?.score}:${game.away?.score}:${game.state}`;
               // Include prop stat + batting line in hash
               if (bet.player_name && bet.espn_game_id) {
@@ -455,7 +465,10 @@ client.once(Events.ClientReady, (c) => {
                   }
                 } catch {}
               }
-              if (cardUpdateTracker.get(bet.id) === hash) continue;
+              if (cardUpdateTracker.get(bet.id) === hash) {
+                if (allGamesPost) cardFinalRendered.add(bet.id);
+                continue;
+              }
               cardUpdateTracker.set(bet.id, hash);
               isLive = true;
             }
@@ -509,6 +522,12 @@ client.once(Events.ClientReady, (c) => {
                 }
               }
             } catch (e) {}
+          }
+
+          // Mark as final-rendered so we stop checking this bet
+          if (allGamesPost) {
+            cardFinalRendered.add(bet.id);
+            console.log(`[CardUpdate] 🏁 ${bet.slip_number} all games final — no more updates`);
           }
         } catch (e) {
           console.error(`[CardUpdate] Error updating ${bet.slip_number}:`, e.message);
