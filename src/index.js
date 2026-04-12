@@ -392,8 +392,8 @@ client.once(Events.ClientReady, (c) => {
                     const summary = await espn.getGameSummary(leg.sport, leg.espn_game_id);
                     const player = summary ? espn.findPlayer(summary.players, leg.player_name) : null;
                     if (player?.stats) {
-                      // Batting line hash (h-ab changes each AB)
-                      if (player.stats['h-ab']) hashPart += `:bl${player.stats['h-ab']}`;
+                      // Batting line hash (h + ab changes each AB)
+                      if (player.stats['h'] !== undefined) hashPart += `:bl${player.stats['h']}-${player.stats['ab'] || 0}`;
                       // Prop stat hash
                       if (leg.wager_type === 'prop' && leg.prop_description) {
                         const parsed = espn.parsePropDescription(leg.prop_description, leg.sport);
@@ -443,7 +443,7 @@ client.once(Events.ClientReady, (c) => {
                   const summary = await espn.getGameSummary(bet.sport, bet.espn_game_id);
                   const player = summary ? espn.findPlayer(summary.players, bet.player_name) : null;
                   if (player?.stats) {
-                    if (player.stats['h-ab']) hash += `:bl${player.stats['h-ab']}`;
+                    if (player.stats['h'] !== undefined) hash += `:bl${player.stats['h']}-${player.stats['ab'] || 0}`;
                     if (bet.wager_type === 'prop' && bet.prop_description) {
                       const parsed = espn.parsePropDescription(bet.prop_description, bet.sport);
                       if (parsed) {

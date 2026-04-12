@@ -175,14 +175,21 @@ async function fetchLiveScore(sport, espnGameId, wagerType) {
 }
 
 // ── Batting line helper (MLB only) ─────────────────────────
-async function fetchBattingLine(sport, espnGameId, playerName, teamA, teamB) {
+async function fetchBattingLine(sport, espnGameId, playerName, teamA, teamB, eventStartTime) {
   if (!espnGameId || !playerName || !['mlb', 'kbo', 'npb'].includes(sport)) return null;
   try {
     // Check game is live/post first
     const summary = await getGameSummary(sport, espnGameId);
     if (!summary || summary.state === 'pre') return null;
 
-    const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    // Use event date if available, otherwise today
+    let dateStr;
+    if (eventStartTime) {
+      const d = new Date(eventStartTime);
+      dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    } else {
+      dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    }
     // Use team names from summary if not provided
     const tA = teamA || summary.home?.name || '';
     const tB = teamB || summary.away?.name || '';
@@ -217,7 +224,7 @@ async function fetchBattingLine(sport, espnGameId, playerName, teamA, teamB) {
 }
 
 // ── Live prop stat helper ──────────────────────────────────
-async function fetchLivePropStat(sport, espnGameId, playerName, propDescription) {
+async function fetchLivePropStat(sport, espnGameId, playerName, propDescription, eventStartTime) {
   if (!espnGameId || !sport || !playerName || !propDescription) return null;
   try {
     const parsed = parsePropDescription(propDescription, sport);
@@ -247,7 +254,14 @@ async function fetchLivePropStat(sport, espnGameId, playerName, propDescription)
     // For MLB API stats (totalBases, stolenBases, etc.), use MLB Stats API
     if ((statVal === null || statVal === 0) && MLB_API_STATS.has(parsed.espnKey) && ['mlb', 'kbo', 'npb'].includes(sport)) {
       try {
-        const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        // Use event date if available, otherwise today
+        let dateStr;
+        if (eventStartTime) {
+          const d = new Date(eventStartTime);
+          dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        } else {
+          dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        }
         const gamePk = await findMlbGamePk(espnGameId, dateStr, summary.home?.name, summary.away?.name);
         if (gamePk) {
           const mlbStats = await getMlbPlayerStats(gamePk, playerName);
@@ -326,13 +340,13 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   let legPropStats = [];
 
   if (!isParlay && bet.wager_type === 'prop' && bet.espn_game_id && bet.player_name && bet.prop_description) {
-    singlePropStat = bet._propStat || await fetchLivePropStat(bet.sport, bet.espn_game_id, bet.player_name, bet.prop_description);
+    singlePropStat = bet._propStat || await fetchLivePropStat(bet.sport, bet.espn_game_id, bet.player_name, bet.prop_description, bet.event_start_time);
   }
   if (isParlay && bet.parlay_legs?.length) {
     legPropStats = await Promise.all(
       bet.parlay_legs.map(leg => {
         if (leg.wager_type !== 'prop' || !leg.espn_game_id || !leg.player_name || !leg.prop_description) return null;
-        return fetchLivePropStat(leg.sport, leg.espn_game_id, leg.player_name, leg.prop_description);
+        return fetchLivePropStat(leg.sport, leg.espn_game_id, leg.player_name, leg.prop_description, leg.event_start_time || bet.event_start_time);
       })
     );
   }
@@ -342,13 +356,13 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   let legBattingLines = [];
 
   if (!isParlay && bet.espn_game_id && bet.player_name && ['mlb', 'kbo', 'npb'].includes(bet.sport)) {
-    singleBattingLine = await fetchBattingLine(bet.sport, bet.espn_game_id, bet.player_name);
+    singleBattingLine = await fetchBattingLine(bet.sport, bet.espn_game_id, bet.player_name, null, null, bet.event_start_time);
   }
   if (isParlay && bet.parlay_legs?.length) {
     legBattingLines = await Promise.all(
       bet.parlay_legs.map(leg => {
         if (!leg.espn_game_id || !leg.player_name || !['mlb', 'kbo', 'npb'].includes(leg.sport)) return null;
-        return fetchBattingLine(leg.sport, leg.espn_game_id, leg.player_name);
+        return fetchBattingLine(leg.sport, leg.espn_game_id, leg.player_name, null, null, leg.event_start_time || bet.event_start_time);
       })
     );
   }
