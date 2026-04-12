@@ -174,7 +174,7 @@ async function fetchLiveScore(sport, espnGameId, wagerType) {
 }
 
 // ── Batting line helper (MLB only) ─────────────────────────
-async function fetchBattingLine(sport, espnGameId, playerName) {
+async function fetchBattingLine(sport, espnGameId, playerName, teamA, teamB) {
   if (!espnGameId || !playerName || !['mlb', 'kbo', 'npb'].includes(sport)) return null;
   try {
     // Check game is live/post first
@@ -182,7 +182,10 @@ async function fetchBattingLine(sport, espnGameId, playerName) {
     if (!summary || summary.state === 'pre') return null;
 
     const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    const gamePk = await findMlbGamePk(espnGameId, dateStr);
+    // Use team names from summary if not provided
+    const tA = teamA || summary.home?.name || '';
+    const tB = teamB || summary.away?.name || '';
+    const gamePk = await findMlbGamePk(espnGameId, dateStr, tA, tB);
     if (!gamePk) return null;
 
     const stats = await getMlbPlayerStats(gamePk, playerName);
@@ -244,7 +247,7 @@ async function fetchLivePropStat(sport, espnGameId, playerName, propDescription)
     if ((statVal === null || statVal === 0) && MLB_API_STATS.has(parsed.espnKey) && ['mlb', 'kbo', 'npb'].includes(sport)) {
       try {
         const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-        const gamePk = await findMlbGamePk(espnGameId, dateStr);
+        const gamePk = await findMlbGamePk(espnGameId, dateStr, summary.home?.name, summary.away?.name);
         if (gamePk) {
           const mlbStats = await getMlbPlayerStats(gamePk, playerName);
           if (mlbStats) {
