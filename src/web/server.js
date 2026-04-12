@@ -2439,6 +2439,7 @@ Rules:
           ],
           max_tokens: 2000,
           temperature: 0.2,
+          response_format: { type: 'json_object' },
         }),
       });
 
@@ -2448,14 +2449,15 @@ Rules:
       }
 
       let raw = oaiData.choices[0].message.content.trim();
-      // Strip markdown fences
-      raw = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '');
+      // Strip markdown fences if present
+      raw = raw.replace(/^```[\s\S]*?\n/, '').replace(/\n?```\s*$/, '');
 
       let tableData;
       try {
         tableData = JSON.parse(raw);
       } catch (e) {
-        return res.status(422).json({ error: 'AI returned invalid JSON', raw });
+        console.error('[Content Studio] JSON parse failed. Raw:', raw.substring(0, 500));
+        return res.status(422).json({ error: 'AI returned invalid JSON — try again' });
       }
 
       // Validate structure
