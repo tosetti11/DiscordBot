@@ -690,9 +690,24 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   // ── Single bet details ──
   if (!isParlay) {
     if (futuresMarket) {
+      const sportEmojis = {
+        nfl: '🏈', cfb: '🏈', ncaa_football: '🏈', cfl: '🏈', xfl: '🏈',
+        nba: '🏀', wnba: '🏀', cbb: '🏀', ncaa_mbb: '🏀', ncaa_wbb: '🏀',
+        mlb: '⚾', kbo: '⚾', npb: '⚾', cpbl: '⚾',
+        nhl: '🏒',
+        mls: '⚽', epl: '⚽', la_liga: '⚽', serie_a: '⚽', bundesliga: '⚽',
+        ligue_1: '⚽', ucl: '⚽', liga_mx: '⚽', eredivisie: '⚽',
+        primeira_liga: '⚽', world_cup: '⚽', europa_league: '⚽',
+        mma: '🥊', ufc: '🥊', boxing: '🥊',
+        tennis: '🎾', tennis_atp: '🎾', tennis_wta: '🎾', tennis_gs: '🎾',
+        golf: '⛳', golf_pga: '⛳', golf_liv: '⛳', golf_dp: '⛳',
+        golf_lpga: '⛳', golf_champions: '⛳',
+        nascar: '🏎️', f1: '🏎️',
+      };
+      const emoji = sportEmojis[bet.sport] || '🏆';
       ctx.font = '13px ' + FF;
       ctx.fillStyle = C.textMuted;
-      ctx.fillText(`📌 ${futuresMarket}`, LEFT_BAR + PAD, curY + 13);
+      ctx.fillText(`${emoji} ${futuresMarket}`, LEFT_BAR + PAD, curY + 13);
       curY += 18;
     }
     if (bet.team_a && bet.team_b) {
