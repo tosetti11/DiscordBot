@@ -270,10 +270,15 @@ client.once(Events.ClientReady, (c) => {
         try {
           if (sport === 'golf_pga') {
             // Golf events are filtered out by getTodaysGames (no home/away) — fetch directly
-            for (const bet of openBets) {
-              if (bet.sport === 'golf_pga' && bet.espn_game_id) {
-                const golfGame = await espn.getGolfEventStatus(bet.espn_game_id, dateStr);
-                if (golfGame && !notifGames.find(g => g.id === golfGame.id)) notifGames.push(golfGame);
+            // Check both parent bets AND parlay legs for golf game IDs
+            const allGolfItems = [
+              ...openBets.filter(b => b.sport === 'golf_pga' && b.espn_game_id),
+              ...(openLegs || []).filter(l => l.sport === 'golf_pga' && l.espn_game_id),
+            ];
+            for (const item of allGolfItems) {
+              if (!notifGames.find(g => g.id === item.espn_game_id)) {
+                const golfGame = await espn.getGolfEventStatus(item.espn_game_id, dateStr);
+                if (golfGame) notifGames.push(golfGame);
               }
             }
           } else {
@@ -385,12 +390,29 @@ client.once(Events.ClientReady, (c) => {
             for (const leg of legs) {
               if (!leg.espn_game_id) continue;
               const dateStr = eventDateStr(leg.event_start_time || bet.event_start_time);
-              const games = await espn.getTodaysGames(leg.sport, dateStr);
-              const game = games.find(g => g.id === leg.espn_game_id);
+              let game;
+              if (leg.sport === 'golf_pga' || leg.sport?.startsWith('golf')) {
+                // Golf events are filtered out by getTodaysGames (no home/away) — fetch directly
+                game = await espn.getGolfEventStatus(leg.espn_game_id, dateStr);
+              } else {
+                const games = await espn.getTodaysGames(leg.sport, dateStr);
+                game = games.find(g => g.id === leg.espn_game_id);
+              }
               if (game && (game.state === 'in' || game.state === 'post')) {
                 if (game.state !== 'post') allGamesPost = false;
                 let hashPart = `${leg.espn_game_id}:${game.home?.score}:${game.away?.score}:${game.state}`;
-                // Include prop stat + batting line in hash
+                // Golf parlay legs: use player round data for hash (game scores are dummy 0s)
+                if ((leg.sport === 'golf_pga' || leg.sport?.startsWith('golf')) && leg.player_name) {
+                  try {
+                    const golfData = await espn.getGolfPlayerRound(leg.player_name, leg.golf_round || null);
+                    if (golfData) {
+                      hashPart = `${leg.espn_game_id}:golf:${golfData.holesCompleted}:${golfData.roundScore}:${golfData.roundStatus}`;
+                      if (golfData.roundStatus !== 'post') allGamesPost = false;
+                      else allGamesPost = allGamesPost && true;
+                    }
+                  } catch {}
+                }
+                // Include prop stat + batting line in hash (non-golf)
                 if (leg.player_name && leg.espn_game_id) {
                   try {
                     const summary = await espn.getGameSummary(leg.sport, leg.espn_game_id);
