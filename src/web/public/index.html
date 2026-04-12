@@ -2351,6 +2351,12 @@
           </div>
           <img id="share-preview-img" class="share-preview-img hidden" alt="Preview">
         </div>
+        <div class="form-group hidden" id="share-guild-group">
+          <label for="share-guild">Server</label>
+          <select id="share-guild" class="form-select" onchange="onShareGuildChange()">
+            <option value="" disabled selected>Select server</option>
+          </select>
+        </div>
         <div class="form-group">
           <label for="share-channel">Channel</label>
           <select id="share-channel">

@@ -7193,6 +7193,9 @@ async function openShareModal(pageType) {
   sharePageType = pageType;
   shareCapturedImage = null;
 
+  // Hide the in-modal guild selector (only used by content)
+  document.getElementById('share-guild-group').classList.add('hidden');
+
   const guildId = getShareGuildId(pageType);
   if (!guildId) {
     showToast('Select a server first');
@@ -7307,6 +7310,7 @@ async function openShareModal(pageType) {
 
 function closeShareModal() {
   document.getElementById('share-modal').classList.add('hidden');
+  document.getElementById('share-guild-group').classList.add('hidden');
   sharePageType = null;
   shareCapturedImage = null;
 }
@@ -7314,6 +7318,7 @@ function closeShareModal() {
 function getShareGuildId(pageType) {
   if (pageType === 'stats') return document.getElementById('stats-guild').value;
   if (pageType === 'leaderboard') return document.getElementById('lb-guild').value;
+  if (pageType === 'content') return document.getElementById('share-guild').value;
   return null;
 }
 
@@ -7381,6 +7386,9 @@ async function sendShareToDiscord() {
       shareUserName = typeSel.selectedIndex >= 0 ? typeSel.options[typeSel.selectedIndex].text : 'Leaderboard';
       const catSel = document.getElementById('lb-category');
       sharePeriod = catSel.selectedIndex >= 0 ? catSel.options[catSel.selectedIndex].text : '';
+    } else if (sharePageType === 'content') {
+      shareUserName = currentUser ? currentUser.displayName : 'Admin';
+      sharePeriod = '';
     }
 
     const res = await fetch('/api/share-to-discord', {
@@ -8623,9 +8631,46 @@ function csDownload() {
 
 function csShareToDiscord() {
   if (!csResultImage) return;
-  // Reuse the existing share modal
-  shareCapturedImage = csResultImage;
   sharePageType = 'content';
-  document.getElementById('share-modal').classList.remove('hidden');
-  populateShareChannels();
+  shareCapturedImage = csResultImage;
+
+  // Show the modal
+  const modal = document.getElementById('share-modal');
+  const previewImg = document.getElementById('share-preview-img');
+  const previewLoading = document.getElementById('share-preview-loading');
+  const desc = document.getElementById('share-modal-desc');
+  desc.textContent = 'Post this Content Studio image to a Discord channel';
+
+  // Show guild selector for content (no page-level guild select)
+  const guildGroup = document.getElementById('share-guild-group');
+  const guildSel = document.getElementById('share-guild');
+  guildGroup.classList.remove('hidden');
+  guildSel.innerHTML = '<option value="" disabled selected>Select server</option>';
+  if (currentUser && currentUser.guilds) {
+    currentUser.guilds.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.name;
+      guildSel.appendChild(opt);
+    });
+    if (currentUser.guilds.length === 1) {
+      guildSel.value = currentUser.guilds[0].id;
+      onShareGuildChange();
+    }
+  }
+
+  // Show image preview directly (already have it)
+  previewImg.src = csResultImage;
+  previewImg.classList.remove('hidden');
+  previewLoading.classList.add('hidden');
+  document.getElementById('share-send-btn').disabled = false;
+
+  modal.classList.remove('hidden');
+}
+
+function onShareGuildChange() {
+  const guildId = document.getElementById('share-guild').value;
+  if (!guildId) return;
+  const channelSelect = document.getElementById('share-channel');
+  loadShareChannels(guildId, channelSelect);
 }
