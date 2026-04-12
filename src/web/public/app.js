@@ -3650,6 +3650,8 @@ function selectCloseOutcome(outcome) {
   const cashWrap = document.getElementById('cashout-input-wrap');
   if (outcome === 'cashout') {
     cashWrap.classList.remove('hidden');
+    document.getElementById('cashout-amount').value = '';
+    document.getElementById('cashout-unit-preview').style.display = 'none';
     document.getElementById('cashout-amount').focus();
   } else {
     cashWrap.classList.add('hidden');
@@ -3670,6 +3672,19 @@ function closeCloseBetModal() {
   closeBetGifUrl = null;
 }
 
+function updateCashoutPreview() {
+  const preview = document.getElementById('cashout-unit-preview');
+  const dollars = parseFloat(document.getElementById('cashout-amount').value);
+  const unitSize = getUnitSize();
+  if (!dollars || dollars <= 0 || !unitSize || unitSize <= 0) {
+    preview.style.display = 'none';
+    return;
+  }
+  const units = (dollars / unitSize).toFixed(2);
+  preview.style.display = 'block';
+  preview.textContent = `= ${parseFloat(units)}u (at $${unitSize}/unit)`;
+}
+
 function setGifPreview(url) {
   closeBetGifUrl = url;
   const wrap = document.getElementById('gif-preview-wrap');
@@ -3687,14 +3702,20 @@ function clearGifPreview() {
 async function confirmCloseBet() {
   if (!closeBetPendingId || !closeBetPendingOutcome) return;
 
-  // Validate cashout amount
+  // Validate cashout amount (user enters dollars, convert to units)
   let cashOutAmount;
   if (closeBetPendingOutcome === 'cashout') {
-    cashOutAmount = parseFloat(document.getElementById('cashout-amount').value);
-    if (!cashOutAmount || cashOutAmount < 0) {
-      showToast('Enter a valid payout amount');
+    const dollarAmount = parseFloat(document.getElementById('cashout-amount').value);
+    if (!dollarAmount || dollarAmount < 0) {
+      showToast('Enter a valid dollar amount');
       return;
     }
+    const unitSize = getUnitSize();
+    if (!unitSize || unitSize <= 0) {
+      showToast('Set your unit size first (top of bet slip page)');
+      return;
+    }
+    cashOutAmount = parseFloat((dollarAmount / unitSize).toFixed(2));
   }
 
   const message = document.getElementById('close-bet-message').value.trim();

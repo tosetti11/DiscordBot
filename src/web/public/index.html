@@ -2238,8 +2238,9 @@
           <button class="btn close-outcome-btn cashout" onclick="selectCloseOutcome('cashout')" data-outcome="cashout">💸 Cash Out</button>
         </div>
         <div id="cashout-input-wrap" class="form-group hidden" style="margin-top:10px;">
-          <label for="cashout-amount">Payout received (units)</label>
-          <input type="number" id="cashout-amount" class="form-input" step="0.01" min="0" placeholder="e.g. 1.50" style="width:100%;">
+          <label for="cashout-amount">Cash out amount ($)</label>
+          <input type="number" id="cashout-amount" class="form-input" step="0.01" min="0" placeholder="e.g. 125.00" style="width:100%;" oninput="updateCashoutPreview()">
+          <div id="cashout-unit-preview" class="cashout-preview" style="display:none;"></div>
         </div>
         <div class="form-group" style="margin-top:14px;">
           <label for="close-bet-message">Message to the community <span style="color:var(--text-secondary);font-weight:400;">(optional)</span></label>

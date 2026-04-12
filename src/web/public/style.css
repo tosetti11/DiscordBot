@@ -992,6 +992,12 @@ textarea {
 }
 .co-bet-net.positive { color: #57f287; }
 .co-bet-net.negative { color: #ed4245; }
+.cashout-preview {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: #5865f2;
+  font-weight: 600;
+}
 
 /* ── Metric Grid (streak, avg odds, etc.) ── */
 .sp-metric-grid {
