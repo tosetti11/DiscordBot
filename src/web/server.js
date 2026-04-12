@@ -3672,6 +3672,9 @@ IMPORTANT RULES:
 
         let finalPick = safePick;
         if (betCategory === 'futures') {
+          if (!safeFuturesMarket || !safeFuturesSelection) {
+            return res.status(400).json({ error: 'Missing futures market or selection' });
+          }
           finalPick = `${safeFuturesMarket}: ${safeFuturesSelection}`;
         } else if (betCategory === 'team_game') {
           if (wagerType === 'moneyline') {
@@ -3730,7 +3733,7 @@ IMPORTANT RULES:
           bet_category: betCategory,
           team_a: safeTeamA || null,
           team_b: safeTeamB || null,
-          player_name: safePlayerName || null,
+          player_name: safePlayerName || (betCategory === 'futures' && sport?.startsWith('golf') ? safeFuturesSelection : null),
           prop_description: safePropDesc || null,
           pick: finalPick,
           wager_type: wagerType,

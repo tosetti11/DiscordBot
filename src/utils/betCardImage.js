@@ -396,9 +396,13 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   // Pick text
   tempCtx.font = 'bold 20px ' + FF;
   let pickText = bet.pick || (isParlay ? `${bet.parlay_legs.length}-Leg Parlay` : '—');
+  let futuresMarket = null;
   if (bet.bet_category === 'futures' && !isParlay) {
     const parts = bet.pick ? bet.pick.split(': ') : [bet.pick];
-    pickText = parts.length > 1 ? parts.slice(1).join(': ') : bet.pick;
+    if (parts.length > 1) {
+      futuresMarket = parts[0]; // e.g. "Outright Winner"
+      pickText = parts.slice(1).join(': ');
+    }
   }
   const pickLines = wrapText(tempCtx, pickText || '—', INNER);
   y += pickLines.length * 26;
@@ -406,6 +410,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
   // Matchup / player (singles)
   if (!isParlay) {
+    if (futuresMarket) y += 18; // futures market subtitle
     if (bet.team_a && bet.team_b) y += 18;
     if (bet.player_name) y += 18;
     if (bet.event_start_time) y += 18;
@@ -684,6 +689,12 @@ async function generateBetCardImage(bet, username, avatarUrl) {
 
   // ── Single bet details ──
   if (!isParlay) {
+    if (futuresMarket) {
+      ctx.font = '13px ' + FF;
+      ctx.fillStyle = C.textMuted;
+      ctx.fillText(`📌 ${futuresMarket}`, LEFT_BAR + PAD, curY + 13);
+      curY += 18;
+    }
     if (bet.team_a && bet.team_b) {
       ctx.font = '13px ' + FF;
       ctx.fillStyle = C.textMuted;
