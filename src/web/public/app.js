@@ -858,7 +858,7 @@ function buildParlayLegs() {
         <div class="form-row">
           <div class="form-group">
             <label>Market</label>
-            <input type="text" class="leg-futures-market" data-leg="${i}" placeholder="e.g. Super Bowl LIX Winner" maxlength="200">
+            <input type="text" class="leg-futures-market" data-leg="${i}" placeholder="e.g. Masters Outright Winner" maxlength="200">
           </div>
         </div>
         <div class="form-row">

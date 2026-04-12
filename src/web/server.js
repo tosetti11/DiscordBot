@@ -2270,6 +2270,7 @@ Rules:
 - HOCKEY BETS: Anytime goal scorer, first goal scorer, multiple goals, assists, saves, shots on goal, and points are all player props — use betCategory "player_prop" and wagerType "prop". Keep the prop description exactly as shown on the slip.
 - COMBO PROPS: For combination stat props like "PTS+REB+AST", "PTS+REB", "REB+AST", "Hits+Runs+RBIs", keep the full stat combo in propDescription (e.g. "Over 45.5 PTS+REB+AST"). These are player props.
 - For futures, set betCategory to "futures", wagerType to "futures"
+- FUTURES MARKET: For futuresMarket, ALWAYS include the event/tournament/league name along with the market type. Examples: "Masters Outright Winner" (not just "Outright Winner"), "Stanley Cup Winner", "Super Bowl LX Winner", "NBA Championship Winner", "AL MVP", "NL Cy Young". The futuresMarket should make it clear WHAT the bet is about without needing any other context.
 - teamA should be the team/side being bet ON (the pick). For totals, teamA is the first-listed team in the matchup.
 - If you can detect the wager/stake amount in dollars, put it in wagerAmount (just the number, no $ sign)
 - If the slip has multiple bets/legs, return as parlay
