@@ -2392,32 +2392,54 @@ Rules:
       }
 
       // Build GPT-4o message to structure the data
-      const systemPrompt = `You are a data formatter for a sports betting Discord bot. The user will give you a prompt and/or an image containing data they want turned into a styled table image.
+      const systemPrompt = `You are a data formatter for a sports betting Discord bot. The user will describe EXACTLY what table they want — follow their instructions precisely.
 
-Your job: Extract the data and return a JSON object with this EXACT structure:
+CRITICAL: The user's prompt IS the spec. If they say "show golfer, odds, and profit needed" then those are your columns — do NOT add extra columns they didn't ask for, and do NOT omit columns they did ask for. Match their wording for column headers.
+
+If the user asks about a real event (e.g. Masters 2025 odds, NFL win totals), use accurate real-world data. If you don't have exact current data, use the most recent data you have and note it in the footer.
+
+Return a JSON object with this EXACT structure:
 {
   "title": "<short catchy title>",
-  "subtitle": "<optional one-line description or null>",
+  "subtitle": "<optional one-line context or null>",
   "columns": [
     { "header": "<column name>", "align": "left|center|right" }
   ],
   "rows": [
     ["cell1", "cell2", "cell3"]
   ],
-  "footer": "<optional footer text or null>"
+  "footer": "<optional source/date note or null>"
+}
+
+EXAMPLE — User says: "Masters outright winner odds for top 5 favorites. Show golfer name, odds, and bet needed for $100 profit"
+Response:
+{
+  "title": "⛳ Masters Outright Winner",
+  "subtitle": "Top 5 Favorites — Bet Needed for $100 Profit",
+  "columns": [
+    { "header": "Golfer", "align": "left" },
+    { "header": "Odds", "align": "center" },
+    { "header": "Bet for $100", "align": "right" }
+  ],
+  "rows": [
+    ["Scottie Scheffler", "+600", "$16.67"],
+    ["Rory McIlroy", "+1200", "$8.33"],
+    ["Jon Rahm", "+1400", "$7.14"],
+    ["Xander Schauffele", "+1400", "$7.14"],
+    ["Collin Morikawa", "+1800", "$5.56"]
+  ],
+  "footer": "Odds as of April 2025 — for reference only"
 }
 
 Rules:
-- Keep column headers SHORT (1-3 words max)
-- Format currency with $ sign (e.g. "$9.10")
-- Format odds with +/- sign (e.g. "+1050", "-110")
-- Format percentages with % sign
-- Keep row data as strings
-- Maximum 20 rows
-- Maximum 6 columns
-- First column is typically the name/label (left aligned)
-- Number columns should be right aligned
-- Return ONLY valid JSON, no markdown or explanation`;
+- Follow the user's requested columns EXACTLY — do not add or remove columns
+- Keep column headers SHORT (1-4 words)
+- Format: currency with $ (e.g. "$9.10"), odds with +/- (e.g. "+1050"), percentages with %
+- All cell data as strings
+- Maximum 20 rows, 6 columns
+- First column left-aligned, number/currency columns right-aligned
+- Use emoji in title when relevant (⛳🏈🏀🏒⚾🏆)
+- Return ONLY the JSON object`;
 
       const userContent = [];
       if (prompt) userContent.push({ type: 'text', text: prompt });
@@ -2437,8 +2459,8 @@ Rules:
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent },
           ],
-          max_tokens: 2000,
-          temperature: 0.2,
+          max_tokens: 3000,
+          temperature: 0,
           response_format: { type: 'json_object' },
         }),
       });
