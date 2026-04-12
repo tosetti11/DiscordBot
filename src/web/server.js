@@ -568,11 +568,13 @@ function createWebServer() {
     const wins = bets.filter(b => b.status === 'win').length;
     const losses = bets.filter(b => b.status === 'loss').length;
     const pushes = bets.filter(b => b.status === 'push').length;
-    const closed = bets.filter(b => ['win', 'loss', 'push'].includes(b.status));
+    const cashouts = bets.filter(b => b.status === 'cashout').length;
+    const closed = bets.filter(b => ['win', 'loss', 'push', 'cashout'].includes(b.status));
     const winPct = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 1000) / 10 : 0;
 
     let netUnits = 0;
     let unitsWagered = 0;
+    let cashoutNet = 0;
     for (const b of closed) {
       unitsWagered += Number(b.units);
       if (b.status === 'win') {
@@ -581,11 +583,15 @@ function createWebServer() {
           : b.units * (100 / Math.abs(b.odds_american));
       } else if (b.status === 'loss') {
         netUnits -= Number(b.units);
+      } else if (b.status === 'cashout') {
+        const coNet = parseFloat(b.cash_out_amount) - Number(b.units);
+        netUnits += coNet;
+        cashoutNet += coNet;
       }
     }
 
     const roi = unitsWagered > 0 ? Math.round((netUnits / unitsWagered) * 1000) / 10 : 0;
-    return { total, open, wins, losses, pushes, winPct, netUnits: Math.round(netUnits * 100) / 100, unitsWagered: Math.round(unitsWagered * 100) / 100, roi };
+    return { total, open, wins, losses, pushes, cashouts, winPct, netUnits: Math.round(netUnits * 100) / 100, unitsWagered: Math.round(unitsWagered * 100) / 100, roi, cashoutNet: Math.round(cashoutNet * 100) / 100 };
   }
 
   function addTeamStat(map, team, bet, legCount = 1) {
@@ -600,6 +606,8 @@ function createWebServer() {
     } else if (bet.status === 'loss') {
       map[key].losses++;
       map[key].netUnits -= Number(bet.units) / legCount;
+    } else if (bet.status === 'cashout') {
+      map[key].netUnits += (parseFloat(bet.cash_out_amount) - Number(bet.units)) / legCount;
     }
     map[key].netUnits = Math.round(map[key].netUnits * 100) / 100;
   }
@@ -762,13 +770,15 @@ function createWebServer() {
 
       // Best / worst bet
       let bestBet = null, worstBet = null;
-      const closedAll = bets.filter(b => ['win', 'loss'].includes(b.status));
+      const closedAll = bets.filter(b => ['win', 'loss', 'cashout'].includes(b.status));
       for (const b of closedAll) {
         let payout = 0;
         if (b.status === 'win') {
           payout = b.odds_american >= 0
             ? b.units * (b.odds_american / 100)
             : b.units * (100 / Math.abs(b.odds_american));
+        } else if (b.status === 'cashout') {
+          payout = parseFloat(b.cash_out_amount) - Number(b.units);
         } else {
           payout = -b.units;
         }
@@ -779,7 +789,7 @@ function createWebServer() {
 
       // Daily P&L (grouped by EST date)
       const dailyPnL = {};
-      for (const b of bets.filter(b => ['win', 'loss', 'push'].includes(b.status))) {
+      for (const b of bets.filter(b => ['win', 'loss', 'push', 'cashout'].includes(b.status))) {
         const day = toESTDateString(b.created_at);
         if (!dailyPnL[day]) dailyPnL[day] = { date: day, net: 0, bets: 0, wins: 0, losses: 0 };
         dailyPnL[day].bets++;
@@ -791,6 +801,8 @@ function createWebServer() {
         } else if (b.status === 'loss') {
           dailyPnL[day].losses++;
           dailyPnL[day].net -= b.units;
+        } else if (b.status === 'cashout') {
+          dailyPnL[day].net += parseFloat(b.cash_out_amount) - Number(b.units);
         }
         dailyPnL[day].net = Math.round(dailyPnL[day].net * 100) / 100;
       }
@@ -815,6 +827,36 @@ function createWebServer() {
       // Recent bets (last 10) — full format for ticket rendering
       const recentBets = bets.slice(0, 10).map(b => formatBetForApi(b));
 
+      // Cashout summary
+      const cashoutBets = bets.filter(b => b.status === 'cashout');
+      let cashoutStats = null;
+      if (cashoutBets.length > 0) {
+        let totalCashedOut = 0;
+        let totalStaked = 0;
+        const cashoutList = cashoutBets.map(b => {
+          const co = parseFloat(b.cash_out_amount);
+          const staked = Number(b.units);
+          const net = co - staked;
+          totalCashedOut += co;
+          totalStaked += staked;
+          return {
+            pick: b.pick || (b.bet_type === 'parlay' && b.parlay_legs ? `${b.parlay_legs.length}-Leg Parlay` : b.slip_number || 'Bet'),
+            units: staked,
+            cashOutAmount: co,
+            net: Math.round(net * 100) / 100,
+            sport: SPORT_NAMES[b.sport] || b.sport,
+            date: toESTDateString(b.created_at),
+          };
+        });
+        cashoutStats = {
+          count: cashoutBets.length,
+          totalCashedOut: Math.round(totalCashedOut * 100) / 100,
+          totalStaked: Math.round(totalStaked * 100) / 100,
+          netUnits: Math.round((totalCashedOut - totalStaked) * 100) / 100,
+          bets: cashoutList,
+        };
+      }
+
       res.json({
         overview: overall,
         singles,
@@ -823,6 +865,7 @@ function createWebServer() {
         byWager,
         whaleStats,
         normalStats,
+        cashoutStats,
         streak: { count: streak, type: streakType },
         bestBet: bestBet ? { pick: bestBet.pick || (bestBet.bet_type === 'parlay' && bestBet.parlay_legs ? `${bestBet.parlay_legs.length}-Leg Parlay` : bestBet.slip_number || 'Bet'), payout: bestBet._payout, odds: bestBet.odds_american, units: bestBet.units, sport: SPORT_NAMES[bestBet.sport] || bestBet.sport } : null,
         worstBet: worstBet ? { pick: worstBet.pick || (worstBet.bet_type === 'parlay' && worstBet.parlay_legs ? `${worstBet.parlay_legs.length}-Leg Parlay` : worstBet.slip_number || 'Bet'), payout: worstBet._payout, odds: worstBet.odds_american, units: worstBet.units, sport: SPORT_NAMES[worstBet.sport] || worstBet.sport } : null,

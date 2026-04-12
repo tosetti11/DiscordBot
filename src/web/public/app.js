@@ -2423,6 +2423,7 @@ function renderTailOnlyStats(data) {
   renderBreakdown('sport-breakdown', [], 0);
   renderBreakdown('wager-breakdown', [], 0);
   document.getElementById('whale-section').classList.add('hidden');
+  document.getElementById('cashout-section').classList.add('hidden');
 
   // Clear P&L and recent
   document.getElementById('pnl-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No bets placed</td></tr>';
@@ -2488,6 +2489,39 @@ function renderStats(data) {
     renderBreakdown('whale-breakdown', whaleRows, data.overview.total);
   } else {
     whaleSec.classList.add('hidden');
+  }
+
+  // Cashout stats
+  const coSec = document.getElementById('cashout-section');
+  if (data.cashoutStats) {
+    coSec.classList.remove('hidden');
+    const cs = data.cashoutStats;
+    document.getElementById('co-kpi-count').textContent = cs.count;
+    document.getElementById('co-kpi-staked').textContent = `${fmtU(cs.totalStaked)}u`;
+    document.getElementById('co-kpi-returned').textContent = `${fmtU(cs.totalCashedOut)}u`;
+    const coNetEl = document.getElementById('co-kpi-net');
+    coNetEl.textContent = fmtNet(cs.netUnits);
+    coNetEl.classList.remove('positive', 'negative');
+    if (cs.netUnits > 0) coNetEl.classList.add('positive');
+    else if (cs.netUnits < 0) coNetEl.classList.add('negative');
+
+    const coList = document.getElementById('co-bets-list');
+    coList.innerHTML = '';
+    for (const b of cs.bets) {
+      const div = document.createElement('div');
+      div.className = 'co-bet-row';
+      const netClass = b.net >= 0 ? 'positive' : 'negative';
+      div.innerHTML = `
+        <div>
+          <div class="co-bet-pick">${esc(b.pick)}</div>
+          <div class="co-bet-detail">${esc(b.sport || '')} · ${b.units}u staked · ${fmtU(b.cashOutAmount)}u returned · ${esc(b.date)}</div>
+        </div>
+        <div class="co-bet-net ${netClass}">${fmtNet(b.net)}</div>
+      `;
+      coList.appendChild(div);
+    }
+  } else {
+    coSec.classList.add('hidden');
   }
 
   // Tail stats

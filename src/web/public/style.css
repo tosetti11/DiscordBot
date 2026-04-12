@@ -961,6 +961,38 @@ textarea {
   margin: 14px 20px;
 }
 
+/* ── Cash Out Bets List ── */
+.co-bets-list {
+  padding: 0 16px 12px;
+}
+.co-bet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(88, 101, 242, 0.06);
+  margin-bottom: 6px;
+}
+.co-bet-row:last-child { margin-bottom: 0; }
+.co-bet-pick {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+.co-bet-detail {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.co-bet-net {
+  font-weight: 700;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+.co-bet-net.positive { color: #57f287; }
+.co-bet-net.negative { color: #ed4245; }
+
 /* ── Metric Grid (streak, avg odds, etc.) ── */
 .sp-metric-grid {
   display: grid;

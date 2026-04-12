@@ -783,6 +783,36 @@
             </div>
           </div>
 
+          <!-- ══ Cash Out Stats (collapsible) ══ -->
+          <div class="sp-panel hidden" id="cashout-section">
+            <div class="sp-panel-header" onclick="togglePanel(this)">
+              <span class="sp-panel-title">💸 Cash Outs</span>
+              <span class="sp-panel-chevron">▾</span>
+            </div>
+            <div class="sp-panel-body sp-panel-open">
+              <div class="sp-mini-hero">
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Cash Outs</div>
+                  <div class="sp-mini-value" id="co-kpi-count">—</div>
+                </div>
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Total Staked</div>
+                  <div class="sp-mini-value" id="co-kpi-staked">—</div>
+                </div>
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Total Returned</div>
+                  <div class="sp-mini-value" id="co-kpi-returned">—</div>
+                </div>
+                <div class="sp-mini-stat">
+                  <div class="sp-mini-label">Net Units</div>
+                  <div class="sp-mini-value" id="co-kpi-net">—</div>
+                </div>
+              </div>
+              <div class="sp-panel-divider"></div>
+              <div id="co-bets-list" class="co-bets-list"></div>
+            </div>
+          </div>
+
           <!-- ══ Tail Stats (collapsible) ══ -->
           <div class="sp-panel" id="tail-section">
             <div class="sp-panel-header" onclick="togglePanel(this)">
