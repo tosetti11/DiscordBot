@@ -435,8 +435,8 @@ client.once(Events.ClientReady, (c) => {
             const dateStr = eventDateStr(bet.event_start_time);
             const games = await espn.getTodaysGames(bet.sport, dateStr);
             const game = games.find(g => g.id === bet.espn_game_id);
-            if (game && game.state === 'in') {
-              let hash = `${game.home?.score}:${game.away?.score}`;
+            if (game && (game.state === 'in' || game.state === 'post')) {
+              let hash = `${game.home?.score}:${game.away?.score}:${game.state}`;
               // Include prop stat + batting line in hash
               if (bet.player_name && bet.espn_game_id) {
                 try {
