@@ -677,8 +677,8 @@ client.once(Events.ClientReady, (c) => {
           if (!parsed) continue;
 
           if (espn.GOLF_STATS.has(parsed.espnKey)) {
-            // Fetch player's current round data
-            const roundData = await espn.getGolfPlayerRound(bet.player_name);
+            // Fetch player's round data (use bet's golf_round so R3 bets check R3, not current round)
+            const roundData = await espn.getGolfPlayerRound(bet.player_name, bet.golf_round || null);
             if (!roundData || roundData.roundStatus !== 'post') continue; // round not done yet
 
             // Build a fake summary with the golf round score injected
@@ -777,7 +777,7 @@ client.once(Events.ClientReady, (c) => {
           if (game.state === 'pre') continue;
           const parsed = espn.parsePropDescription(leg.prop_description, leg.sport);
           if (parsed && espn.GOLF_STATS.has(parsed.espnKey)) {
-            const roundData = await espn.getGolfPlayerRound(leg.player_name);
+            const roundData = await espn.getGolfPlayerRound(leg.player_name, leg.golf_round || null);
             if (!roundData || roundData.roundStatus !== 'post') continue;
             const summary = { players: {}, _golfRoundScore: roundData.roundScore };
             const normName = leg.player_name.toLowerCase().replace(/[^a-z ]/g, '').trim();

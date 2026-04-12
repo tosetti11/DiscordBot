@@ -563,6 +563,17 @@ function parsePropDescription(propDesc, sport) {
     return { direction, line, stat: statName, espnKey };
   }
 
+  // Over/Under with no stat name — golf: "Under 71.5", "Over 69.5"
+  const bareOU = propDesc.match(/^(over|under)\s+([\d.]+)$/i);
+  if (bareOU) {
+    const direction = bareOU[1].toLowerCase();
+    const line = parseFloat(bareOU[2]);
+    // Infer stat from sport context
+    const statName = sport === 'golf_pga' ? 'score' : 'score';
+    const espnKey = overrides[statName] || STAT_MAP[statName] || statName;
+    return { direction, line, stat: statName, espnKey };
+  }
+
   // ALT props: "ALT Hits 1+", "ALT Total Bases 2+", "ALT Strikeouts 5+"
   const altMatch = propDesc.match(/^ALT\s+(.+?)\s+(\d+)\+$/i);
   if (altMatch) {
@@ -570,6 +581,16 @@ function parsePropDescription(propDesc, sport) {
     const threshold = parseInt(altMatch[2], 10);
     const espnKey = overrides[statName] || STAT_MAP[statName] || statName;
     // "ALT Hits 1+" means >= 1, which is equivalent to Over 0.5
+    return { direction: 'over', line: threshold - 0.5, stat: statName, espnKey };
+  }
+
+  // Threshold props: "1+ Home Runs", "2+ Hits", "1+ Stolen Bases"
+  const threshMatch = propDesc.match(/^(\d+)\+\s+(.+)$/i);
+  if (threshMatch) {
+    const threshold = parseInt(threshMatch[1], 10);
+    const statName = threshMatch[2].toLowerCase().trim();
+    const espnKey = overrides[statName] || STAT_MAP[statName] || statName;
+    // "1+ Home Runs" means >= 1, equivalent to Over 0.5
     return { direction: 'over', line: threshold - 0.5, stat: statName, espnKey };
   }
 
