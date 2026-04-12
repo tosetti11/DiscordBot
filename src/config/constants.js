@@ -102,6 +102,7 @@ module.exports = {
     loss: '❌',
     push: '🔄',
     void: '⛔',
+    cashout: '💸',
   },
 
   // Bet type labels

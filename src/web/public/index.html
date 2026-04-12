@@ -2205,6 +2205,11 @@
           <button class="btn close-outcome-btn win" onclick="selectCloseOutcome('win')" data-outcome="win">✅ Win</button>
           <button class="btn close-outcome-btn loss" onclick="selectCloseOutcome('loss')" data-outcome="loss">❌ Loss</button>
           <button class="btn close-outcome-btn push" onclick="selectCloseOutcome('push')" data-outcome="push">🔄 Push</button>
+          <button class="btn close-outcome-btn cashout" onclick="selectCloseOutcome('cashout')" data-outcome="cashout">💸 Cash Out</button>
+        </div>
+        <div id="cashout-input-wrap" class="form-group hidden" style="margin-top:10px;">
+          <label for="cashout-amount">Payout received (units)</label>
+          <input type="number" id="cashout-amount" class="form-input" step="0.01" min="0" placeholder="e.g. 1.50" style="width:100%;">
         </div>
         <div class="form-group" style="margin-top:14px;">
           <label for="close-bet-message">Message to the community <span style="color:var(--text-secondary);font-weight:400;">(optional)</span></label>

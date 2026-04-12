@@ -882,7 +882,18 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       }
 
       const playerData = findPlayer(summary.players, playerName);
-      if (!playerData) return null;
+      if (!playerData) {
+        // Game over but player not in box score = DNP → push
+        if (game.state === 'post') return 'push';
+        return null;
+      }
+
+      // Check for DNP: player in box score but played 0 minutes (NBA/NFL/NHL)
+      const minRaw = playerData.stats?.min || playerData.stats?.minutes;
+      if (game.state === 'post' && minRaw !== undefined) {
+        const minVal = typeof minRaw === 'string' ? parseFloat(minRaw) : minRaw;
+        if (minVal === 0) return 'push'; // DNP
+      }
 
       let statVal;
       const rawStat = playerData.stats?.[parsed.espnKey];

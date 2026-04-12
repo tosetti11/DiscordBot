@@ -1790,6 +1790,7 @@ textarea {
 .ticket.status-loss  { border-left: 4px solid #D62300; }
 .ticket.status-push  { border-left: 4px solid #808080; }
 .ticket.status-void  { border-left: 4px solid #555; }
+.ticket.status-cashout { border-left: 4px solid #5865f2; }
 
 /* ── Ticket Header ── */
 .ticket-header {
@@ -1846,6 +1847,7 @@ textarea {
 .ticket-status-loss  { background: rgba(214, 35, 0, 0.18); color: #ff4444; }
 .ticket-status-push  { background: rgba(128, 128, 128, 0.18); color: #aaa; }
 .ticket-status-void  { background: rgba(85, 85, 85, 0.18); color: #888; }
+.ticket-status-cashout { background: rgba(88, 101, 242, 0.18); color: #5865f2; }
 
 /* ── Dashed receipt-style divider ── */
 .ticket-divider {
@@ -5593,6 +5595,8 @@ textarea {
 .close-outcome-btn.loss.selected { border-color: #D62300; background: rgba(214,35,0,0.3); }
 .close-outcome-btn.push { background: rgba(250,166,26,0.15); color: #faa61a; }
 .close-outcome-btn.push.selected { border-color: #faa61a; background: rgba(250,166,26,0.3); }
+.close-outcome-btn.cashout { background: rgba(88,101,242,0.15); color: #5865f2; }
+.close-outcome-btn.cashout.selected { border-color: #5865f2; background: rgba(88,101,242,0.3); }
 .close-bet-body textarea {
   background: var(--bg-input, #1a1a1a);
   border: 1px solid var(--border, #333);

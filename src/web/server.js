@@ -1579,10 +1579,15 @@ function createWebServer() {
   app.post('/api/bets/:betId/close', authMiddleware, async (req, res) => {
     try {
       const { betId } = req.params;
-      const { status, resultNote, communityMessage, gifUrl } = req.body;
+      const { status, resultNote, communityMessage, gifUrl, cashOutAmount } = req.body;
 
-      if (!['win', 'loss', 'push'].includes(status)) {
-        return res.status(400).json({ error: 'Status must be win, loss, or push' });
+      if (!['win', 'loss', 'push', 'cashout'].includes(status)) {
+        return res.status(400).json({ error: 'Status must be win, loss, push, or cashout' });
+      }
+
+      if (status === 'cashout') {
+        const amt = parseFloat(cashOutAmount);
+        if (!amt || amt < 0) return res.status(400).json({ error: 'Cash out requires a valid payout amount' });
       }
 
       const bet = await db.getBet(betId);
@@ -1594,13 +1599,13 @@ function createWebServer() {
       if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
       if (bet.status !== 'open') return res.status(400).json({ error: 'Bet is already closed' });
 
-      await db.closeBet(betId, status, resultNote || null);
+      await db.closeBet(betId, status, resultNote || null, status === 'cashout' ? parseFloat(cashOutAmount) : null);
 
       // Close all parlay legs too if parlay
       if (bet.bet_type === 'parlay' && bet.parlay_legs) {
         for (const leg of bet.parlay_legs) {
           if (leg.status === 'open') {
-            await db.updateParlayLegStatus(leg.id, status);
+            await db.updateParlayLegStatus(leg.id, status === 'cashout' ? 'void' : status);
           }
         }
       }
@@ -1660,8 +1665,12 @@ function createWebServer() {
             }
           } catch (e) {}
 
-          const resultEmoji = status === 'win' ? '✅' : status === 'loss' ? '❌' : '🔄';
-          let content = `${resultEmoji} **${closerDisplayName}** closed a bet as **${status.toUpperCase()}**`;
+          const resultEmoji = status === 'win' ? '✅' : status === 'loss' ? '❌' : status === 'cashout' ? '💸' : '🔄';
+          const statusLabel = status === 'cashout' ? 'CASHED OUT' : status.toUpperCase();
+          let content = `${resultEmoji} **${closerDisplayName}** closed a bet as **${statusLabel}**`;
+          if (status === 'cashout' && cashOutAmount) {
+            content += ` (${parseFloat(cashOutAmount).toFixed(2)}u returned)`;
+          }
 
           // Append the user's community message
           if (communityMessage && communityMessage.trim()) {
@@ -1672,8 +1681,8 @@ function createWebServer() {
           const imgBuffer = await generateBetCardImage(updatedBet, bettorDisplayName, null);
           const attachment = new ABClose(imgBuffer, { name: 'bet-card.png' });
 
-          if (status === 'win') {
-            // WIN: Delete old message, post a fresh one
+          if (status === 'win' || status === 'cashout') {
+            // WIN/CASHOUT: Delete old message, post a fresh one
             try {
               const oldMsg = await channel.messages.fetch(bet.message_id);
               await oldMsg.delete();
@@ -1742,7 +1751,7 @@ function createWebServer() {
       // Reopen all parlay legs too
       if (bet.bet_type === 'parlay' && bet.parlay_legs) {
         for (const leg of bet.parlay_legs) {
-          if (['win', 'loss', 'push', 'void'].includes(leg.status)) {
+          if (['win', 'loss', 'push', 'void', 'cashout'].includes(leg.status)) {
             await db.updateParlayLegStatus(leg.id, 'open');
           }
         }

@@ -20,14 +20,16 @@ function calcStats(bets) {
   const wins = bets.filter(b => b.status === 'win').length;
   const losses = bets.filter(b => b.status === 'loss').length;
   const pushes = bets.filter(b => b.status === 'push').length;
-  const closed = bets.filter(b => ['win', 'loss', 'push'].includes(b.status));
+  const closed = bets.filter(b => ['win', 'loss', 'push', 'cashout'].includes(b.status));
   const winPct = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 1000) / 10 : 0;
 
   let netUnits = 0;
   let unitsWagered = 0;
   for (const b of closed) {
     unitsWagered += Number(b.units);
-    if (b.status === 'win') {
+    if (b.status === 'cashout' && b.cash_out_amount != null) {
+      netUnits += parseFloat(b.cash_out_amount) - parseFloat(b.units);
+    } else if (b.status === 'win') {
       netUnits += b.odds_american >= 0
         ? b.units * (b.odds_american / 100)
         : b.units * (100 / Math.abs(b.odds_american));
@@ -213,7 +215,9 @@ function addTeam(map, team, bet, legCount = 1) {
   const key = team.toUpperCase().trim();
   if (!map[key]) map[key] = { count: 0, wins: 0, losses: 0, netUnits: 0 };
   map[key].count++;
-  if (bet.status === 'win') {
+  if (bet.status === 'cashout' && bet.cash_out_amount != null) {
+    map[key].netUnits += (parseFloat(bet.cash_out_amount) - parseFloat(bet.units)) / legCount;
+  } else if (bet.status === 'win') {
     map[key].wins++;
     const payout = bet.odds_american >= 0
       ? bet.units * (bet.odds_american / 100)

@@ -166,16 +166,19 @@ async function getUserBets(discordId, guildId, limit = 10) {
 }
 
 /**
- * Close a bet (set status to win/loss/push)
+ * Close a bet (set status to win/loss/push/cashout)
  */
-async function closeBet(betId, status, resultNote = null) {
+async function closeBet(betId, status, resultNote = null, cashOutAmount = null) {
+  const updateFields = {
+    status,
+    result_note: resultNote,
+    closed_at: new Date().toISOString(),
+  };
+  if (cashOutAmount !== null) updateFields.cash_out_amount = cashOutAmount;
+
   const { data, error } = await supabase
     .from('bets')
-    .update({
-      status,
-      result_note: resultNote,
-      closed_at: new Date().toISOString(),
-    })
+    .update(updateFields)
     .eq('id', betId)
     .select()
     .single();
@@ -278,7 +281,7 @@ async function getWhaleStats(discordId) {
   if (error) throw error;
   if (!data || data.length === 0) return null;
 
-  const closed = data.filter(b => ['win', 'loss', 'push'].includes(b.status));
+  const closed = data.filter(b => ['win', 'loss', 'push', 'cashout'].includes(b.status));
   const wins = closed.filter(b => b.status === 'win').length;
   const losses = closed.filter(b => b.status === 'loss').length;
   const pushes = closed.filter(b => b.status === 'push').length;
@@ -286,7 +289,9 @@ async function getWhaleStats(discordId) {
 
   let netUnits = 0;
   for (const b of closed) {
-    if (b.status === 'win') {
+    if (b.status === 'cashout' && b.cash_out_amount != null) {
+      netUnits += parseFloat(b.cash_out_amount) - parseFloat(b.units);
+    } else if (b.status === 'win') {
       netUnits += b.odds_american >= 0
         ? b.units * (b.odds_american / 100)
         : b.units * (100 / Math.abs(b.odds_american));
@@ -403,6 +408,7 @@ async function reopenBet(betId) {
       status: 'open',
       result_note: null,
       closed_at: null,
+      cash_out_amount: null,
     })
     .eq('id', betId)
     .select()

@@ -2708,7 +2708,7 @@ const SPORT_NAMES = {
   nascar: 'NASCAR', wnba: 'WNBA', esports: 'Esports', other: 'Other'
 };
 
-const STATUS_EMOJI = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void: '⛔' };
+const STATUS_EMOJI = { open: '🟡', win: '✅', loss: '❌', push: '🔄', void: '⛔', cashout: '💸' };
 
 // ─── Follow System ───
 let followedBettors = new Set();
@@ -3035,7 +3035,7 @@ function renderTailedBetCard(bet) {
   const div = document.createElement('div');
   div.className = `ticket tailed-card status-${bet.status || 'open'}`;
 
-  const statusMap = { open: 'PENDING', win: 'WON', loss: 'LOST', push: 'PUSH', void: 'VOID' };
+  const statusMap = { open: 'PENDING', win: 'WON', loss: 'LOST', push: 'PUSH', void: 'VOID', cashout: 'CASHED OUT' };
   const statusText = statusMap[bet.status] || 'PENDING';
   const sportName = bet.sportName || SPORT_NAMES[bet.sport] || bet.sport || '';
   const wagerLabel = bet.wagerType ? (bet.wagerType.charAt(0).toUpperCase() + bet.wagerType.slice(1)) : '';
@@ -3164,7 +3164,7 @@ function renderBetCard(bet, showOwner = false) {
   div.className = `ticket status-${bet.status || 'open'}`;
   div.dataset.betId = bet.id;
 
-  const statusMap = { open: 'PENDING', win: 'WON', loss: 'LOST', push: 'PUSH', void: 'VOID' };
+  const statusMap = { open: 'PENDING', win: 'WON', loss: 'LOST', push: 'PUSH', void: 'VOID', cashout: 'CASHED OUT' };
   const statusText = statusMap[bet.status] || 'PENDING';
   const sportName = bet.sportName || SPORT_NAMES[bet.sport] || bet.sport || '';
   const wagerLabel = bet.wagerType ? (bet.wagerType.charAt(0).toUpperCase() + bet.wagerType.slice(1)) : '';
@@ -3221,7 +3221,7 @@ function renderBetCard(bet, showOwner = false) {
         <button class="ticket-btn ticket-btn-edit" onclick="event.stopPropagation();openEditModal('${bet.id}')">✏️</button>
         <button class="ticket-btn ticket-btn-del" onclick="event.stopPropagation();confirmDeleteBet('${bet.id}')">🗑️</button>
       </div>`;
-  } else if (betsGuildPerms.isAdmin && ['win', 'loss', 'push', 'void'].includes(bet.status)) {
+  } else if (betsGuildPerms.isAdmin && ['win', 'loss', 'push', 'void', 'cashout'].includes(bet.status)) {
     actionsHtml = `
       <div class="ticket-actions">
         <button class="ticket-btn ticket-btn-reopen" onclick="event.stopPropagation();reopenBet('${bet.id}')">🔓 Reopen</button>
@@ -3601,6 +3601,8 @@ function closeBet(betId) {
   document.querySelectorAll('.close-outcome-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('close-bet-message').value = '';
   document.getElementById('close-bet-confirm-btn').disabled = true;
+  document.getElementById('cashout-input-wrap').classList.add('hidden');
+  document.getElementById('cashout-amount').value = '';
   clearGifPreview();
   document.getElementById('close-bet-modal').classList.remove('hidden');
 }
@@ -3610,6 +3612,14 @@ function selectCloseOutcome(outcome) {
   document.querySelectorAll('.close-outcome-btn').forEach(b => {
     b.classList.toggle('selected', b.dataset.outcome === outcome);
   });
+  // Show/hide cashout payout input
+  const cashWrap = document.getElementById('cashout-input-wrap');
+  if (outcome === 'cashout') {
+    cashWrap.classList.remove('hidden');
+    document.getElementById('cashout-amount').focus();
+  } else {
+    cashWrap.classList.add('hidden');
+  }
   document.getElementById('close-bet-confirm-btn').disabled = false;
 }
 
@@ -3642,16 +3652,29 @@ function clearGifPreview() {
 
 async function confirmCloseBet() {
   if (!closeBetPendingId || !closeBetPendingOutcome) return;
+
+  // Validate cashout amount
+  let cashOutAmount;
+  if (closeBetPendingOutcome === 'cashout') {
+    cashOutAmount = parseFloat(document.getElementById('cashout-amount').value);
+    if (!cashOutAmount || cashOutAmount < 0) {
+      showToast('Enter a valid payout amount');
+      return;
+    }
+  }
+
   const message = document.getElementById('close-bet-message').value.trim();
   const btn = document.getElementById('close-bet-confirm-btn');
   btn.disabled = true;
   btn.textContent = 'Closing...';
 
   try {
+    const body = { status: closeBetPendingOutcome, communityMessage: message || undefined, gifUrl: closeBetGifUrl || undefined };
+    if (cashOutAmount !== undefined) body.cashOutAmount = cashOutAmount;
     const res = await fetch(`/api/bets/${closeBetPendingId}/close`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: closeBetPendingOutcome, communityMessage: message || undefined, gifUrl: closeBetGifUrl || undefined })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (data.error) {

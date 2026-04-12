@@ -44,9 +44,10 @@ const STATUS_COLORS = {
   loss: { bar: '#D62300', bgBadge: 'rgba(214, 35, 0, 0.25)', text: '#ff4444' },
   push: { bar: '#808080', bgBadge: 'rgba(128, 128, 128, 0.25)', text: '#aaa' },
   void: { bar: '#555', bgBadge: 'rgba(85, 85, 85, 0.25)', text: '#888' },
+  cashout: { bar: '#5865f2', bgBadge: 'rgba(88, 101, 242, 0.25)', text: '#7289da' },
 };
 
-const STATUS_LABELS = { open: 'PENDING', win: 'WON', loss: 'LOST', push: 'PUSH', void: 'VOID' };
+const STATUS_LABELS = { open: 'PENDING', win: 'WON', loss: 'LOST', push: 'PUSH', void: 'VOID', cashout: 'CASHED OUT' };
 
 /** Format a unit value */
 function fmtU(v) {
@@ -1004,21 +1005,25 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   drawDashedLine(ctx, LEFT_BAR + 14, curY, W - 14);
   curY += 1;
 
-  // ── Stats row: ODDS | WAGER | TO WIN ──
+  // ── Stats row: ODDS | WAGER | TO WIN (or CASHED OUT) ──
   const statsY = curY;
   const colW = (W - LEFT_BAR - PAD * 2) / 3;
 
   // Labels
   ctx.font = '700 10px ' + FF;
-  const labels = ['ODDS', 'WAGER', 'TO WIN'];
+  const isCashout = bet.status === 'cashout' && bet.cash_out_amount != null;
+  const labels = ['ODDS', 'WAGER', isCashout ? 'CASHED OUT' : 'TO WIN'];
   const oddsStr = bet.odds_american ? `${formatOdds(bet.odds_american)} (${bet.odds_decimal})` : '—';
   const unitsStr = `${fmtU(bet.units)}u`;
   let toWinStr = '—';
-  if (bet.odds_american) {
+  if (isCashout) {
+    const net = parseFloat(bet.cash_out_amount) - parseFloat(bet.units);
+    toWinStr = net >= 0 ? `+${fmtU(net)}u` : `${fmtU(net)}u`;
+  } else if (bet.odds_american) {
     toWinStr = `+${calculatePayout(bet.odds_american, bet.units)}u`;
   }
   const values = [oddsStr, unitsStr, toWinStr];
-  const valueColors = [C.textPrimary, C.textPrimary, C.payout];
+  const valueColors = [C.textPrimary, C.textPrimary, isCashout ? '#5865f2' : C.payout];
 
   for (let i = 0; i < 3; i++) {
     const cx = LEFT_BAR + PAD + colW * i + colW / 2;
