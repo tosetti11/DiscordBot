@@ -797,7 +797,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       }
       ctx.font = '600 10px ' + FF;
       ctx.fillStyle = C.textMuted;
-      let legTagX = legX + 22;
+      let legTagX = legIsLive ? legX + 44 : legX + 22;
       ctx.fillText(legSport, legTagX, curY + 12);
       legTagX += ctx.measureText(legSport).width + 6;
 
