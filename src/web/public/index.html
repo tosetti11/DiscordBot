@@ -132,6 +132,9 @@
             <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="announce" id="nav-announce" onclick="switchPage('announce')">
               <span class="sidebar-icon">📣</span> Announce
             </a>
+            <a href="javascript:void(0)" class="sidebar-link sidebar-sub hidden" data-page="content-studio" id="nav-content-studio" onclick="switchPage('content-studio')">
+              <span class="sidebar-icon">🎨</span> Content Studio
+            </a>
           </div>
         </div>
       </nav>
@@ -2174,6 +2177,62 @@
           <p class="golf-history-empty">Loading...</p>
         </div>
       </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══ Content Studio Page (Admin) ═══ -->
+  <main id="content-studio-page" class="main-content hidden">
+    <div class="tools-container">
+      <div class="tools-header">
+        <h2>🎨 Content Studio</h2>
+        <p class="slip-subtitle">Generate styled table images from a prompt or screenshot. AI structures the data, renders it in the app theme.</p>
+      </div>
+
+      <div class="tool-card">
+        <!-- Prompt input -->
+        <div class="form-group">
+          <label for="cs-prompt">Prompt</label>
+          <textarea id="cs-prompt" class="form-input" rows="4" placeholder="e.g. Masters outright winner odds for top 10 favorites. Show golfer name, odds, and bet needed for $100 profit with a $50 bankroll."></textarea>
+        </div>
+
+        <!-- Optional image upload -->
+        <div class="form-group" style="margin-top: 12px;">
+          <label>Screenshot (optional)</label>
+          <div class="cs-upload-zone" id="cs-upload-zone">
+            <input type="file" id="cs-file-input" accept="image/*" hidden>
+            <div class="cs-upload-prompt" id="cs-upload-prompt" onclick="document.getElementById('cs-file-input').click()">
+              📸 <span>Tap to upload a screenshot</span>
+            </div>
+            <div class="cs-preview hidden" id="cs-preview">
+              <img id="cs-preview-img" style="max-width:100%; border-radius:8px;">
+              <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="csClearImage()">Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generate button -->
+        <div style="margin-top: 16px; display: flex; gap: 10px; align-items: center;">
+          <button class="btn btn-accent" id="cs-generate-btn" onclick="csGenerate()">🤖 Generate Image</button>
+          <div class="cs-status hidden" id="cs-status">
+            <div class="scan-spinner"></div>
+            <span>Generating...</span>
+          </div>
+        </div>
+
+        <!-- Result preview -->
+        <div class="cs-result hidden" id="cs-result" style="margin-top: 20px;">
+          <h3 style="color: #FF8732; margin-bottom: 10px;">Preview</h3>
+          <img id="cs-result-img" style="max-width: 100%; border-radius: 10px; border: 1px solid rgba(255,135,50,0.2);">
+          <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-accent btn-sm" onclick="csDownload()">💾 Download</button>
+            <button class="btn btn-secondary btn-sm" onclick="csShareToDiscord()">📤 Share to Discord</button>
+            <button class="btn btn-secondary btn-sm" onclick="csRegenerate()">🔄 Regenerate</button>
+          </div>
+        </div>
+
+        <!-- Error display -->
+        <div class="cs-error hidden" id="cs-error" style="margin-top: 12px; color: #ff4444;"></div>
       </div>
     </div>
   </main>

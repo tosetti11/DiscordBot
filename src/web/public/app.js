@@ -2084,6 +2084,7 @@ function switchPage(page) {
     scoreboard: document.getElementById('scoreboard-page'),
     profile: document.getElementById('profile-page'),
     'ai-picks': document.getElementById('ai-picks-page'),
+    'content-studio': document.getElementById('content-studio-page'),
   };
 
   // Hide all, show selected
@@ -6530,6 +6531,8 @@ async function checkOwnerFeatures() {
     if (res.ok) {
       const navLink = document.getElementById('nav-analytics');
       if (navLink) navLink.classList.remove('hidden');
+      const csLink = document.getElementById('nav-content-studio');
+      if (csLink) csLink.classList.remove('hidden');
       // Show Models section (Props + Games)
       const modelsSection = document.getElementById('sidebar-models');
       const modelsDivider = document.getElementById('models-divider');
@@ -8535,4 +8538,94 @@ function golfRenderHistory(picks) {
       </div>
     `;
   }).join('');
+}
+
+// ═══════════════════════════════════════════════
+//  Content Studio
+// ═══════════════════════════════════════════════
+
+let csImageData = null; // base64 upload
+let csResultImage = null; // generated image base64
+
+// File upload handling
+document.addEventListener('DOMContentLoaded', () => {
+  const fileInput = document.getElementById('cs-file-input');
+  if (fileInput) {
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      csImageData = await compressImageForOCR(file);
+      document.getElementById('cs-upload-prompt').classList.add('hidden');
+      const preview = document.getElementById('cs-preview');
+      preview.classList.remove('hidden');
+      document.getElementById('cs-preview-img').src = csImageData;
+    });
+  }
+});
+
+function csClearImage() {
+  csImageData = null;
+  document.getElementById('cs-file-input').value = '';
+  document.getElementById('cs-upload-prompt').classList.remove('hidden');
+  document.getElementById('cs-preview').classList.add('hidden');
+}
+
+async function csGenerate() {
+  const prompt = document.getElementById('cs-prompt').value.trim();
+  if (!prompt && !csImageData) {
+    document.getElementById('cs-error').textContent = 'Enter a prompt or upload a screenshot.';
+    document.getElementById('cs-error').classList.remove('hidden');
+    return;
+  }
+
+  document.getElementById('cs-error').classList.add('hidden');
+  document.getElementById('cs-result').classList.add('hidden');
+  document.getElementById('cs-status').classList.remove('hidden');
+  document.getElementById('cs-generate-btn').disabled = true;
+
+  try {
+    const body = {};
+    if (prompt) body.prompt = prompt;
+    if (csImageData) body.imageData = csImageData;
+
+    const res = await fetch('/api/content-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Generation failed');
+
+    csResultImage = data.imageData;
+    document.getElementById('cs-result-img').src = csResultImage;
+    document.getElementById('cs-result').classList.remove('hidden');
+  } catch (err) {
+    document.getElementById('cs-error').textContent = err.message;
+    document.getElementById('cs-error').classList.remove('hidden');
+  } finally {
+    document.getElementById('cs-status').classList.add('hidden');
+    document.getElementById('cs-generate-btn').disabled = false;
+  }
+}
+
+function csRegenerate() {
+  csGenerate();
+}
+
+function csDownload() {
+  if (!csResultImage) return;
+  const a = document.createElement('a');
+  a.href = csResultImage;
+  a.download = `content-${Date.now()}.png`;
+  a.click();
+}
+
+function csShareToDiscord() {
+  if (!csResultImage) return;
+  // Reuse the existing share modal
+  shareCapturedImage = csResultImage;
+  sharePageType = 'content';
+  document.getElementById('share-modal').classList.remove('hidden');
+  populateShareChannels();
 }

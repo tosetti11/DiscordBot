@@ -7157,3 +7157,23 @@ textarea {
   .golf-history-filters { flex-wrap: wrap; }
   .golf-step-header { flex-wrap: wrap; }
 }
+
+/* ─── Content Studio ─── */
+.cs-upload-zone {
+  border: 2px dashed rgba(255,135,50,0.25);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+.cs-upload-zone:hover { border-color: rgba(255,135,50,0.5); }
+.cs-upload-prompt {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; color: var(--text-muted); font-size: 14px;
+  justify-content: center; padding: 12px 0;
+}
+.cs-upload-prompt:hover { color: var(--text-primary); }
+.cs-status {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text-muted); font-size: 13px;
+}
+.cs-error { font-size: 13px; }

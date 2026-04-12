@@ -123,7 +123,7 @@ function createWebServer() {
   // Global JSON parser – skip the share endpoint so its own larger parser handles it
   const globalJsonParser = express.json({ limit: '100kb' });
   app.use((req, res, next) => {
-    if (req.path === '/api/share-to-discord' || req.path === '/api/ocr-slip' || req.path === '/api/golf/analyze') return next();
+    if (req.path === '/api/share-to-discord' || req.path === '/api/ocr-slip' || req.path === '/api/golf/analyze' || req.path === '/api/content-image') return next();
     globalJsonParser(req, res, next);
   });
 
@@ -2380,6 +2380,104 @@ Rules:
     }
   });
 
+  // ─── Content Image Generator (Admin/Owner) ───
+  app.post('/api/content-image', authMiddleware, ownerMiddleware, express.json({ limit: '5mb' }), postLimiter, async (req, res) => {
+    try {
+      const { prompt, imageData } = req.body;
+      if (!prompt && !imageData) {
+        return res.status(400).json({ error: 'Provide a prompt or image (or both)' });
+      }
+      if (!OPENAI_API_KEY) {
+        return res.status(503).json({ error: 'OPENAI_API_KEY not configured' });
+      }
+
+      // Build GPT-4o message to structure the data
+      const systemPrompt = `You are a data formatter for a sports betting Discord bot. The user will give you a prompt and/or an image containing data they want turned into a styled table image.
+
+Your job: Extract the data and return a JSON object with this EXACT structure:
+{
+  "title": "<short catchy title>",
+  "subtitle": "<optional one-line description or null>",
+  "columns": [
+    { "header": "<column name>", "align": "left|center|right" }
+  ],
+  "rows": [
+    ["cell1", "cell2", "cell3"]
+  ],
+  "footer": "<optional footer text or null>"
+}
+
+Rules:
+- Keep column headers SHORT (1-3 words max)
+- Format currency with $ sign (e.g. "$9.10")
+- Format odds with +/- sign (e.g. "+1050", "-110")
+- Format percentages with % sign
+- Keep row data as strings
+- Maximum 20 rows
+- Maximum 6 columns
+- First column is typically the name/label (left aligned)
+- Number columns should be right aligned
+- Return ONLY valid JSON, no markdown or explanation`;
+
+      const userContent = [];
+      if (prompt) userContent.push({ type: 'text', text: prompt });
+      if (imageData) {
+        userContent.push({ type: 'image_url', image_url: { url: imageData, detail: 'high' } });
+      }
+
+      const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+          max_tokens: 2000,
+          temperature: 0.2,
+        }),
+      });
+
+      const oaiData = await oaiRes.json();
+      if (!oaiData.choices?.[0]?.message?.content) {
+        return res.status(502).json({ error: 'No response from AI' });
+      }
+
+      let raw = oaiData.choices[0].message.content.trim();
+      // Strip markdown fences
+      raw = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '');
+
+      let tableData;
+      try {
+        tableData = JSON.parse(raw);
+      } catch (e) {
+        return res.status(422).json({ error: 'AI returned invalid JSON', raw });
+      }
+
+      // Validate structure
+      if (!tableData.columns?.length || !tableData.rows?.length) {
+        return res.status(422).json({ error: 'AI response missing columns or rows', raw });
+      }
+
+      // Generate the image
+      const { generateContentImage } = require('../utils/contentImage');
+      const imgBuffer = generateContentImage(tableData);
+
+      res.json({
+        success: true,
+        imageData: `data:image/png;base64,${imgBuffer.toString('base64')}`,
+        tableData,
+      });
+    } catch (err) {
+      console.error('[API] Content image error:', err);
+      res.status(500).json({ error: 'Failed to generate content image' });
+    }
+  });
+
   app.post('/api/share-to-discord', authMiddleware, imageJsonParser, postLimiter, async (req, res) => {
     try {
       const { guildId, channelId, pageType, imageData, userName, periodLabel } = req.body;
@@ -2425,7 +2523,7 @@ Rules:
       const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
       const ext = imgFormat === 'jpeg' ? 'jpg' : 'png';
-      const filename = pageType === 'stats' ? `stats.${ext}` : `leaderboard.${ext}`;
+      const filename = pageType === 'stats' ? `stats.${ext}` : pageType === 'content' ? `content.${ext}` : `leaderboard.${ext}`;
       const attachment = new AttachmentBuilder(imgBuffer, { name: filename });
 
       // Build a dynamic message
@@ -2434,17 +2532,21 @@ Rules:
       let messageText;
       if (pageType === 'stats') {
         messageText = `Hey Boys! Check out **${safeName}'s** stats for **${safePeriod || 'All Time'}**! 💰`;
+      } else if (pageType === 'content') {
+        messageText = null; // Content posts send image only, no embed text
       } else {
         messageText = `Hey Boys! Check out the **${safeName}** leaderboard${safePeriod ? ' — **' + safePeriod + '**' : ''}! 💰`;
       }
 
-      const title = pageType === 'stats' ? '� Statistics' : '💰 Rankings';
       const embed = new EmbedBuilder()
         .setColor(0xF5C518)
-        .setTitle(title)
         .setImage(`attachment://${filename}`)
         .setTimestamp()
         .setFooter({ text: `Shared by ${displayName} • TheGamblingKing` });
+
+      if (pageType === 'stats') embed.setTitle('📊 Statistics');
+      else if (pageType === 'content') embed.setTitle('🎨 Content Studio');
+      else embed.setTitle('💰 Rankings');
 
       await channel.send({ content: messageText, embeds: [embed], files: [attachment] });
 
