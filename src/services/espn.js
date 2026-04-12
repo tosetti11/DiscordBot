@@ -725,7 +725,9 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
   // NRFI/YRFI can resolve after 1st inning (game must be at least 'in', not 'pre')
   const isNrfiType = wagerType === 'nrfi' || wagerType === 'yrfi';
   if (isNrfiType && game.state === 'pre') return null;  // game hasn't started
-  const earlyResolve = sport === 'golf_pga' || isNrfiType;
+  // Props/totals can early-resolve "over" direction mid-game (stat only goes up)
+  const canEarlyOver = ['prop', 'homerun', 'total', 'team_total'].includes(wagerType);
+  const earlyResolve = sport === 'golf_pga' || isNrfiType || canEarlyOver;
   if (game.state !== 'post' && !earlyResolve) return null;
 
   // Compute scores based on period — use linescore data for period bets
@@ -769,9 +771,10 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       const line = parseFloat(spreadValue);
       const isOver = /over/i.test(pick);
       if (isOver && totalScore > line) return 'win';
+      if (!isOver && totalScore > line) return 'loss';
+      if (game.state !== 'post') return null; // live: score can still go up
       if (isOver && totalScore < line) return 'loss';
       if (!isOver && totalScore < line) return 'win';
-      if (!isOver && totalScore > line) return 'loss';
       return 'push';
     }
 
@@ -781,9 +784,10 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       const line = parseFloat(spreadValue);
       const isOver = /over/i.test(pick);
       if (isOver && teamScore > line) return 'win';
+      if (!isOver && teamScore > line) return 'loss';
+      if (game.state !== 'post') return null; // live: score can still go up
       if (isOver && teamScore < line) return 'loss';
       if (!isOver && teamScore < line) return 'win';
-      if (!isOver && teamScore > line) return 'loss';
       return 'push';
     }
 
@@ -831,17 +835,26 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       if (totalHRs === null) return null;
 
       // Yes/No HR bet
-      if (/^yes\b/i.test(pick)) return totalHRs > 0 ? 'win' : 'loss';
-      if (/^no\b/i.test(pick)) return totalHRs === 0 ? 'win' : 'loss';
+      if (/^yes\b/i.test(pick)) {
+        if (totalHRs > 0) return 'win';
+        if (game.state !== 'post') return null; // live: HRs can still happen
+        return 'loss';
+      }
+      if (/^no\b/i.test(pick)) {
+        if (totalHRs > 0) return 'loss';
+        if (game.state !== 'post') return null; // live: HRs can still happen
+        return 'win';
+      }
 
       // Over/Under HR bet
       if (spreadValue != null) {
         const line = parseFloat(spreadValue);
         const isOver = /over/i.test(pick);
         if (isOver && totalHRs > line) return 'win';
+        if (!isOver && totalHRs > line) return 'loss';
+        if (game.state !== 'post') return null; // live: HRs can still happen
         if (isOver && totalHRs < line) return 'loss';
         if (!isOver && totalHRs < line) return 'win';
-        if (!isOver && totalHRs > line) return 'loss';
         return 'push';
       }
       return null;
@@ -899,11 +912,13 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
 
       if (parsed.direction === 'over') {
         if (statVal > parsed.line) return 'win';
+        if (game.state !== 'post') return null; // live: stat can still go up
         if (statVal < parsed.line) return 'loss';
         return 'push';
       } else {
-        if (statVal < parsed.line) return 'win';
         if (statVal > parsed.line) return 'loss';
+        if (game.state !== 'post') return null; // live: stat can still go up
+        if (statVal < parsed.line) return 'win';
         return 'push';
       }
     }

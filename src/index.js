@@ -728,8 +728,8 @@ client.once(Events.ClientReady, (c) => {
           continue; // Skip normal resolution path for golf
         }
 
-        // NRFI/YRFI can resolve mid-game (after 1st inning); others need game over
-        const earlyResolveSingle = ['nrfi', 'yrfi'].includes(bet.wager_type);
+        // NRFI/YRFI can resolve mid-game (after 1st inning); props/totals can resolve when over-line hit
+        const earlyResolveSingle = ['nrfi', 'yrfi', 'prop', 'homerun', 'total', 'team_total'].includes(bet.wager_type);
         if (game.state === 'pre') continue; // no games started yet
         if (game.state !== 'post' && !earlyResolveSingle) continue;
 
@@ -808,8 +808,8 @@ client.once(Events.ClientReady, (c) => {
           continue;
         }
 
-        // NRFI/YRFI can resolve mid-game (after 1st inning); others need game over
-        const earlyResolveLeg = ['nrfi', 'yrfi'].includes(leg.wager_type);
+        // NRFI/YRFI can resolve mid-game (after 1st inning); props/totals can resolve when over-line hit
+        const earlyResolveLeg = ['nrfi', 'yrfi', 'prop', 'homerun', 'total', 'team_total'].includes(leg.wager_type);
         if (game.state === 'pre') continue;
         if (game.state !== 'post' && !earlyResolveLeg) continue;
 
