@@ -467,18 +467,6 @@ client.once(Events.ClientReady, (c) => {
           const fullBet = await db.getBet(bet.id);
           if (!fullBet || fullBet.status !== 'open') continue;
 
-          // Debug: log what ESPN is returning for this bet's games
-          if (isParlay && fullBet.parlay_legs?.length) {
-            for (const leg of fullBet.parlay_legs) {
-              if (!leg.espn_game_id) continue;
-              const dbgSum = await espn.getGameSummary(leg.sport, leg.espn_game_id);
-              console.log(`[CardUpdate] DEBUG ${bet.slip_number} leg ${leg.espn_game_id}: state=${dbgSum?.state}, detail=${dbgSum?.detail}`);
-            }
-          } else if (bet.espn_game_id) {
-            const dbgSum = await espn.getGameSummary(bet.sport, bet.espn_game_id);
-            console.log(`[CardUpdate] DEBUG ${bet.slip_number}: state=${dbgSum?.state}, detail=${dbgSum?.detail}`);
-          }
-
           const guild = client.guilds.cache.get(bet.guild_id);
           let displayName = bet.discord_id;
           if (guild) {

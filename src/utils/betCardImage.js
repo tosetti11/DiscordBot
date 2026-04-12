@@ -4,6 +4,23 @@ const { SPORT_NAMES, WAGER_TYPES, PERIODS, FIGHT_METHODS } = require('../config/
 const { formatOdds, calculatePayout } = require('./odds');
 const { getGameSummary, getGolfPlayerRound, parsePropDescription, findPlayer, MLB_API_STATS, findMlbGamePk, getMlbPlayerStats, COMPUTED_STATS } = require('../services/espn');
 
+// ── Parse event start time to YYYY-MM-DD date string ────────
+const MONTH_MAP = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' };
+function parseEventDate(eventStartTime) {
+  const fallback = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  if (!eventStartTime) return fallback;
+  // Try ISO parse
+  const iso = new Date(eventStartTime);
+  if (!isNaN(iso.getTime())) return iso.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  // Parse "Sat Apr 11 9:40 PM ET" format
+  const m = String(eventStartTime).match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\b/i);
+  if (m) {
+    const month = MONTH_MAP[m[1].toLowerCase()];
+    if (month) return `${new Date().getFullYear()}-${month}-${m[2].padStart(2, '0')}`;
+  }
+  return fallback;
+}
+
 // ── Register bundled fonts ───────────────────────────────────
 const FONT_PATH = path.join(__dirname, '..', 'fonts', 'Inter-Variable.ttf');
 const EMOJI_FONT_PATH = path.join(__dirname, '..', 'fonts', 'NotoColorEmoji.ttf');
@@ -182,14 +199,7 @@ async function fetchBattingLine(sport, espnGameId, playerName, teamA, teamB, eve
     const summary = await getGameSummary(sport, espnGameId);
     if (!summary || summary.state === 'pre') return null;
 
-    // Use event date if available, otherwise today
-    let dateStr;
-    if (eventStartTime) {
-      const d = new Date(eventStartTime);
-      dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    } else {
-      dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    }
+    const dateStr = parseEventDate(eventStartTime);
     // Use team names from summary if not provided
     const tA = teamA || summary.home?.name || '';
     const tB = teamB || summary.away?.name || '';
@@ -254,14 +264,7 @@ async function fetchLivePropStat(sport, espnGameId, playerName, propDescription,
     // For MLB API stats (totalBases, stolenBases, etc.), use MLB Stats API
     if ((statVal === null || statVal === 0) && MLB_API_STATS.has(parsed.espnKey) && ['mlb', 'kbo', 'npb'].includes(sport)) {
       try {
-        // Use event date if available, otherwise today
-        let dateStr;
-        if (eventStartTime) {
-          const d = new Date(eventStartTime);
-          dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-        } else {
-          dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-        }
+        const dateStr = parseEventDate(eventStartTime);
         const gamePk = await findMlbGamePk(espnGameId, dateStr, summary.home?.name, summary.away?.name);
         if (gamePk) {
           const mlbStats = await getMlbPlayerStats(gamePk, playerName);
