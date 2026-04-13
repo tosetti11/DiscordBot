@@ -468,6 +468,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       if (leg.espn_game_id) y += 14;
       const legScoreData = legLiveScores[li];
       if (legScoreData && legScoreData.state !== 'pre') y += 20;
+      const legGdPre = legGolfData[li];
+      if (legGdPre && legGdPre.roundStatus !== 'pre') y += 42; // golf tracker
       if (legPropStats[li]) y += 18; // prop stat progress
       if (legBattingLines[li]) y += 16; // batting line
       if (leg.odds_american) y += 15; // odds line
@@ -874,7 +876,11 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       // Leg header: status indicator + sport
       const legSport = (SPORT_NAMES[leg.sport] || leg.sport || '').toUpperCase();
       const legLsData = legLiveScores[i];
-      const legIsLive = leg.status === 'open' && legLsData && legLsData.state === 'in';
+      const legGd = legGolfData[i];
+      const legIsLive = leg.status === 'open' && (
+        (legLsData && legLsData.state === 'in') ||
+        (legGd && legGd.roundStatus === 'in')
+      );
 
       // Draw status indicator
       if (legIsLive) {
@@ -999,6 +1005,49 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         ctx.fillStyle = isLegLive ? C.win : C.textMuted;
         ctx.fillText(legScoreStr, legX, curY + 12);
         curY += 20;
+      }
+      // Leg golf tracker
+      if (legGd && legGd.roundStatus !== 'pre') {
+        const gLive = legGd.roundStatus === 'in';
+        const gFinal = legGd.roundStatus === 'post';
+        const gBg = gLive ? 'rgba(67, 181, 129, 0.08)' : 'rgba(128, 128, 128, 0.06)';
+        roundRect(ctx, legX - 2, curY + 2, legInner + 4, 36, 5);
+        ctx.fillStyle = gBg;
+        ctx.fill();
+        ctx.strokeStyle = gLive ? 'rgba(67, 181, 129, 0.25)' : 'rgba(128, 128, 128, 0.15)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, legX - 2, curY + 2, legInner + 4, 36, 5);
+        ctx.stroke();
+        const gx = legX + 4;
+        ctx.font = 'bold 10px ' + FF;
+        ctx.fillStyle = gLive ? C.win : C.textSecondary;
+        let gText;
+        if (gFinal) {
+          gText = `⛳ R${legGd.roundNum} Final: ${legGd.roundScore || '—'} (${legGd.roundDisplay || 'E'})`;
+        } else {
+          gText = `⛳ Thru ${legGd.holesCompleted}  ·  Score: ${legGd.roundScore || '—'} (${legGd.roundDisplay || 'E'})`;
+        }
+        ctx.fillText(gText, gx, curY + 14);
+        // Mini progress bar
+        const bx = gx;
+        const by = curY + 20;
+        const bw = legInner - 12;
+        const bh = 10;
+        const pct = legGd.holesCompleted / (legGd.totalHoles || 18);
+        roundRect(ctx, bx, by, bw, bh, 3);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.fill();
+        if (pct > 0) {
+          roundRect(ctx, bx, by, Math.max(6, bw * pct), bh, 3);
+          ctx.fillStyle = gLive ? 'rgba(67, 181, 129, 0.5)' : 'rgba(128, 128, 128, 0.35)';
+          ctx.fill();
+        }
+        const bText = gFinal ? 'COMPLETE' : `${legGd.holesCompleted} / ${legGd.totalHoles || 18} holes`;
+        ctx.font = 'bold 7px ' + FF;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        const btw = ctx.measureText(bText).width;
+        ctx.fillText(bText, bx + (bw - btw) / 2, by + 7);
+        curY += 42;
       }
       // Leg prop stat progress
       const legPs = legPropStats[i];
