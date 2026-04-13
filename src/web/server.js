@@ -3721,6 +3721,14 @@ IMPORTANT RULES:
 
         // Resolve ESPN game IDs for each parlay leg
         for (const record of legRecords) {
+          // Correct sport if GPT returned 'other' but team names match a known sport
+          if ((!record.sport || record.sport === 'other') && (record.team_a || record.team_b)) {
+            const inferred = espn.inferSportFromTeams(record.team_a, record.team_b);
+            if (inferred) {
+              console.log(`[OCR] Corrected leg sport from '${record.sport}' to '${inferred}' for ${record.team_a} vs ${record.team_b}`);
+              record.sport = inferred;
+            }
+          }
           if (record.bet_category !== 'futures' && record.sport) {
             try {
               const resolved = await espn.resolveGameId(
@@ -3880,6 +3888,16 @@ IMPORTANT RULES:
           golf_hole: golfHole ? parseInt(golfHole) : null,
           golf_round: golfRound ? parseInt(golfRound) : null,
         };
+
+        // Correct sport if GPT returned 'other' but team names match a known sport
+        if ((!sport || sport === 'other') && (safeTeamA || safeTeamB)) {
+          const inferred = espn.inferSportFromTeams(safeTeamA, safeTeamB);
+          if (inferred) {
+            console.log(`[OCR] Corrected sport from '${sport}' to '${inferred}' for ${safeTeamA} vs ${safeTeamB}`);
+            sport = inferred;
+            betData.sport = inferred;
+          }
+        }
 
         // Resolve ESPN game ID for live tracking
         if (betCategory !== 'futures' && sport) {

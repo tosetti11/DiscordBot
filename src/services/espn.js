@@ -51,6 +51,51 @@ const ESPN_PATHS = {
   afl: 'football/afl',
 };
 
+// ── Team keyword → sport mapping (for correcting GPT mis-classifications) ──
+const TEAM_SPORT_KEYWORDS = {
+  nhl: [
+    'avalanche','blackhawks','blue jackets','blues','bruins','canadiens','canucks',
+    'capitals','coyotes','devils','ducks','flames','flyers','golden knights',
+    'hurricanes','islanders','jets','kings','kraken','lightning','maple leafs',
+    'mammoth','oilers','panthers','penguins','predators','rangers','red wings',
+    'sabres','senators','sharks','stars','wild','hockey club',
+  ],
+  nba: [
+    'celtics','nets','knicks','76ers','raptors','bulls','cavaliers','pistons',
+    'pacers','bucks','hawks','hornets','heat','magic','wizards','nuggets',
+    'timberwolves','thunder','trail blazers','blazers','jazz','warriors','clippers',
+    'lakers','suns','kings','mavericks','rockets','grizzlies','pelicans','spurs',
+  ],
+  mlb: [
+    'diamondbacks','d-backs','braves','orioles','red sox','cubs','white sox',
+    'reds','guardians','rockies','tigers','astros','royals','angels','dodgers',
+    'marlins','brewers','twins','mets','yankees','athletics','phillies','pirates',
+    'padres','giants','mariners','cardinals','rays','rangers','blue jays','nationals',
+  ],
+  nfl: [
+    'cardinals','falcons','ravens','bills','panthers','bears','bengals','browns',
+    'cowboys','broncos','lions','packers','texans','colts','jaguars','chiefs',
+    'raiders','chargers','rams','dolphins','vikings','patriots','saints','giants',
+    'jets','eagles','steelers','49ers','seahawks','buccaneers','titans','commanders',
+  ],
+};
+
+/**
+ * Infer sport from team names when GPT returns 'other'.
+ * @param {string} teamA
+ * @param {string} [teamB]
+ * @returns {string|null} Corrected sport key, or null if no match
+ */
+function inferSportFromTeams(teamA, teamB) {
+  const text = `${teamA || ''} ${teamB || ''}`.toLowerCase();
+  for (const [sport, keywords] of Object.entries(TEAM_SPORT_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (text.includes(kw)) return sport;
+    }
+  }
+  return null;
+}
+
 // ── Response cache (avoid hammering ESPN) ──
 const cache = new Map();
 const SCOREBOARD_TTL = 30_000;  // 30s for scoreboard
@@ -1241,6 +1286,7 @@ module.exports = {
   getGolfPlayerRound,
   findMlbGamePk,
   getMlbPlayerStats,
+  inferSportFromTeams,
   MLB_API_STATS,
   GOLF_STATS,
   STAT_MAP,
