@@ -19,12 +19,9 @@ const mlbLiveSessions = new Map();
 
 // ── Next Pitch outcome options ──
 const NEXT_PITCH_OUTCOMES = [
-  { label: 'Strike (Called)', value: 'Strike (Called)', emoji: '🟢' },
-  { label: 'Strike (Swinging)', value: 'Strike (Swinging)', emoji: '💨' },
-  { label: 'Foul Ball', value: 'Foul Ball', emoji: '⚡' },
-  { label: 'Ball', value: 'Ball', emoji: '🔴' },
-  { label: 'In Play', value: 'In Play', emoji: '🏏' },
-  { label: 'Hit By Pitch', value: 'Hit By Pitch', emoji: '🤕' },
+  { label: 'Strike/Foul', value: 'Strike/Foul', description: 'Called strike, swinging strike, or foul ball', emoji: '🟢' },
+  { label: 'Ball/HBP', value: 'Ball/HBP', description: 'Ball or hit by pitch', emoji: '🔴' },
+  { label: 'In Play', value: 'In Play', description: 'Ball put in play', emoji: '🏏' },
 ];
 
 // ── At-Bat outcome options ──

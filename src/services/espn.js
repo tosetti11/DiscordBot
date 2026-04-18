@@ -1036,12 +1036,9 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
 
         // Map MLB API pitch descriptions to our outcome values
         const outcomeMap = {
-          'strike (called)': ['called strike', 'strike looking'],
-          'strike (swinging)': ['swinging strike', 'swinging strike (blocked)', 'missed bunt'],
-          'foul ball': ['foul', 'foul tip', 'foul bunt', 'foul pitchout'],
-          'ball': ['ball', 'ball in dirt', 'intent ball', 'pitchout', 'automatic ball'],
+          'strike/foul': ['called strike', 'strike looking', 'swinging strike', 'swinging strike (blocked)', 'missed bunt', 'foul', 'foul tip', 'foul bunt', 'foul pitchout'],
+          'ball/hbp': ['ball', 'ball in dirt', 'intent ball', 'pitchout', 'automatic ball', 'hit by pitch'],
           'in play': ['in play, out(s)', 'in play, no out', 'in play, run(s)', 'hit into play'],
-          'hit by pitch': ['hit by pitch'],
         };
 
         const expectedNorm = expectedOutcome.toLowerCase();

@@ -2222,7 +2222,7 @@ For a SINGLE bet:
   "golfRound": "<tournament round 1-4 for golf bets, or null>",
   "golfHole": "<hole number 1-18 for golf bets, or null>",
   "mlbLiveType": "<one of: next_pitch, at_bat, inning, pitch — only for mlb_live bets, null otherwise>",
-  "nextPitchOutcome": "<one of: Strike (Called), Strike (Swinging), Foul Ball, Ball, In Play, Hit By Pitch — for next_pitch bets, or null>",
+  "nextPitchOutcome": "<one of: Strike/Foul, Ball/HBP, In Play — for next_pitch bets, or null>",
   "batterName": "<batter name for next_pitch bets, or null>",
   "npAbNumber": "<which at-bat number the pitch is in (1-10) — for next_pitch bets, or null>",
   "npPitchNumber": "<which pitch within that at-bat (1-30) — for next_pitch bets, or null>",
@@ -2269,7 +2269,7 @@ For a PARLAY (multiple legs):
       "golfRound": "<round 1-4 or null>",
       "golfHole": "<hole 1-18 or null>",
       "mlbLiveType": "<next_pitch, at_bat, inning, or pitch — only for mlb_live legs, null otherwise>",
-      "nextPitchOutcome": "<Strike (Called), Strike (Swinging), Foul Ball, Ball, In Play, Hit By Pitch — or null>",
+      "nextPitchOutcome": "<Strike/Foul, Ball/HBP, or In Play — or null>",
       "batterName": "<batter name for next_pitch bets, or null>",
       "npAbNumber": "<which at-bat number the pitch is in — or null>",
       "npPitchNumber": "<which pitch within that at-bat — or null>",
@@ -2323,7 +2323,7 @@ Rules:
 - FIGHT BETS (UFC/Boxing): If the bet mentions a specific round (e.g. "Round 3", "Rd 1-2", "goes the distance"), extract fightRound as the round number. If a method of victory is specified (e.g. "by KO/TKO", "by Submission", "by Decision", "by Points"), set fightMethod to the matching value (ko_tko, submission, decision, unanimous_decision, split_decision, dq, points).
 - GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds.
 - MLB LIVE / AT BAT BETS: These are live in-game MLB bets on specific at-bats, innings, or pitches. Use betCategory "mlb_live" and wagerType "mlb_live" for ALL of these. Set sport to "mlb". There are 4 sub-types:
-  1. NEXT PITCH (mlbLiveType "next_pitch"): Bets on the outcome of the very next pitch. DraftKings slips show the specific at-bat and pitch number (e.g. "At Bat 3, Pitch 2 — Next Pitch Result: Strike"). Set pitcherName, batterName, nextPitchOutcome to one of: "Strike (Called)", "Strike (Swinging)", "Foul Ball", "Ball", "In Play", "Hit By Pitch". CRITICALLY: also extract npAbNumber (which at-bat number this pitch is in, e.g. 3) and npPitchNumber (which pitch within that AB, e.g. 2). These are REQUIRED for tracking.
+  1. NEXT PITCH (mlbLiveType "next_pitch"): Bets on the outcome of the very next pitch. DraftKings slips show the specific at-bat and pitch number (e.g. "At Bat 3, Pitch 2 — Next Pitch Result: Strike"). Set pitcherName, batterName, nextPitchOutcome to one of: "Strike/Foul", "Ball/HBP", "In Play". CRITICALLY: also extract npAbNumber (which at-bat number this pitch is in, e.g. 3) and npPitchNumber (which pitch within that AB, e.g. 2). These are REQUIRED for tracking.
   2. AT BAT BETS (mlbLiveType "at_bat"): Bets on a specific player's Nth at-bat in a game. Examples: "Ohtani 2nd AB Over 4.5 Pitches", "Judge 1st AB - Strikeout", "Soto 3rd AB to reach base". Set abNumber (1-10), mlbPlayerName to the batter, and:
      - Pitch Count O/U: Set abMarket "pitch_count", abDirection "Over"/"Under", abLine to the line (e.g. "4.5")
      - Exact Outcome: Set abMarket "exact_outcome", exactOutcome to the predicted result (Single, Double, Triple, Home Run, Walk, Strikeout, Strikeout Looking, Strikeout Swinging, Ground Out, Fly Out, Fly Ball Out, Line Drive Out, Pop Out, Hit By Pitch, Sacrifice, Fielders Choice, Error, Foul Out)
