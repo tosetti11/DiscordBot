@@ -226,6 +226,11 @@ client.once(Events.ClientReady, (c) => {
       const day = m[2].padStart(2, '0');
       if (month) return `${new Date().getFullYear()}${month}${day}`;
     }
+    // Unparseable eventStartTime — fall back to createdAt date, then today
+    if (createdAt) {
+      const d = new Date(createdAt);
+      if (!isNaN(d.getTime())) return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+    }
     return today;
   }
 
