@@ -1916,6 +1916,67 @@ function applySingleData(data) {
     if (ghEl) ghEl.value = data.golfHole;
   }
 
+  // MLB Live fields
+  if (data.betCategory === 'mlb_live') {
+    if (data.mlbLiveType) {
+      const typeEl = document.getElementById('mlb-live-type');
+      if (typeEl) {
+        typeEl.value = data.mlbLiveType;
+        typeEl.dispatchEvent(new Event('change'));
+      }
+    }
+    // Teams
+    if (data.teamA) { const el = document.getElementById('mlb-team-a'); if (el) el.value = data.teamA; }
+    if (data.teamB) { const el = document.getElementById('mlb-team-b'); if (el) el.value = data.teamB; }
+
+    if (data.mlbLiveType === 'at_bat') {
+      if (data.abNumber) { const el = document.getElementById('mlb-ab-number'); if (el) el.value = data.abNumber; }
+      if (data.abMarket) {
+        const el = document.getElementById('mlb-ab-market');
+        if (el) { el.value = data.abMarket; el.dispatchEvent(new Event('change')); }
+      }
+      if (data.mlbPlayerName) { const el = document.getElementById('mlb-ab-player'); if (el) el.value = data.mlbPlayerName; }
+      if (data.abLine) { const el = document.getElementById('mlb-ab-line'); if (el) el.value = data.abLine; }
+      if (data.abDirection) {
+        document.querySelectorAll('.mlb-ab-dir-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.value === data.abDirection);
+        });
+      }
+      if (data.exactOutcome) { const el = document.getElementById('mlb-ab-outcome'); if (el) el.value = data.exactOutcome; }
+      if (data.onBase) {
+        document.querySelectorAll('.mlb-ab-onbase-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.value === data.onBase);
+        });
+      }
+    } else if (data.mlbLiveType === 'inning') {
+      if (data.inningNumber) { const el = document.getElementById('mlb-inning-number'); if (el) el.value = data.inningNumber; }
+      if (data.inningMarket) {
+        const el = document.getElementById('mlb-inning-market');
+        if (el) { el.value = data.inningMarket; el.dispatchEvent(new Event('change')); }
+      }
+      if (data.inningLine) { const el = document.getElementById('mlb-inn-line'); if (el) el.value = data.inningLine; }
+      if (data.inningDirection) {
+        document.querySelectorAll('.mlb-inn-dir-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.value === data.inningDirection);
+        });
+      }
+      if (data.inningHomeRun) {
+        document.querySelectorAll('.mlb-inn-hr-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.value === data.inningHomeRun);
+        });
+      }
+    } else if (data.mlbLiveType === 'pitch') {
+      if (data.pitcherName) { const el = document.getElementById('mlb-pitcher-name'); if (el) el.value = data.pitcherName; }
+      if (data.pitchNumber) { const el = document.getElementById('mlb-pitch-number'); if (el) el.value = data.pitchNumber; }
+      if (data.pitchMph) { const el = document.getElementById('mlb-pitch-mph'); if (el) el.value = data.pitchMph; }
+      if (data.pitchDirection) {
+        document.querySelectorAll('.mlb-pitch-dir-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.value === data.pitchDirection);
+        });
+      }
+    }
+  }
+
   // Trigger sport-specific field visibility
   if (data.sport) {
     const sportEl = document.getElementById('sport-select');

@@ -2203,8 +2203,8 @@ For a SINGLE bet:
 {
   "betType": "single",
   "sport": "<one of: ${validSports.join(', ')}>",
-  "betCategory": "<one of: team_game, player_prop, futures>",
-  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet>",
+  "betCategory": "<one of: team_game, player_prop, futures, mlb_live>",
+  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet, mlb_live>",
   "teamA": "<your pick team or null>",
   "teamB": "<opponent team or null>",
   "spreadValue": "<spread or total line value like -1.5, 220.5, or null>",
@@ -2220,7 +2220,24 @@ For a SINGLE bet:
   "fightRound": "<round number 1-12 for UFC/Boxing bets, or null>",
   "fightMethod": "<one of: ko_tko, submission, decision, unanimous_decision, split_decision, dq, points — or null>",
   "golfRound": "<tournament round 1-4 for golf bets, or null>",
-  "golfHole": "<hole number 1-18 for golf bets, or null>"
+  "golfHole": "<hole number 1-18 for golf bets, or null>",
+  "mlbLiveType": "<one of: at_bat, inning, pitch — only for mlb_live bets, null otherwise>",
+  "abNumber": "<at-bat number 1-10 or null>",
+  "abMarket": "<one of: pitch_count, exact_outcome, on_base — or null>",
+  "abDirection": "<Over or Under — for pitch count bets, or null>",
+  "abLine": "<pitch count line like 4.5, or null>",
+  "exactOutcome": "<one of: Single, Double, Triple, Home Run, Walk, Strikeout, Strikeout Looking, Strikeout Swinging, Ground Out, Fly Out, Fly Ball Out, Line Drive Out, Pop Out, Hit By Pitch, Sacrifice, Fielders Choice, Error, Foul Out — or null>",
+  "onBase": "<Yes or No — or null>",
+  "inningNumber": "<inning number 1-15 or null>",
+  "inningMarket": "<one of: runs, hits, home_run — or null>",
+  "inningDirection": "<Over or Under — for inning runs/hits bets, or null>",
+  "inningLine": "<line value like 0.5, or null>",
+  "inningHomeRun": "<Yes or No — or null>",
+  "pitcherName": "<pitcher name — for pitch-by-pitch bets, or null>",
+  "pitchNumber": "<pitch number in game for this pitcher, or null>",
+  "pitchMph": "<MPH line like 95, or null>",
+  "pitchDirection": "<Faster or Slower — or null>",
+  "mlbPlayerName": "<batter name for at-bat bets, or null>"
 }
 
 For a PARLAY (multiple legs):
@@ -2231,8 +2248,8 @@ For a PARLAY (multiple legs):
   "legs": [
     {
       "sport": "<sport value>",
-      "betCategory": "<team_game, player_prop, or futures>",
-      "wagerType": "<moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, or draw_no_bet>",
+      "betCategory": "<team_game, player_prop, futures, or mlb_live>",
+      "wagerType": "<moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet, or mlb_live>",
       "teamA": "<pick team or null>",
       "teamB": "<opponent or null>",
       "spreadValue": "<spread/line or null>",
@@ -2246,7 +2263,24 @@ For a PARLAY (multiple legs):
       "fightRound": "<round number or null>",
       "fightMethod": "<method value or null>",
       "golfRound": "<round 1-4 or null>",
-      "golfHole": "<hole 1-18 or null>"
+      "golfHole": "<hole 1-18 or null>",
+      "mlbLiveType": "<at_bat, inning, or pitch — only for mlb_live legs, null otherwise>",
+      "abNumber": "<at-bat number or null>",
+      "abMarket": "<pitch_count, exact_outcome, on_base — or null>",
+      "abDirection": "<Over or Under or null>",
+      "abLine": "<pitch count line or null>",
+      "exactOutcome": "<exact AB outcome or null>",
+      "onBase": "<Yes or No or null>",
+      "inningNumber": "<inning number or null>",
+      "inningMarket": "<runs, hits, home_run — or null>",
+      "inningDirection": "<Over or Under or null>",
+      "inningLine": "<line value or null>",
+      "inningHomeRun": "<Yes or No or null>",
+      "pitcherName": "<pitcher name or null>",
+      "pitchNumber": "<pitch number or null>",
+      "pitchMph": "<MPH line or null>",
+      "pitchDirection": "<Faster or Slower or null>",
+      "mlbPlayerName": "<batter name or null>"
     }
   ]
 }
@@ -2280,6 +2314,18 @@ Rules:
 - PERIOD DETECTION: If the bet is for a specific half, quarter, period, or inning (e.g. "1st Half Over 110.5", "3rd Period ML", "1Q Spread -2.5", "First 5 Innings Over 4.5", "1st Inning Under 0.5"), set the period field accordingly. Look for indicators like "1H", "2H", "1st Half", "2nd Half", "1Q", "2Q", "3Q", "4Q", "1st Quarter", "1st Period", "2P", "3P", "1st Set", "F5", "First 5", "1st Inning", "2nd Inning", etc. Default to "full_game" if no period is specified.
 - FIGHT BETS (UFC/Boxing): If the bet mentions a specific round (e.g. "Round 3", "Rd 1-2", "goes the distance"), extract fightRound as the round number. If a method of victory is specified (e.g. "by KO/TKO", "by Submission", "by Decision", "by Points"), set fightMethod to the matching value (ko_tko, submission, decision, unanimous_decision, split_decision, dq, points).
 - GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds.
+- MLB LIVE / AT BAT BETS: These are live in-game MLB bets on specific at-bats, innings, or pitches. Use betCategory "mlb_live" and wagerType "mlb_live" for ALL of these. Set sport to "mlb". There are 3 sub-types:
+  1. AT BAT BETS (mlbLiveType "at_bat"): Bets on a specific player's Nth at-bat in a game. Examples: "Ohtani 2nd AB Over 4.5 Pitches", "Judge 1st AB - Strikeout", "Soto 3rd AB to reach base". Set abNumber (1-10), mlbPlayerName to the batter, and:
+     - Pitch Count O/U: Set abMarket "pitch_count", abDirection "Over"/"Under", abLine to the line (e.g. "4.5")
+     - Exact Outcome: Set abMarket "exact_outcome", exactOutcome to the predicted result (Single, Double, Triple, Home Run, Walk, Strikeout, Strikeout Looking, Strikeout Swinging, Ground Out, Fly Out, Fly Ball Out, Line Drive Out, Pop Out, Hit By Pitch, Sacrifice, Fielders Choice, Error, Foul Out)
+     - On Base: Set abMarket "on_base", onBase "Yes"/"No"
+  2. INNING BETS (mlbLiveType "inning"): Bets on a specific inning's stats. Examples: "3rd Inning Over 0.5 Runs", "5th Inning HR Yes", "Inning 2 Under 1.5 Hits". Set inningNumber (1-15), and:
+     - Runs O/U: Set inningMarket "runs", inningDirection "Over"/"Under", inningLine to the line
+     - Hits O/U: Set inningMarket "hits", inningDirection "Over"/"Under", inningLine to the line
+     - Home Run Yes/No: Set inningMarket "home_run", inningHomeRun "Yes"/"No"
+  3. PITCH BY PITCH (mlbLiveType "pitch"): Bets on a specific pitch's velocity. Examples: "Gerrit Cole Pitch #45 Faster than 96 MPH", "Next pitch Over 92 MPH". Set pitcherName, pitchNumber, pitchMph, pitchDirection "Faster"/"Slower".
+  - IMPORTANT: Do NOT confuse at-bat bets with regular player props. If the bet mentions a specific at-bat number (1st AB, 2nd AB, etc.), a specific inning for runs/hits/HR, or a specific pitch number/velocity, it is an mlb_live bet. Regular strikeout props, hit props, and HR props for a FULL GAME are still player_prop/prop.
+  - ALWAYS set teamA and teamB for mlb_live bets from the matchup visible on the slip.
 - Return ONLY valid JSON, no markdown or explanation`;
 
       // Process each image through OpenAI Vision
