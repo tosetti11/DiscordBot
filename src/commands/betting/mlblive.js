@@ -26,22 +26,25 @@ const NEXT_PITCH_OUTCOMES = [
 
 // ── At-Bat outcome options ──
 const AB_OUTCOMES = [
-  { label: 'Single', value: 'Single', emoji: '🥎' },
-  { label: 'Double', value: 'Double', emoji: '✌️' },
-  { label: 'Triple', value: 'Triple', emoji: '3️⃣' },
-  { label: 'Home Run', value: 'Home Run', emoji: '💣' },
-  { label: 'Walk (BB)', value: 'Walk', emoji: '🚶' },
+  { label: 'In Play Out', value: 'In Play Out', emoji: '⬇️' },
   { label: 'Strikeout', value: 'Strikeout', emoji: '🦁' },
-  { label: 'Hit By Pitch', value: 'HBP', emoji: '🤕' },
+  { label: 'Single', value: 'Single', emoji: '🥎' },
+  { label: 'Walk/HBP', value: 'Walk/HBP', emoji: '🚶' },
+  { label: 'Double', value: 'Double', emoji: '✌️' },
+  { label: 'Home Run', value: 'Home Run', emoji: '💣' },
   { label: 'Reach on Error', value: 'Reach on Error', emoji: '❌' },
-  { label: 'Flyout', value: 'Flyout', emoji: '🪰' },
-  { label: 'Groundout', value: 'Groundout', emoji: '⬇️' },
-  { label: 'Lineout', value: 'Lineout', emoji: '➡️' },
-  { label: 'Pop Out', value: 'Pop Out', emoji: '⬆️' },
-  { label: 'Sacrifice Fly', value: 'Sac Fly', emoji: '✈️' },
-  { label: 'Sacrifice Bunt', value: 'Sac Bunt', emoji: '🏏' },
-  { label: 'Fielders Choice', value: 'Fielders Choice', emoji: '🔀' },
-  { label: 'Double Play', value: 'Double Play', emoji: '2️⃣' },
+  { label: 'Triple', value: 'Triple', emoji: '3️⃣' },
+];
+
+// ── Pitch count exact options ──
+const PITCH_COUNT_EXACT = [
+  { label: '1 Pitch', value: '1', emoji: '1️⃣' },
+  { label: '2 Pitches', value: '2', emoji: '2️⃣' },
+  { label: '3 Pitches', value: '3', emoji: '3️⃣' },
+  { label: '4 Pitches', value: '4', emoji: '4️⃣' },
+  { label: '5 Pitches', value: '5', emoji: '5️⃣' },
+  { label: '6 Pitches', value: '6', emoji: '6️⃣' },
+  { label: '7+ Pitches', value: '7+', emoji: '7️⃣' },
 ];
 
 const command = new SlashCommandBuilder()
@@ -289,7 +292,8 @@ async function handleABNumberSelect(interaction) {
       .setPlaceholder('Select market')
       .addOptions([
         { label: 'Pitch Count (Over/Under)', value: 'pitch_count', description: 'e.g. Over 3.5 pitches', emoji: '🔢' },
-        { label: 'Exact Outcome', value: 'exact_outcome', description: 'Single, Double, HR, K, etc.', emoji: '🎯' },
+        { label: 'Pitch Count (Exact)', value: 'pitch_count_exact', description: '1, 2, 3, 4, 5, 6, or 7+', emoji: '🎯' },
+        { label: 'Plate Appearance Exact', value: 'exact_outcome', description: 'In Play Out, K, Single, etc.', emoji: '🦇' },
         { label: 'On Base (Yes/No)', value: 'on_base', description: 'Plate appearance reaches base', emoji: '🏃' },
       ])
   );
@@ -322,6 +326,18 @@ async function handleABMarketSelect(interaction) {
     );
     await interaction.update({
       content: `⚾ **${ordinal(session.abNumber)} AB — Pitch Count** — Over or Under?`,
+      components: [row],
+    });
+  } else if (session.abMarket === 'pitch_count_exact') {
+    // Select exact pitch count 1-6, 7+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('mlblive_ab_pitch_count_exact')
+        .setPlaceholder('Select exact pitch count')
+        .addOptions(PITCH_COUNT_EXACT)
+    );
+    await interaction.update({
+      content: `⚾ **${ordinal(session.abNumber)} AB — Pitch Count Exact** — How many pitches?`,
       components: [row],
     });
   } else if (session.abMarket === 'exact_outcome') {
@@ -373,6 +389,18 @@ async function handleABOutcomeSelect(interaction) {
   if (!session) return interaction.update({ content: 'Session expired. Use `/mlblive` again.', components: [] });
 
   session.exactOutcome = interaction.values[0];
+  mlbLiveSessions.set(userId, session);
+
+  await showABModal(interaction, session);
+}
+
+// ─── AB Pitch Count Exact Selection → open modal ───
+async function handleABPitchCountExactSelect(interaction) {
+  const userId = interaction.user.id;
+  const session = mlbLiveSessions.get(userId);
+  if (!session) return interaction.update({ content: 'Session expired. Use `/mlblive` again.', components: [] });
+
+  session.pitchCountExact = interaction.values[0];
   mlbLiveSessions.set(userId, session);
 
   await showABModal(interaction, session);
@@ -469,6 +497,8 @@ async function showABModal(interaction, session) {
   let marketLabel;
   if (session.abMarket === 'pitch_count') {
     marketLabel = `Pitch Count ${session.direction}`;
+  } else if (session.abMarket === 'pitch_count_exact') {
+    marketLabel = `Pitch Count: ${session.pitchCountExact}`;
   } else if (session.abMarket === 'exact_outcome') {
     marketLabel = session.exactOutcome;
   } else {
@@ -694,6 +724,8 @@ async function handleABModalSubmit(interaction) {
     }
     session.lineValue = lineValue;
     pick = `${playerName} ${abLabel} — Pitch Count ${session.direction} ${lineValue}`;
+  } else if (session.abMarket === 'pitch_count_exact') {
+    pick = `${playerName} ${abLabel} — Pitch Count Exact: ${session.pitchCountExact}`;
   } else if (session.abMarket === 'exact_outcome') {
     pick = `${playerName} ${abLabel} — ${session.exactOutcome}`;
   } else {
@@ -968,6 +1000,7 @@ module.exports = {
   handleABMarketSelect,
   handleABDirectionSelect,
   handleABOutcomeSelect,
+  handleABPitchCountExactSelect,
   handleInningNumberSelect,
   handleInningMarketSelect,
   handleInningDirectionSelect,

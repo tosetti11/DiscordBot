@@ -2227,10 +2227,11 @@ For a SINGLE bet:
   "npAbNumber": "<which at-bat number the pitch is in (1-10) — for next_pitch bets, or null>",
   "npPitchNumber": "<which pitch within that at-bat (1-30) — for next_pitch bets, or null>",
   "abNumber": "<at-bat number 1-10 or null>",
-  "abMarket": "<one of: pitch_count, exact_outcome, on_base — or null>",
-  "abDirection": "<Over or Under — for pitch count bets, or null>",
+  "abMarket": "<one of: pitch_count, pitch_count_exact, exact_outcome, on_base — or null>",
+  "abDirection": "<Over or Under — for pitch count O/U bets, or null>",
   "abLine": "<pitch count line like 4.5, or null>",
-  "exactOutcome": "<one of: Single, Double, Triple, Home Run, Walk, Strikeout, Strikeout Looking, Strikeout Swinging, Ground Out, Fly Out, Fly Ball Out, Line Drive Out, Pop Out, Hit By Pitch, Sacrifice, Fielders Choice, Error, Foul Out — or null>",
+  "pitchCountExact": "<one of: 1, 2, 3, 4, 5, 6, 7+ — for pitch count exact bets, or null>",
+  "exactOutcome": "<one of: In Play Out, Strikeout, Single, Walk/HBP, Double, Home Run, Reach on Error, Triple — or null>",
   "onBase": "<Yes or No — or null>",
   "inningNumber": "<inning number 1-15 or null>",
   "inningMarket": "<one of: runs, hits, home_run — or null>",
@@ -2274,9 +2275,10 @@ For a PARLAY (multiple legs):
       "npAbNumber": "<which at-bat number the pitch is in — or null>",
       "npPitchNumber": "<which pitch within that at-bat — or null>",
       "abNumber": "<at-bat number or null>",
-      "abMarket": "<pitch_count, exact_outcome, on_base — or null>",
+      "abMarket": "<pitch_count, pitch_count_exact, exact_outcome, on_base — or null>",
       "abDirection": "<Over or Under or null>",
       "abLine": "<pitch count line or null>",
+      "pitchCountExact": "<1, 2, 3, 4, 5, 6, or 7+ — or null>",
       "exactOutcome": "<exact AB outcome or null>",
       "onBase": "<Yes or No or null>",
       "inningNumber": "<inning number or null>",
@@ -2326,7 +2328,8 @@ Rules:
   1. NEXT PITCH (mlbLiveType "next_pitch"): Bets on the outcome of the very next pitch. DraftKings slips show the specific at-bat and pitch number (e.g. "At Bat 3, Pitch 2 — Next Pitch Result: Strike"). Set pitcherName, batterName, nextPitchOutcome to one of: "Strike/Foul", "Ball/HBP", "In Play". CRITICALLY: also extract npAbNumber (which at-bat number this pitch is in, e.g. 3) and npPitchNumber (which pitch within that AB, e.g. 2). These are REQUIRED for tracking.
   2. AT BAT BETS (mlbLiveType "at_bat"): Bets on a specific player's Nth at-bat in a game. Examples: "Ohtani 2nd AB Over 4.5 Pitches", "Judge 1st AB - Strikeout", "Soto 3rd AB to reach base". Set abNumber (1-10), mlbPlayerName to the batter, and:
      - Pitch Count O/U: Set abMarket "pitch_count", abDirection "Over"/"Under", abLine to the line (e.g. "4.5")
-     - Exact Outcome: Set abMarket "exact_outcome", exactOutcome to the predicted result (Single, Double, Triple, Home Run, Walk, Strikeout, Strikeout Looking, Strikeout Swinging, Ground Out, Fly Out, Fly Ball Out, Line Drive Out, Pop Out, Hit By Pitch, Sacrifice, Fielders Choice, Error, Foul Out)
+     - Pitch Count Exact: Set abMarket "pitch_count_exact", pitchCountExact to the exact count ("1", "2", "3", "4", "5", "6", or "7+")
+     - Plate Appearance Exact: Set abMarket "exact_outcome", exactOutcome to the predicted result (In Play Out, Strikeout, Single, Walk/HBP, Double, Home Run, Reach on Error, Triple)
      - On Base: Set abMarket "on_base", onBase "Yes"/"No"
   3. INNING BETS (mlbLiveType "inning"): Bets on a specific inning's stats. Examples: "3rd Inning Over 0.5 Runs", "5th Inning HR Yes", "Inning 2 Under 1.5 Hits". Set inningNumber (1-15), and:
      - Runs O/U: Set inningMarket "runs", inningDirection "Over"/"Under", inningLine to the line
@@ -3591,7 +3594,7 @@ IMPORTANT RULES:
         period, fightRound, fightMethod, golfHole, golfRound,
         onBehalfOf, // admin placing bet for another user
         // MLB Live fields
-        mlbLiveType, abNumber, abMarket, abDirection, abLine, exactOutcome, onBase,
+        mlbLiveType, abNumber, abMarket, abDirection, abLine, pitchCountExact, exactOutcome, onBase,
         inningNumber, inningMarket, inningDirection, inningLine, inningHomeRun,
         pitcherName, pitchNumber, pitchMph, pitchDirection, mlbPlayerName,
         // Parlay fields
@@ -3743,6 +3746,7 @@ IMPORTANT RULES:
               legPick = `Next Pitch: ${leg.nextPitchOutcome || '?'} — ${truncate(leg.pitcherName, 200) || '?'} to ${truncate(leg.batterName, 200) || '?'} (AB ${abN}, Pitch ${pitchN})`;
             } else if (leg.mlbLiveType === 'at_bat') {
               if (leg.abMarket === 'pitch_count') legPick = `AB #${leg.abNumber} Pitch Count O/U`;
+              else if (leg.abMarket === 'pitch_count_exact') legPick = `AB #${leg.abNumber} Pitch Count Exact: ${leg.pitchCountExact}`;
               else if (leg.abMarket === 'exact_outcome') legPick = `AB #${leg.abNumber} Exact Outcome`;
               else if (leg.abMarket === 'on_base') legPick = `AB #${leg.abNumber} On Base`;
             } else if (leg.mlbLiveType === 'inning') {
@@ -3919,7 +3923,7 @@ IMPORTANT RULES:
 
         // MLB Live pick construction
         if (betCategory === 'mlb_live') {
-          const { mlbLiveType, abNumber, abMarket, abDirection, abLine, exactOutcome, onBase,
+          const { mlbLiveType, abNumber, abMarket, abDirection, abLine, pitchCountExact, exactOutcome, onBase,
                   inningNumber, inningMarket, inningDirection, inningLine, inningHomeRun,
                   pitcherName, pitchNumber, pitchMph, pitchDirection, mlbPlayerName,
                   batterName, nextPitchOutcome, npAbNumber, npPitchNumber } = req.body;
@@ -3933,6 +3937,8 @@ IMPORTANT RULES:
           } else if (mlbLiveType === 'at_bat') {
             if (abMarket === 'pitch_count') {
               finalPick = `AB #${abNumber} Pitch Count ${abDirection} ${abLine}`;
+            } else if (abMarket === 'pitch_count_exact') {
+              finalPick = `AB #${abNumber} Pitch Count Exact: ${pitchCountExact}`;
             } else if (abMarket === 'exact_outcome') {
               finalPick = `AB #${abNumber} Exact Outcome: ${exactOutcome}`;
             } else if (abMarket === 'on_base') {

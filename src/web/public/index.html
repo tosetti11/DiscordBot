@@ -580,7 +580,8 @@
                     <label for="mlb-ab-market">Market</label>
                     <select id="mlb-ab-market">
                       <option value="pitch_count">🔢 Pitch Count (O/U)</option>
-                      <option value="exact_outcome">🎯 Exact Outcome</option>
+                      <option value="pitch_count_exact">🔢 Pitch Count (Exact)</option>
+                      <option value="exact_outcome">🎯 Plate Appearance Exact</option>
                       <option value="on_base">🏃 On Base (Yes/No)</option>
                     </select>
                   </div>
@@ -608,24 +609,31 @@
                 <!-- Exact outcome -->
                 <div id="mlb-ab-outcome-row" class="form-row hidden">
                   <div class="form-group full-width">
-                    <label for="mlb-ab-outcome">Exact Outcome</label>
+                    <label for="mlb-ab-outcome">Plate Appearance Exact</label>
                     <select id="mlb-ab-outcome">
-                      <option value="Single">🥎 Single</option>
-                      <option value="Double">✌️ Double</option>
-                      <option value="Triple">3️⃣ Triple</option>
-                      <option value="Home Run">💣 Home Run</option>
-                      <option value="Walk">🚶 Walk (BB)</option>
+                      <option value="In Play Out">⬇️ In Play Out</option>
                       <option value="Strikeout">🦁 Strikeout</option>
-                      <option value="HBP">🤕 Hit By Pitch</option>
+                      <option value="Single">🥎 Single</option>
+                      <option value="Walk/HBP">🚶 Walk/HBP</option>
+                      <option value="Double">✌️ Double</option>
+                      <option value="Home Run">💣 Home Run</option>
                       <option value="Reach on Error">❌ Reach on Error</option>
-                      <option value="Flyout">🪰 Flyout</option>
-                      <option value="Groundout">⬇️ Groundout</option>
-                      <option value="Lineout">➡️ Lineout</option>
-                      <option value="Pop Out">⬆️ Pop Out</option>
-                      <option value="Sac Fly">✈️ Sacrifice Fly</option>
-                      <option value="Sac Bunt">🏏 Sacrifice Bunt</option>
-                      <option value="Fielders Choice">🔀 Fielder's Choice</option>
-                      <option value="Double Play">2️⃣ Double Play</option>
+                      <option value="Triple">3️⃣ Triple</option>
+                    </select>
+                  </div>
+                </div>
+                <!-- Pitch count exact -->
+                <div id="mlb-ab-pitchcount-exact-row" class="form-row hidden">
+                  <div class="form-group full-width">
+                    <label for="mlb-ab-pitchcount-exact">Exact Pitch Count</label>
+                    <select id="mlb-ab-pitchcount-exact">
+                      <option value="1">1 Pitch</option>
+                      <option value="2">2 Pitches</option>
+                      <option value="3">3 Pitches</option>
+                      <option value="4">4 Pitches</option>
+                      <option value="5">5 Pitches</option>
+                      <option value="6">6 Pitches</option>
+                      <option value="7+">7+ Pitches</option>
                     </select>
                   </div>
                 </div>

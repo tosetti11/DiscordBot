@@ -1386,6 +1386,9 @@ async function handleSelectMenu(interaction) {
   if (id === 'mlblive_ab_outcome') {
     return mlblive.handleABOutcomeSelect(interaction);
   }
+  if (id === 'mlblive_ab_pitch_count_exact') {
+    return mlblive.handleABPitchCountExactSelect(interaction);
+  }
   if (id === 'mlblive_inning_number') {
     return mlblive.handleInningNumberSelect(interaction);
   }

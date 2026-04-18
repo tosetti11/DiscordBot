@@ -1083,6 +1083,30 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
         }
       }
 
+      // ── At Bat: Pitch Count Exact ──
+      // Pick format: "AB #3 Pitch Count Exact: 4 (Player)" or "Player 1st AB — Pitch Count Exact: 7+"
+      const abPitchExactMatch = pick.match(/(?:(\d+)(?:st|nd|rd|th) AB|AB #(\d+)).*Pitch Count Exact:\s*(\d+\+?)/i);
+      if (abPitchExactMatch) {
+        const abNum = parseInt(abPitchExactMatch[1] || abPitchExactMatch[2]);
+        const expectedCount = abPitchExactMatch[3]; // e.g. "4" or "7+"
+        const pbp = summary?._mlbPlayByPlay;
+        if (!pbp) return null;
+
+        const nameMatch = pick.match(/^(.+?)\s+\d+(?:st|nd|rd|th)\s+AB/i) || pick.match(/\(([^)]+)\)\s*$/);
+        const playerName = nameMatch ? nameMatch[1].trim() : null;
+        if (!playerName) return null;
+
+        const atBat = findPlayerAtBat(pbp, playerName, abNum);
+        if (!atBat) return null;
+
+        const pitchCount = (atBat.playEvents || []).filter(e => e.isPitch).length;
+        if (expectedCount === '7+') {
+          return pitchCount >= 7 ? 'win' : 'loss';
+        } else {
+          return pitchCount === parseInt(expectedCount) ? 'win' : 'loss';
+        }
+      }
+
       // ── At Bat: Exact Outcome ──
       // Pick format: "Player 1st AB — Single" or "AB #3 Exact Outcome: Strikeout (Player)"
       const abOutcomeMatch = pick.match(/(?:(\d+)(?:st|nd|rd|th) AB|AB #(\d+)).*(?:—\s*(.+?)(?:\s*\|)|Exact Outcome:\s*(.+?)(?:\s*\(|\s*\|))/i);
@@ -1105,24 +1129,14 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
 
         // Normalize outcome comparisons
         const outcomeMap = {
+          'in play out': ['groundout', 'grounded_into_double_play', 'ground_out', 'force_out', 'flyout', 'fly_out', 'field_out', 'lineout', 'line_out', 'pop_out', 'pop out', 'line out', 'foul_out', 'sac_fly', 'sac_bunt', 'sacrifice_fly', 'sacrifice_bunt', 'fielders_choice', 'fielders_choice_out', 'double_play'],
+          'strikeout': ['strikeout', 'strikeout_looking', 'strikeout_swinging', 'called_strikeout'],
           'single': ['single'],
+          'walk/hbp': ['walk', 'hit_by_pitch'],
           'double': ['double'],
-          'triple': ['triple'],
           'home run': ['home_run', 'home run'],
-          'walk': ['walk'],
-          'strikeout': ['strikeout', 'strikeout_looking', 'strikeout_swinging'],
-          'strikeout looking': ['strikeout_looking', 'called_strikeout'],
-          'strikeout swinging': ['strikeout_swinging'],
-          'ground out': ['groundout', 'grounded_into_double_play', 'ground_out', 'force_out'],
-          'fly out': ['flyout', 'fly_out', 'field_out', 'lineout', 'pop_out', 'pop out', 'line out'],
-          'fly ball out': ['flyout', 'fly_out', 'field_out'],
-          'line drive out': ['lineout', 'line_out'],
-          'pop out': ['pop_out', 'pop out'],
-          'hit by pitch': ['hit_by_pitch'],
-          'sacrifice': ['sac_fly', 'sac_bunt', 'sacrifice_fly', 'sacrifice_bunt'],
-          'fielders choice': ['fielders_choice', 'fielders_choice_out'],
-          'error': ['error', 'field_error'],
-          'foul out': ['foul_out'],
+          'reach on error': ['error', 'field_error'],
+          'triple': ['triple'],
         };
 
         const matches = outcomeMap[expectedOutcome];

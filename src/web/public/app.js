@@ -501,11 +501,13 @@ function setupEventListeners() {
   const mlbAbMarket = document.getElementById('mlb-ab-market');
   if (mlbAbMarket) {
     mlbAbMarket.addEventListener('change', function() {
-      document.getElementById('mlb-ab-pitchcount-row').classList.add('hidden');
+      document.getElementById('mlb-ab-line-row').classList.add('hidden');
       document.getElementById('mlb-ab-outcome-row').classList.add('hidden');
       document.getElementById('mlb-ab-onbase-row').classList.add('hidden');
+      document.getElementById('mlb-ab-pitchcount-exact-row').classList.add('hidden');
       const v = this.value;
-      if (v === 'pitch_count') document.getElementById('mlb-ab-pitchcount-row').classList.remove('hidden');
+      if (v === 'pitch_count') document.getElementById('mlb-ab-line-row').classList.remove('hidden');
+      else if (v === 'pitch_count_exact') document.getElementById('mlb-ab-pitchcount-exact-row').classList.remove('hidden');
       else if (v === 'exact_outcome') document.getElementById('mlb-ab-outcome-row').classList.remove('hidden');
       else if (v === 'on_base') document.getElementById('mlb-ab-onbase-row').classList.remove('hidden');
     });
@@ -1343,6 +1345,9 @@ async function handleSubmit(e) {
           } else if (body.abMarket === 'exact_outcome') {
             body.exactOutcome = document.getElementById('mlb-ab-outcome').value;
             if (!body.exactOutcome) throw new Error('Select exact outcome');
+          } else if (body.abMarket === 'pitch_count_exact') {
+            body.pitchCountExact = document.getElementById('mlb-ab-pitchcount-exact').value;
+            if (!body.pitchCountExact) throw new Error('Select exact pitch count');
           } else if (body.abMarket === 'on_base') {
             const activeOB = document.querySelector('.mlb-ab-onbase-btn.active');
             body.onBase = activeOB ? activeOB.dataset.value : null;
@@ -1954,6 +1959,7 @@ function applySingleData(data) {
         });
       }
       if (data.exactOutcome) { const el = document.getElementById('mlb-ab-outcome'); if (el) el.value = data.exactOutcome; }
+      if (data.pitchCountExact) { const el = document.getElementById('mlb-ab-pitchcount-exact'); if (el) el.value = data.pitchCountExact; }
       if (data.onBase) {
         document.querySelectorAll('.mlb-ab-onbase-btn').forEach(btn => {
           btn.classList.toggle('active', btn.dataset.value === data.onBase);
