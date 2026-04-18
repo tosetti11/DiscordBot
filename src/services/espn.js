@@ -423,7 +423,7 @@ async function getAllTodaysGames() {
 }
 
 /**
- * Find a game by matching team name (fuzzy)
+ * Find a game by matching team name (word-boundary matching)
  * @param {string} teamName - Team name to search for
  * @param {Array} games - List of game objects from getTodaysGames
  * @returns {Object|null} Matching game
@@ -433,7 +433,14 @@ function matchTeamToGame(teamName, games) {
 
   const needle = teamName.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
 
-  // Exact match on abbreviation, short name, or display name
+  // Word-boundary match: ensures short abbreviations like "la" don't match
+  // inside longer words like "colorado". Uses \b regex anchors so "la" matches
+  // "la kings" but not "colorado avalanche".
+  const wordMatch = (search, text) => {
+    const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`).test(text);
+  };
+
   for (const game of games) {
     const homeNames = [
       game.home.abbreviation.toLowerCase(),
@@ -446,8 +453,8 @@ function matchTeamToGame(teamName, games) {
       game.away.name.toLowerCase(),
     ];
 
-    if (homeNames.some(n => n === needle || needle.includes(n) || n.includes(needle))) return game;
-    if (awayNames.some(n => n === needle || needle.includes(n) || n.includes(needle))) return game;
+    if (homeNames.some(n => n === needle || wordMatch(n, needle) || wordMatch(needle, n))) return game;
+    if (awayNames.some(n => n === needle || wordMatch(n, needle) || wordMatch(needle, n))) return game;
   }
 
   return null;
@@ -771,7 +778,7 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
   const isNrfiType = wagerType === 'nrfi' || wagerType === 'yrfi';
   if (isNrfiType && game.state === 'pre') return null;  // game hasn't started
   // Props/totals can early-resolve "over" direction mid-game (stat only goes up)
-  const canEarlyOver = ['prop', 'homerun', 'total', 'team_total'].includes(wagerType);
+  const canEarlyOver = ['prop', 'homerun', 'total', 'team_total', 'mlb_live'].includes(wagerType);
   const earlyResolve = sport === 'golf_pga' || isNrfiType || canEarlyOver;
   if (game.state !== 'post' && !earlyResolve) return null;
 
@@ -997,6 +1004,194 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       const pickScore = pickTeamSide === 'home' ? homeScore : awayScore;
       const oppScore = pickTeamSide === 'home' ? awayScore : homeScore;
       return pickScore > oppScore ? 'win' : 'loss';
+    }
+
+    case 'mlb_live': {
+      // MLB Live bets — resolve using ESPN linescore + MLB Stats API play-by-play
+      if (!pick) return null;
+
+      // ── At Bat: Pitch Count O/U ──
+      // Pick format: "Player 1st AB — Pitch Count Over 4.5" or "AB #3 Pitch Count Over 4.5 (Player)"
+      const abPitchMatch = pick.match(/(?:(\d+)(?:st|nd|rd|th) AB|AB #(\d+)).*Pitch Count (Over|Under) ([\d.]+)/i);
+      if (abPitchMatch) {
+        const abNum = parseInt(abPitchMatch[1] || abPitchMatch[2]);
+        const dir = abPitchMatch[3].toLowerCase();
+        const line = parseFloat(abPitchMatch[4]);
+        const pbp = summary?._mlbPlayByPlay;
+        if (!pbp) return null;
+
+        // Extract player name from pick
+        const nameMatch = pick.match(/^(.+?)\s+\d+(?:st|nd|rd|th)\s+AB/i) || pick.match(/\(([^)]+)\)\s*$/);
+        const playerName = nameMatch ? nameMatch[1].trim() : null;
+        if (!playerName) return null;
+
+        const atBat = findPlayerAtBat(pbp, playerName, abNum);
+        if (!atBat) return null; // AB hasn't happened yet or player not found
+
+        // Count pitches in this at-bat
+        const pitchCount = (atBat.playEvents || []).filter(e => e.isPitch).length;
+        if (dir === 'over') {
+          if (pitchCount > line) return 'win';
+          if (pitchCount < line) return 'loss';
+          return 'push';
+        } else {
+          if (pitchCount < line) return 'win';
+          if (pitchCount > line) return 'loss';
+          return 'push';
+        }
+      }
+
+      // ── At Bat: Exact Outcome ──
+      // Pick format: "Player 1st AB — Single" or "AB #3 Exact Outcome: Strikeout (Player)"
+      const abOutcomeMatch = pick.match(/(?:(\d+)(?:st|nd|rd|th) AB|AB #(\d+)).*(?:—\s*(.+?)(?:\s*\|)|Exact Outcome:\s*(.+?)(?:\s*\(|\s*\|))/i);
+      if (abOutcomeMatch) {
+        const abNum = parseInt(abOutcomeMatch[1] || abOutcomeMatch[2]);
+        const expectedOutcome = (abOutcomeMatch[3] || abOutcomeMatch[4] || '').trim().toLowerCase();
+        if (!expectedOutcome) return null;
+        const pbp = summary?._mlbPlayByPlay;
+        if (!pbp) return null;
+
+        const nameMatch = pick.match(/^(.+?)\s+\d+(?:st|nd|rd|th)\s+AB/i) || pick.match(/\(([^)]+)\)\s*$/);
+        const playerName = nameMatch ? nameMatch[1].trim() : null;
+        if (!playerName) return null;
+
+        const atBat = findPlayerAtBat(pbp, playerName, abNum);
+        if (!atBat) return null;
+
+        const actualEvent = (atBat.result?.event || '').toLowerCase();
+        const actualType = (atBat.result?.eventType || '').toLowerCase();
+
+        // Normalize outcome comparisons
+        const outcomeMap = {
+          'single': ['single'],
+          'double': ['double'],
+          'triple': ['triple'],
+          'home run': ['home_run', 'home run'],
+          'walk': ['walk'],
+          'strikeout': ['strikeout', 'strikeout_looking', 'strikeout_swinging'],
+          'strikeout looking': ['strikeout_looking', 'called_strikeout'],
+          'strikeout swinging': ['strikeout_swinging'],
+          'ground out': ['groundout', 'grounded_into_double_play', 'ground_out', 'force_out'],
+          'fly out': ['flyout', 'fly_out', 'field_out', 'lineout', 'pop_out', 'pop out', 'line out'],
+          'fly ball out': ['flyout', 'fly_out', 'field_out'],
+          'line drive out': ['lineout', 'line_out'],
+          'pop out': ['pop_out', 'pop out'],
+          'hit by pitch': ['hit_by_pitch'],
+          'sacrifice': ['sac_fly', 'sac_bunt', 'sacrifice_fly', 'sacrifice_bunt'],
+          'fielders choice': ['fielders_choice', 'fielders_choice_out'],
+          'error': ['error', 'field_error'],
+          'foul out': ['foul_out'],
+        };
+
+        const matches = outcomeMap[expectedOutcome];
+        if (matches) {
+          return (matches.includes(actualType) || matches.includes(actualEvent)) ? 'win' : 'loss';
+        }
+        // Fallback: direct comparison
+        return (actualEvent === expectedOutcome || actualType === expectedOutcome) ? 'win' : 'loss';
+      }
+
+      // ── At Bat: On Base ──
+      // Pick format: "Player 1st AB — On Base: Yes" or "AB #3 On Base: Yes (Player)"
+      const abOnBaseMatch = pick.match(/(?:(\d+)(?:st|nd|rd|th) AB|AB #(\d+)).*On Base:\s*(Yes|No)/i);
+      if (abOnBaseMatch) {
+        const abNum = parseInt(abOnBaseMatch[1] || abOnBaseMatch[2]);
+        const expectedOnBase = abOnBaseMatch[3].toLowerCase() === 'yes';
+        const pbp = summary?._mlbPlayByPlay;
+        if (!pbp) return null;
+
+        const nameMatch = pick.match(/^(.+?)\s+\d+(?:st|nd|rd|th)\s+AB/i) || pick.match(/\(([^)]+)\)\s*$/);
+        const playerName = nameMatch ? nameMatch[1].trim() : null;
+        if (!playerName) return null;
+
+        const atBat = findPlayerAtBat(pbp, playerName, abNum);
+        if (!atBat) return null;
+
+        // Check if batter reached base — check runners for end base, or result.event type
+        const reachedBase = (atBat.runners || []).some(r => {
+          const batter = r.details?.runner?.fullName || '';
+          const nameNorm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+          const runnerNorm = batter.toLowerCase().replace(/[^a-z ]/g, '').trim();
+          if (runnerNorm !== nameNorm && !runnerNorm.includes(nameNorm) && !nameNorm.includes(runnerNorm)) return false;
+          // Runner reached a base (not out)
+          return r.movement?.end && !r.movement?.isOut;
+        });
+
+        if (expectedOnBase && reachedBase) return 'win';
+        if (expectedOnBase && !reachedBase) return 'loss';
+        if (!expectedOnBase && !reachedBase) return 'win';
+        return 'loss';
+      }
+
+      // ── Pitch by Pitch: MPH ──
+      // Pick format: "Pitcher — Pitch #42 Faster than 96 MPH" or "Pitcher Pitch #42 Faster 96 MPH"
+      const pitchMatch = pick.match(/^(.+?)(?:\s*—\s*|\s+)Pitch #(\d+)\s+(Faster|Slower)(?:\s+than)?\s+([\d.]+)\s*MPH/i);
+      if (pitchMatch) {
+        const pitcherName = pitchMatch[1].trim();
+        const pitchNum = parseInt(pitchMatch[2]);
+        const dir = pitchMatch[3].toLowerCase();
+        const mphLine = parseFloat(pitchMatch[4]);
+        const pbp = summary?._mlbPlayByPlay;
+        if (!pbp) return null;
+
+        const pitch = findPitcherPitch(pbp, pitcherName, pitchNum);
+        if (!pitch) return null; // pitch hasn't been thrown yet
+
+        const speed = pitch.pitchData?.startSpeed;
+        if (speed == null) return null;
+
+        if (dir === 'faster') {
+          if (speed > mphLine) return 'win';
+          if (speed < mphLine) return 'loss';
+          return 'push';
+        } else {
+          if (speed < mphLine) return 'win';
+          if (speed > mphLine) return 'loss';
+          return 'push';
+        }
+      }
+
+      // ── Inning Runs O/U (existing linescore-based logic) ──
+      const inningRunsMatch = pick.match(/Inning (\d+) Runs (Over|Under) ([\d.]+)/i);
+      if (inningRunsMatch) {
+        const innNum = parseInt(inningRunsMatch[1]);
+        const dir = inningRunsMatch[2].toLowerCase();
+        const line = parseFloat(inningRunsMatch[3]);
+        const linescores = getLinescores(game);
+        if (!linescores) return null;
+        // Inning index is 0-based
+        const homeInn = linescores.home?.[innNum - 1];
+        const awayInn = linescores.away?.[innNum - 1];
+        if (!homeInn && !awayInn) return null; // inning hasn't happened yet
+        const homeR = parseFloat(homeInn?.displayValue || homeInn?.value || '0');
+        const awayR = parseFloat(awayInn?.displayValue || awayInn?.value || '0');
+        // Wait for full inning to complete
+        if (game.state === 'in') {
+          const currentInning = game._raw?.competitions?.[0]?.status?.period || 0;
+          if (currentInning <= innNum) return null;
+        }
+        const totalRuns = homeR + awayR;
+        if (dir === 'over') {
+          if (totalRuns > line) return 'win';
+          if (game.state !== 'post' && game._raw?.competitions?.[0]?.status?.period <= innNum) return null;
+          if (totalRuns < line) return 'loss';
+          return 'push';
+        } else {
+          if (totalRuns > line) return 'loss';
+          if (game.state !== 'post' && game._raw?.competitions?.[0]?.status?.period <= innNum) return null;
+          if (totalRuns < line) return 'win';
+          return 'push';
+        }
+      }
+
+      const inningHRMatch = pick.match(/^Inning (\d+) HR: (Yes|No)/i);
+      if (inningHRMatch) {
+        // Can't reliably resolve HR per inning from ESPN linescore alone
+        return null;
+      }
+
+      // AB-level and pitch-level bets can't be resolved from ESPN
+      return null;
     }
 
     case 'futures':
@@ -1270,6 +1465,85 @@ async function getMlbPlayerStats(gamePk, playerName) {
   return null;
 }
 
+/**
+ * Get MLB play-by-play data for AB-level and pitch-level resolution.
+ * @param {number} gamePk - MLB game primary key
+ * @returns {Object|null} { allPlays, currentPlay, playsByInning }
+ */
+async function getMlbPlayByPlay(gamePk) {
+  if (!gamePk) return null;
+  const cacheKey = `mlb-pbp:${gamePk}`;
+  const cached = getCached(cacheKey, 30_000); // 30s cache — more frequent for live AB tracking
+  if (cached) return cached;
+
+  try {
+    const url = `https://statsapi.mlb.com/api/v1/game/${encodeURIComponent(gamePk)}/playByPlay`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const pbp = {
+      allPlays: json.allPlays || [],
+      currentPlay: json.currentPlay || null,
+      playsByInning: json.playsByInning || [],
+    };
+    setCache(cacheKey, pbp);
+    return pbp;
+  } catch { return null; }
+}
+
+/**
+ * Find a specific at-bat in play-by-play data.
+ * Matches by batter name + sequential AB number for that batter.
+ * @param {Object} pbp - Play-by-play data from getMlbPlayByPlay
+ * @param {string} playerName - Batter name
+ * @param {number} abNumber - Which AB for this player (1st, 2nd, 3rd, etc.)
+ * @returns {Object|null} The matching play object, or null
+ */
+function findPlayerAtBat(pbp, playerName, abNumber) {
+  if (!pbp?.allPlays || !playerName || !abNumber) return null;
+  const norm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+  let count = 0;
+  for (const play of pbp.allPlays) {
+    const batter = (play.matchup?.batter?.fullName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+    if (!batter) continue;
+    if (batter === norm || batter.includes(norm) || norm.includes(batter)) {
+      // Only count completed at-bats (result.type === 'atBat')
+      if (play.result?.type === 'atBat' || play.about?.isComplete) {
+        count++;
+        if (count === abNumber) return play;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Find a specific pitch in play-by-play data.
+ * @param {Object} pbp - Play-by-play data from getMlbPlayByPlay
+ * @param {string} pitcherName - Pitcher name
+ * @param {number} pitchNumber - Pitch # overall for this pitcher in the game
+ * @returns {Object|null} The matching pitch event, or null
+ */
+function findPitcherPitch(pbp, pitcherName, pitchNumber) {
+  if (!pbp?.allPlays || !pitcherName || !pitchNumber) return null;
+  const norm = pitcherName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+  let count = 0;
+  for (const play of pbp.allPlays) {
+    const pitcher = (play.matchup?.pitcher?.fullName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+    if (!pitcher) continue;
+    if (pitcher === norm || pitcher.includes(norm) || norm.includes(pitcher)) {
+      // Count pitches from this pitcher's at-bats
+      for (const evt of (play.playEvents || [])) {
+        if (evt.isPitch) {
+          count++;
+          if (count === pitchNumber) return evt;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 module.exports = {
   ESPN_PATHS,
   getTodaysGames,
@@ -1286,6 +1560,9 @@ module.exports = {
   getGolfPlayerRound,
   findMlbGamePk,
   getMlbPlayerStats,
+  getMlbPlayByPlay,
+  findPlayerAtBat,
+  findPitcherPitch,
   inferSportFromTeams,
   MLB_API_STATS,
   GOLF_STATS,

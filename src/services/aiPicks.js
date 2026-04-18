@@ -17,7 +17,7 @@ function getSeasonalSports() {
   if (month >= 9 && month <= 12) return ['nfl', 'nba', 'nhl', 'ncaa_mbb', 'ncaa_football', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ucl'];
   if (month >= 1 && month <= 2) return ['nba', 'nhl', 'ncaa_mbb', 'nfl', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ucl'];
   if (month === 3) return ['nba', 'nhl', 'ncaa_mbb', 'mlb', 'epl', 'la_liga', 'serie_a', 'ucl', 'kbo', 'npb'];
-  if (month >= 4 && month <= 5) return ['nba', 'nhl', 'mlb', 'epl', 'la_liga', 'serie_a', 'ucl', 'kbo', 'npb'];
+  if (month >= 4 && month <= 5) return ['nhl', 'nba', 'mlb', 'golf_pga', 'epl', 'la_liga', 'serie_a', 'ucl', 'mls', 'kbo', 'npb'];
   if (month === 6) return ['mlb', 'wnba', 'mls', 'kbo', 'npb', 'golf_pga'];
   if (month >= 7 && month <= 8) return ['mlb', 'wnba', 'mls', 'mma', 'kbo', 'npb', 'golf_pga', 'epl'];
   return ['nba', 'nfl', 'mlb', 'nhl', 'epl'];
@@ -106,6 +106,19 @@ async function generateDailyPick(client, guildId) {
   const last10 = (closedPicks || []).slice(0, 10);
   const recentPerformance = last10.map(p => `${p.sport} ${p.wager_type} ${p.pick}: ${p.status}`).join('; ');
 
+  // Use ALL recent picks (including pending) for variety tracking
+  const allRecentPicks = await aiPicksDb.getAllAiPicks(guildId);
+  const recentForVariety = (allRecentPicks || []).slice(0, 5);
+
+  // Build sport frequency from last 5 picks to enforce variety
+  const last5Sports = recentForVariety.map(p => p.sport);
+  const last3Sports = last5Sports.slice(0, 3);
+  const sportFreq = {};
+  for (const s of last5Sports) sportFreq[s] = (sportFreq[s] || 0) + 1;
+  const overusedSports = Object.entries(sportFreq).filter(([, c]) => c >= 2).map(([s]) => s);
+  const lastSport = last5Sports[0] || null;
+  const last3WagerTypes = recentForVariety.slice(0, 3).map(p => p.wager_type);
+
   const gamesJson = JSON.stringify(allGames.map(g => {
     const obj = {
       sport: g.sport,
@@ -127,23 +140,36 @@ async function generateDailyPick(client, guildId) {
 
 Recent results (most recent first): ${recentPerformance || 'No recent picks'}
 
+=== STRICT VARIETY RULES (MUST FOLLOW) ===
+${lastSport ? `- Your last pick was ${SPORT_NAMES[lastSport] || lastSport}. You MUST pick a DIFFERENT sport today.` : ''}
+${overusedSports.length > 0 ? `- These sports have been picked too often recently and are BANNED today: ${overusedSports.map(s => SPORT_NAMES[s] || s).join(', ')}` : ''}
+${last3Sports.length > 0 ? `- Last 3 picks were from: ${last3Sports.map(s => SPORT_NAMES[s] || s).join(', ')}. Pick something DIFFERENT.` : ''}
+${last3WagerTypes.length > 0 ? `- Last 3 wager types: ${last3WagerTypes.join(', ')}. Vary your bet type — try totals (over/under), team totals, or player props if you haven't recently.` : ''}
+- PRIORITIZE variety. NHL, Golf, Soccer, and player props are GREAT options. Don't default to MLB.
+
+=== ODDS RANGE (STRICT) ===
+- Odds MUST be between -140 and -110. This is a HARD requirement. No plus odds. No heavy favorites beyond -140.
+- Target the -110 to -130 sweet spot. These are smart, sharp, high-probability plays.
+
 STRATEGY NOTES:
 - Analyze which bet types have been winning vs losing in recent history
 - If spreads have been losing, lean toward moneylines or totals
 - Look for genuine line value — where the market may be off
 - Consider situational factors: rest days, travel, motivation, injuries
 - For MLB: pitcher matchups are critical — a strong pitcher vs weak lineup is high value
-- Avoid picking heavy favorites with poor value odds
+- Over/unders and team totals often provide the best value — don't sleep on them
+- NHL pucklines, soccer draw no bet, golf round matchups are all excellent pick types
+- Player props (strikeouts, points, assists, etc.) can be high-value if the matchup is right
 
 Today's available games:
 ${gamesJson}
 
 Select ONE "Lock Pick of the Day" — your single best value play. Requirements:
-- Odds MUST be between -160 and +130 (value-focused but allow slightly wider range for strong edges)
-- The pick must be a moneyline, spread, over/under, or team total (team_game bets). Player props are acceptable too.
+- Odds MUST be between -140 and -110 (NO exceptions — no plus odds, no heavy juice)
+- Strongly consider: over/unders, team totals, pucklines, player props — not just moneylines and spreads
 - Team total = one team's score over/under a line (e.g. 'Lakers Over 112.5')
 - Focus on value — find where the line is off or where one side has a clear edge
-- Distribute picks across sports over time (don't always pick the same sport)
+- You MUST pick a different sport than your last pick. Variety is critical.
 - Consider the matchup, records, situational factors, and line value
 
 Return a JSON object with this EXACT structure:
@@ -158,7 +184,7 @@ Return a JSON object with this EXACT structure:
   "propDescription": "<prop description if player_prop, else null>",
   "spreadValue": <numeric spread or total line, or null>,
   "overUnder": "Over" or "Under" or null,
-  "oddsAmerican": <American odds number between -160 and +130>,
+  "oddsAmerican": <American odds number between -140 and -110>,
   "espnGameId": "<ESPN game ID from the data>",
   "confidence": <number 85-99 representing confidence level>,
   "reasoning": "<2-3 sentence analysis explaining WHY this is the lock pick. Be specific about matchup advantages, trends, or line value.>"
@@ -167,34 +193,76 @@ Return a JSON object with this EXACT structure:
 IMPORTANT: Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
 
   try {
-    const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.4,
-        max_tokens: 600,
-      }),
-    });
+    let pickData = null;
+    const MAX_RETRIES = 3;
 
-    const oaiData = await oaiRes.json();
-    if (oaiData.error) {
-      console.error('[AI Pick] OpenAI error:', oaiData.error);
-      return null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.4 + (attempt - 1) * 0.15, // Increase randomness on retries
+          max_tokens: 600,
+        }),
+      });
+
+      const oaiData = await oaiRes.json();
+      if (oaiData.error) {
+        console.error('[AI Pick] OpenAI error:', oaiData.error);
+        return null;
+      }
+
+      const content = oaiData.choices?.[0]?.message?.content?.trim();
+      if (!content) {
+        console.error('[AI Pick] Empty OpenAI response');
+        return null;
+      }
+
+      const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const candidate = JSON.parse(jsonStr);
+
+      // === HARD VALIDATION: reject bad picks and retry ===
+      const odds = candidate.oddsAmerican;
+      const violations = [];
+
+      // Check odds range: must be -140 to -110
+      if (odds > -110 || odds < -140) {
+        violations.push(`odds ${odds} outside -140 to -110`);
+      }
+
+      // Check sport variety: must not repeat last pick's sport
+      if (lastSport && candidate.sport === lastSport) {
+        violations.push(`same sport as last pick (${SPORT_NAMES[lastSport] || lastSport})`);
+      }
+
+      // Check overused sports
+      if (overusedSports.includes(candidate.sport)) {
+        violations.push(`overused sport (${SPORT_NAMES[candidate.sport] || candidate.sport})`);
+      }
+
+      if (violations.length > 0) {
+        console.log(`[AI Pick] Attempt ${attempt}/${MAX_RETRIES} rejected: ${violations.join(', ')}`);
+        if (attempt === MAX_RETRIES) {
+          console.log('[AI Pick] Max retries reached, accepting last attempt with warnings.');
+          pickData = candidate;
+        }
+        continue;
+      }
+
+      pickData = candidate;
+      console.log(`[AI Pick] Accepted pick on attempt ${attempt}: ${candidate.sport} ${candidate.pick} (${odds})`);
+      break;
     }
 
-    const content = oaiData.choices?.[0]?.message?.content?.trim();
-    if (!content) {
-      console.error('[AI Pick] Empty OpenAI response');
+    if (!pickData) {
+      console.error('[AI Pick] Failed to generate valid pick after retries');
       return null;
     }
-
-    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const pickData = JSON.parse(jsonStr);
 
     // Find the matching game for event time
     const matchedGame = allGames.find(g => g.espnGameId === pickData.espnGameId);

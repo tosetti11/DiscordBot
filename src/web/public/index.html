@@ -234,6 +234,7 @@
                   <option value="team_game">🏟️ Team Game</option>
                   <option value="player_prop">🏀 Player Prop</option>
                   <option value="futures">🏆 Futures</option>
+                  <option value="mlb_live">⚾ MLB Live</option>
                 </select>
               </div>
               <div class="form-group" id="wager-type-group">
@@ -491,6 +492,201 @@
                 <div class="form-group">
                   <label for="futures-selection">Selection / Pick</label>
                   <input type="text" id="futures-selection" placeholder="e.g. Chiefs, Jokic" maxlength="100">
+                </div>
+              </div>
+            </div>
+
+            <!-- MLB Live fields -->
+            <div id="mlb-live-fields" class="dynamic-fields hidden">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="mlb-live-type">Live Bet Type</label>
+                  <select id="mlb-live-type" required>
+                    <option value="" disabled selected>Select type</option>
+                    <option value="at_bat">🦇 At Bat</option>
+                    <option value="inning">🏟️ Inning</option>
+                    <option value="pitch">🔥 Pitch by Pitch</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- At Bat sub-fields -->
+              <div id="mlb-ab-fields" class="hidden">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-ab-number">At Bat #</label>
+                    <select id="mlb-ab-number">
+                      <option value="1">1st AB</option>
+                      <option value="2">2nd AB</option>
+                      <option value="3">3rd AB</option>
+                      <option value="4">4th AB</option>
+                      <option value="5">5th AB</option>
+                      <option value="6">6th AB</option>
+                      <option value="7">7th AB</option>
+                      <option value="8">8th AB</option>
+                      <option value="9">9th AB</option>
+                      <option value="10">10th AB</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="mlb-ab-market">Market</label>
+                    <select id="mlb-ab-market">
+                      <option value="pitch_count">🔢 Pitch Count (O/U)</option>
+                      <option value="exact_outcome">🎯 Exact Outcome</option>
+                      <option value="on_base">🏃 On Base (Yes/No)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-ab-player">Batter Name</label>
+                    <input type="text" id="mlb-ab-player" placeholder="e.g. Mike Trout" maxlength="100">
+                  </div>
+                </div>
+                <!-- Pitch count line -->
+                <div id="mlb-ab-line-row" class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-ab-line">Pitch Count Line</label>
+                    <input type="text" id="mlb-ab-line" placeholder="e.g. 3.5, 4.5" maxlength="10">
+                  </div>
+                  <div class="form-group">
+                    <label>Direction</label>
+                    <div class="toggle-group">
+                      <button type="button" class="toggle-btn mlb-ab-dir-btn active" data-value="Over">⬆️ Over</button>
+                      <button type="button" class="toggle-btn mlb-ab-dir-btn" data-value="Under">⬇️ Under</button>
+                    </div>
+                  </div>
+                </div>
+                <!-- Exact outcome -->
+                <div id="mlb-ab-outcome-row" class="form-row hidden">
+                  <div class="form-group full-width">
+                    <label for="mlb-ab-outcome">Exact Outcome</label>
+                    <select id="mlb-ab-outcome">
+                      <option value="Single">🥎 Single</option>
+                      <option value="Double">✌️ Double</option>
+                      <option value="Triple">3️⃣ Triple</option>
+                      <option value="Home Run">💣 Home Run</option>
+                      <option value="Walk">🚶 Walk (BB)</option>
+                      <option value="Strikeout">🦁 Strikeout</option>
+                      <option value="HBP">🤕 Hit By Pitch</option>
+                      <option value="Reach on Error">❌ Reach on Error</option>
+                      <option value="Flyout">🪰 Flyout</option>
+                      <option value="Groundout">⬇️ Groundout</option>
+                      <option value="Lineout">➡️ Lineout</option>
+                      <option value="Pop Out">⬆️ Pop Out</option>
+                      <option value="Sac Fly">✈️ Sacrifice Fly</option>
+                      <option value="Sac Bunt">🏏 Sacrifice Bunt</option>
+                      <option value="Fielders Choice">🔀 Fielder's Choice</option>
+                      <option value="Double Play">2️⃣ Double Play</option>
+                    </select>
+                  </div>
+                </div>
+                <!-- On base yes/no -->
+                <div id="mlb-ab-onbase-row" class="form-row hidden">
+                  <div class="form-group">
+                    <label>On Base</label>
+                    <div class="toggle-group">
+                      <button type="button" class="toggle-btn mlb-ab-onbase-btn active" data-value="Yes">✅ Yes</button>
+                      <button type="button" class="toggle-btn mlb-ab-onbase-btn" data-value="No">❌ No</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Inning sub-fields -->
+              <div id="mlb-inning-fields" class="hidden">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-inning-number">Inning</label>
+                    <select id="mlb-inning-number">
+                      <option value="1">1st Inning</option>
+                      <option value="2">2nd Inning</option>
+                      <option value="3">3rd Inning</option>
+                      <option value="4">4th Inning</option>
+                      <option value="5">5th Inning</option>
+                      <option value="6">6th Inning</option>
+                      <option value="7">7th Inning</option>
+                      <option value="8">8th Inning</option>
+                      <option value="9">9th Inning</option>
+                      <option value="10">10th Inning</option>
+                      <option value="11">11th Inning</option>
+                      <option value="12">12th Inning</option>
+                      <option value="13">13th Inning</option>
+                      <option value="14">14th Inning</option>
+                      <option value="15">15th Inning</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="mlb-inning-market">Market</label>
+                    <select id="mlb-inning-market">
+                      <option value="runs">🔢 Runs (O/U)</option>
+                      <option value="home_run">💣 Home Run (Yes/No)</option>
+                      <option value="hits">🥎 Hits (O/U)</option>
+                    </select>
+                  </div>
+                </div>
+                <!-- Inning line (runs/hits O/U) -->
+                <div id="mlb-inning-line-row" class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-inning-line">Line</label>
+                    <input type="text" id="mlb-inning-line" placeholder="e.g. 0.5, 1.5" maxlength="10">
+                  </div>
+                  <div class="form-group">
+                    <label>Direction</label>
+                    <div class="toggle-group">
+                      <button type="button" class="toggle-btn mlb-inn-dir-btn active" data-value="Over">⬆️ Over</button>
+                      <button type="button" class="toggle-btn mlb-inn-dir-btn" data-value="Under">⬇️ Under</button>
+                    </div>
+                  </div>
+                </div>
+                <!-- HR yes/no -->
+                <div id="mlb-inning-hr-row" class="form-row hidden">
+                  <div class="form-group">
+                    <label>Home Run</label>
+                    <div class="toggle-group">
+                      <button type="button" class="toggle-btn mlb-inn-hr-btn active" data-value="Yes">✅ Yes</button>
+                      <button type="button" class="toggle-btn mlb-inn-hr-btn" data-value="No">❌ No</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pitch by Pitch sub-fields -->
+              <div id="mlb-pitch-fields" class="hidden">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-pitch-player">Pitcher Name</label>
+                    <input type="text" id="mlb-pitch-player" placeholder="e.g. Shohei Ohtani" maxlength="100">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-pitch-number">Pitch #</label>
+                    <input type="text" id="mlb-pitch-number" placeholder="e.g. 2" maxlength="5">
+                  </div>
+                  <div class="form-group">
+                    <label for="mlb-pitch-mph">MPH Threshold</label>
+                    <input type="text" id="mlb-pitch-mph" placeholder="e.g. 95.5" maxlength="10">
+                  </div>
+                  <div class="form-group">
+                    <label>Faster / Slower</label>
+                    <div class="toggle-group">
+                      <button type="button" class="toggle-btn mlb-pitch-dir-btn active" data-value="Faster">🔥 Faster</button>
+                      <button type="button" class="toggle-btn mlb-pitch-dir-btn" data-value="Slower">🐢 Slower</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Teams (shared across all MLB live sub-types) -->
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="mlb-live-team-a">Team A</label>
+                  <input type="text" id="mlb-live-team-a" placeholder="e.g. LAA" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="mlb-live-team-b">Team B</label>
+                  <input type="text" id="mlb-live-team-b" placeholder="e.g. NYY" maxlength="100">
                 </div>
               </div>
             </div>

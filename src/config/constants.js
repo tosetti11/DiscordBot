@@ -118,6 +118,7 @@ module.exports = {
     homerun: 'Home Run',
     double_chance: 'Double Chance',
     draw_no_bet: 'Draw No Bet',
+    mlb_live: 'MLB Live',
   },
 
   // Period options for totals/spreads

@@ -3535,6 +3535,10 @@ IMPORTANT RULES:
         eventStartTime, isWhale, overUnder,
         period, fightRound, fightMethod, golfHole, golfRound,
         onBehalfOf, // admin placing bet for another user
+        // MLB Live fields
+        mlbLiveType, abNumber, abMarket, abDirection, abLine, exactOutcome, onBase,
+        inningNumber, inningMarket, inningDirection, inningLine, inningHomeRun,
+        pitcherName, pitchNumber, pitchMph, pitchDirection, mlbPlayerName,
         // Parlay fields
         legs,
       } = req.body;
@@ -3676,6 +3680,16 @@ IMPORTANT RULES:
               legPick = `Double Chance: ${truncate(leg.teamA, 200)} or Draw`;
             } else if (leg.wagerType === 'draw_no_bet') {
               legPick = `Draw No Bet: ${truncate(leg.teamA, 200)}`;
+            }
+          } else if (leg.betCategory === 'mlb_live') {
+            if (leg.mlbLiveType === 'at_bat') {
+              if (leg.abMarket === 'pitch_count') legPick = `AB #${leg.abNumber} Pitch Count O/U`;
+              else if (leg.abMarket === 'exact_outcome') legPick = `AB #${leg.abNumber} Exact Outcome`;
+              else if (leg.abMarket === 'on_base') legPick = `AB #${leg.abNumber} On Base`;
+            } else if (leg.mlbLiveType === 'inning') {
+              legPick = `Inn ${leg.inningNumber} ${leg.inningMarket || 'runs'}`;
+            } else if (leg.mlbLiveType === 'pitch') {
+              legPick = `${truncate(leg.pitcherName, 200) || 'Pitcher'} Pitch #${leg.pitchNumber || '?'}`;
             }
           } else {
             legPick = truncate(leg.propDescription) || truncate(leg.pick);
@@ -3842,6 +3856,38 @@ IMPORTANT RULES:
           }
         } else {
           finalPick = safePropDesc || safePick;
+        }
+
+        // MLB Live pick construction
+        if (betCategory === 'mlb_live') {
+          const { mlbLiveType, abNumber, abMarket, abDirection, abLine, exactOutcome, onBase,
+                  inningNumber, inningMarket, inningDirection, inningLine, inningHomeRun,
+                  pitcherName, pitchNumber, pitchMph, pitchDirection, mlbPlayerName } = req.body;
+          const safeMLBPlayer = truncate(mlbPlayerName, 200);
+          const safePitcher = truncate(pitcherName, 200);
+          if (mlbLiveType === 'at_bat') {
+            if (abMarket === 'pitch_count') {
+              finalPick = `AB #${abNumber} Pitch Count ${abDirection} ${abLine}`;
+            } else if (abMarket === 'exact_outcome') {
+              finalPick = `AB #${abNumber} Exact Outcome: ${exactOutcome}`;
+            } else if (abMarket === 'on_base') {
+              finalPick = `AB #${abNumber} On Base: ${onBase}`;
+            }
+            if (safeMLBPlayer) finalPick += ` (${safeMLBPlayer})`;
+          } else if (mlbLiveType === 'inning') {
+            if (inningMarket === 'runs') {
+              finalPick = `Inning ${inningNumber} Runs ${inningDirection} ${inningLine}`;
+            } else if (inningMarket === 'hits') {
+              finalPick = `Inning ${inningNumber} Hits ${inningDirection} ${inningLine}`;
+            } else if (inningMarket === 'home_run') {
+              finalPick = `Inning ${inningNumber} HR: ${inningHomeRun}`;
+            }
+          } else if (mlbLiveType === 'pitch') {
+            finalPick = `${safePitcher} Pitch #${pitchNumber} ${pitchDirection} ${pitchMph} MPH`;
+          }
+          if (safeTeamA || safeTeamB) {
+            finalPick += ` | ${safeTeamA || '?'} vs ${safeTeamB || '?'}`;
+          }
         }
 
         // Append fight/golf context to pick text

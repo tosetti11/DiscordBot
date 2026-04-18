@@ -11,6 +11,7 @@ const { buildBetEmbed } = require('../../utils/embeds');
 const { generateBetCardImage } = require('../../utils/betCardImage');
 const { SPORT_NAMES, STATUS_EMOJI } = require('../../config/constants');
 const { formatOdds } = require('../../utils/odds');
+const { checkAndNotifyStreak } = require('../../services/streakService');
 
 // In-memory sessions for parlay leg closing
 const closeSessions = new Map();
@@ -146,20 +147,21 @@ async function showParlayDashboard(interaction, session, method) {
   const content = buildDashboardContent(session);
   const components = [];
 
-  // Select menu with only open legs
-  const openLegs = session.legs
-    .map((leg, i) => ({ leg, index: i }))
-    .filter(({ leg }) => leg.status === 'open');
+  // Select menu with ALL legs — open legs to close, closed legs to edit
+  const allLegs = session.legs.map((leg, i) => ({ leg, index: i }));
+  const openLegs = allLegs.filter(({ leg }) => leg.status === 'open');
 
-  if (openLegs.length > 0) {
-    const legOptions = openLegs.map(({ leg, index }) => {
+  if (allLegs.length > 0) {
+    const legOptions = allLegs.map(({ leg, index }) => {
       const sport = SPORT_NAMES[leg.sport] || leg.sport;
-      let label = `Leg ${index + 1}: ${leg.pick}`;
+      const isOpen = leg.status === 'open';
+      const statusTag = isOpen ? '' : ` [${leg.status.toUpperCase()}]`;
+      let label = `Leg ${index + 1}: ${leg.pick}${statusTag}`;
       if (label.length > 95) label = label.substring(0, 95) + '...';
       return {
         label,
         value: leg.id,
-        description: `${sport}`.substring(0, 100),
+        description: isOpen ? `${sport} — Close this leg`.substring(0, 100) : `${sport} — Edit result`.substring(0, 100),
       };
     });
 
@@ -167,7 +169,9 @@ async function showParlayDashboard(interaction, session, method) {
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId('closebet_leg_select')
-          .setPlaceholder('Select a leg to close')
+          .setPlaceholder('Select leg(s) to close or edit')
+          .setMinValues(1)
+          .setMaxValues(allLegs.length)
           .addOptions(legOptions)
       )
     );
@@ -189,8 +193,8 @@ async function showParlayDashboard(interaction, session, method) {
   components.push(buttonRow);
 
   const msgContent = allClosed
-    ? content + '**All legs are closed!** Close the entire bet to finalize.'
-    : content + 'Select a leg to close, or close the entire bet.';
+    ? content + '**All legs are closed!** Close the entire bet to finalize, or select a leg to edit its result.'
+    : content + 'Select one or more legs to close (or edit a closed leg).';
 
   if (method === 'update') {
     await interaction.update({ content: msgContent, components });
@@ -199,23 +203,10 @@ async function showParlayDashboard(interaction, session, method) {
   }
 }
 
-// ─── Handle leg selection from dashboard ───
-async function handleLegSelect(interaction) {
-  const legId = interaction.values[0];
-  const userId = interaction.user.id;
-  const session = closeSessions.get(userId);
-  if (!session) {
-    return interaction.update({ content: 'Session expired. Use `/closebet` again.', components: [] });
-  }
-
-  session.pendingLegId = legId;
-  closeSessions.set(userId, session);
-
-  const legIndex = session.legs.findIndex(l => l.id === legId);
-  const leg = session.legs[legIndex];
+// ─── Build a description string for a leg ───
+function buildLegDescription(leg, index) {
   const sport = SPORT_NAMES[leg.sport] || leg.sport;
-
-  let desc = `**Leg ${legIndex + 1}**\n`;
+  let desc = `**Leg ${index + 1}**\n`;
   if (leg.bet_category === 'team_game') {
     desc += `${sport}: ${leg.team_a} vs ${leg.team_b}\n`;
     desc += `Pick: **${leg.pick}**`;
@@ -229,37 +220,69 @@ async function handleLegSelect(interaction) {
     desc += `${sport}: ${leg.player_name}\n`;
     desc += `Pick: **${leg.pick}**`;
   }
+  return desc;
+}
+
+// ─── Handle leg selection from dashboard (supports multi-select) ───
+async function handleLegSelect(interaction) {
+  const selectedIds = interaction.values;
+  const userId = interaction.user.id;
+  const session = closeSessions.get(userId);
+  if (!session) {
+    return interaction.update({ content: 'Session expired. Use `/closebet` again.', components: [] });
+  }
+
+  // Store selected leg IDs for bulk operations
+  session.pendingLegIds = selectedIds;
+  closeSessions.set(userId, session);
+
+  // Build description for all selected legs
+  let desc = '';
+  for (const legId of selectedIds) {
+    const legIndex = session.legs.findIndex(l => l.id === legId);
+    const leg = session.legs[legIndex];
+    if (!leg) continue;
+    const currentStatus = leg.status !== 'open' ? ` *(currently ${leg.status.toUpperCase()})*` : '';
+    desc += buildLegDescription(leg, legIndex) + currentStatus + '\n\n';
+  }
+
+  const headerLabel = selectedIds.length === 1 ? 'this leg' : `these ${selectedIds.length} legs`;
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`closebet_leg_win_${legId}`)
+      .setCustomId(`closebet_legs_win`)
       .setLabel('✅ Win')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`closebet_leg_loss_${legId}`)
+      .setCustomId(`closebet_legs_loss`)
       .setLabel('❌ Loss')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
-      .setCustomId(`closebet_leg_push_${legId}`)
+      .setCustomId(`closebet_legs_push`)
       .setLabel('🔄 Push')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(`closebet_leg_void_${legId}`)
+      .setCustomId(`closebet_legs_void`)
       .setLabel('⛔ Void')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`closebet_legs_back`)
+      .setLabel('↩️ Back')
       .setStyle(ButtonStyle.Secondary),
   );
 
   await interaction.update({
-    content: `🎰 **What was the result of this leg?**\n\n${desc}`,
+    content: `🎰 **What was the result of ${headerLabel}?**\n\n${desc}`,
     components: [row],
   });
 }
 
-// ─── Handle leg result button → return to dashboard ───
+// ─── Handle leg result button → update all selected legs and return to dashboard ───
 async function handleLegResultButton(interaction) {
   const parts = interaction.customId.split('_');
-  const result = parts[2]; // win, loss, push, void
-  const legId = parts[3];
+  // New format: closebet_legs_win / closebet_legs_loss / etc.
+  // Old format: closebet_leg_win_<legId> (kept for backward compat)
+  const result = parts[2]; // win, loss, push, void, back
 
   const userId = interaction.user.id;
   const session = closeSessions.get(userId);
@@ -267,13 +290,31 @@ async function handleLegResultButton(interaction) {
     return interaction.update({ content: 'Session expired. Use `/closebet` again.', components: [] });
   }
 
-  try {
-    // Update leg status in DB
-    await db.updateParlayLegStatus(legId, result);
+  // "Back" button — return to dashboard without changes
+  if (result === 'back') {
+    return showParlayDashboard(interaction, session, 'update');
+  }
 
-    // Update local session
-    const legIndex = session.legs.findIndex(l => l.id === legId);
-    if (legIndex !== -1) session.legs[legIndex].status = result;
+  try {
+    // Determine which legs to update
+    let legIds;
+    if (parts[1] === 'legs' && session.pendingLegIds?.length) {
+      // Multi-select: use stored IDs from session
+      legIds = session.pendingLegIds;
+    } else {
+      // Old single-leg format: closebet_leg_win_<legId>
+      legIds = [parts[3]];
+    }
+
+    // Update all selected legs in DB
+    for (const legId of legIds) {
+      await db.updateParlayLegStatus(legId, result);
+      const legIndex = session.legs.findIndex(l => l.id === legId);
+      if (legIndex !== -1) session.legs[legIndex].status = result;
+    }
+
+    // Clear pending selection
+    delete session.pendingLegIds;
     closeSessions.set(userId, session);
 
     // Update the channel embed to reflect leg status changes
@@ -428,6 +469,13 @@ async function handleResultButton(interaction) {
         roleManager.updateUserRoles(interaction.guild, fullBet.discord_id).catch(() => {});
       }
     } catch (e) { /* role manager not critical */ }
+
+    // Check for win streak and notify
+    if (result === 'win') {
+      checkAndNotifyStreak(interaction.client, fullBet, interaction.guildId).catch(e =>
+        console.error('[Streak] Notification error:', e.message)
+      );
+    }
   } catch (err) {
     console.error('Error closing bet:', err);
     await interaction.update({ content: '❌ Error closing bet.', components: [] });

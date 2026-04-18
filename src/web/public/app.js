@@ -481,6 +481,78 @@ function setupEventListeners() {
     }
   });
 
+  // ── MLB Live sub-type toggles ──
+  const mlbTypeSelect = document.getElementById('mlb-live-type');
+  if (mlbTypeSelect) {
+    mlbTypeSelect.addEventListener('change', function() {
+      document.getElementById('mlb-ab-fields').classList.add('hidden');
+      document.getElementById('mlb-inning-fields').classList.add('hidden');
+      document.getElementById('mlb-pitch-fields').classList.add('hidden');
+      const v = this.value;
+      if (v === 'at_bat') document.getElementById('mlb-ab-fields').classList.remove('hidden');
+      else if (v === 'inning') document.getElementById('mlb-inning-fields').classList.remove('hidden');
+      else if (v === 'pitch') document.getElementById('mlb-pitch-fields').classList.remove('hidden');
+    });
+  }
+
+  // MLB AB market toggles
+  const mlbAbMarket = document.getElementById('mlb-ab-market');
+  if (mlbAbMarket) {
+    mlbAbMarket.addEventListener('change', function() {
+      document.getElementById('mlb-ab-pitchcount-row').classList.add('hidden');
+      document.getElementById('mlb-ab-outcome-row').classList.add('hidden');
+      document.getElementById('mlb-ab-onbase-row').classList.add('hidden');
+      const v = this.value;
+      if (v === 'pitch_count') document.getElementById('mlb-ab-pitchcount-row').classList.remove('hidden');
+      else if (v === 'exact_outcome') document.getElementById('mlb-ab-outcome-row').classList.remove('hidden');
+      else if (v === 'on_base') document.getElementById('mlb-ab-onbase-row').classList.remove('hidden');
+    });
+  }
+
+  // MLB Inning market toggles
+  const mlbInnMarket = document.getElementById('mlb-inning-market');
+  if (mlbInnMarket) {
+    mlbInnMarket.addEventListener('change', function() {
+      document.getElementById('mlb-inn-line-row').classList.add('hidden');
+      document.getElementById('mlb-inn-hr-row').classList.add('hidden');
+      const v = this.value;
+      if (v === 'runs' || v === 'hits') document.getElementById('mlb-inn-line-row').classList.remove('hidden');
+      else if (v === 'home_run') document.getElementById('mlb-inn-hr-row').classList.remove('hidden');
+    });
+  }
+
+  // Toggle button wiring for MLB Live direction/yes-no buttons
+  document.querySelectorAll('.mlb-ab-dir-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mlb-ab-dir-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.mlb-ab-onbase-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mlb-ab-onbase-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.mlb-inn-dir-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mlb-inn-dir-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.mlb-inn-hr-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mlb-inn-hr-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.mlb-pitch-dir-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mlb-pitch-dir-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
   // Single bet datetime picker
   const singlePicker = document.getElementById('event-time-picker');
   singlePicker.addEventListener('change', () => {
@@ -498,6 +570,7 @@ function updateCategoryFields(category) {
   document.getElementById('team-fields').classList.add('hidden');
   document.getElementById('prop-fields').classList.add('hidden');
   document.getElementById('futures-fields').classList.add('hidden');
+  document.getElementById('mlb-live-fields').classList.add('hidden');
 
   const wagerGroup = document.getElementById('wager-type-group');
 
@@ -520,6 +593,14 @@ function updateCategoryFields(category) {
     document.getElementById('wager-type').required = false;
     document.getElementById('over-under-row').classList.add('hidden');
     document.getElementById('spread-line-row').classList.add('hidden');
+  } else if (category === 'mlb_live') {
+    document.getElementById('mlb-live-fields').classList.remove('hidden');
+    wagerGroup.classList.add('hidden');
+    document.getElementById('wager-type').required = false;
+    document.getElementById('over-under-row').classList.add('hidden');
+    document.getElementById('spread-line-row').classList.add('hidden');
+    // Auto-set sport to MLB
+    document.getElementById('sport-select').value = 'mlb';
   }
 }
 
@@ -1106,6 +1187,28 @@ async function handleSubmit(e) {
           leg.futuresMarket = document.querySelector(`.leg-futures-market[data-leg="${i}"]`)?.value;
           leg.futuresSelection = document.querySelector(`.leg-futures-selection[data-leg="${i}"]`)?.value;
           if (!leg.futuresMarket || !leg.futuresSelection) throw new Error(`Leg ${i}: Enter market and selection`);
+        } else if (category === 'mlb_live') {
+          leg.wagerType = 'mlb_live';
+          const mlbType = document.querySelector(`.leg-mlb-live-type[data-leg="${i}"]`)?.value;
+          if (!mlbType) throw new Error(`Leg ${i}: Select MLB Live bet type`);
+          leg.mlbLiveType = mlbType;
+          leg.teamA = document.querySelector(`.leg-mlb-team-a[data-leg="${i}"]`)?.value;
+          leg.teamB = document.querySelector(`.leg-mlb-team-b[data-leg="${i}"]`)?.value;
+          // Build a pick string for the leg based on sub-type
+          if (mlbType === 'at_bat') {
+            const abNum = document.querySelector(`.leg-mlb-ab-number[data-leg="${i}"]`)?.value;
+            const abMkt = document.querySelector(`.leg-mlb-ab-market[data-leg="${i}"]`)?.value;
+            leg.mlbLiveType = mlbType;
+            leg.abNumber = abNum;
+            leg.abMarket = abMkt;
+          } else if (mlbType === 'inning') {
+            leg.inningNumber = document.querySelector(`.leg-mlb-inning-number[data-leg="${i}"]`)?.value;
+            leg.inningMarket = document.querySelector(`.leg-mlb-inning-market[data-leg="${i}"]`)?.value;
+          } else if (mlbType === 'pitch') {
+            leg.pitcherName = document.querySelector(`.leg-mlb-pitcher[data-leg="${i}"]`)?.value;
+            leg.pitchNumber = document.querySelector(`.leg-mlb-pitch-number[data-leg="${i}"]`)?.value;
+            leg.pitchMph = document.querySelector(`.leg-mlb-pitch-mph[data-leg="${i}"]`)?.value;
+          }
         }
 
         // Sport-specific extras
@@ -1208,6 +1311,54 @@ async function handleSubmit(e) {
         body.futuresMarket = document.getElementById('futures-market').value;
         body.futuresSelection = document.getElementById('futures-selection').value;
         if (!body.futuresMarket || !body.futuresSelection) throw new Error('Enter market and selection');
+      } else if (category === 'mlb_live') {
+        body.wagerType = 'mlb_live';
+        const mlbType = document.getElementById('mlb-live-type').value;
+        if (!mlbType) throw new Error('Select MLB Live bet type');
+        body.mlbLiveType = mlbType;
+        body.teamA = document.getElementById('mlb-team-a').value;
+        body.teamB = document.getElementById('mlb-team-b').value;
+
+        if (mlbType === 'at_bat') {
+          body.abNumber = document.getElementById('mlb-ab-number').value;
+          body.abMarket = document.getElementById('mlb-ab-market').value;
+          body.mlbPlayerName = document.getElementById('mlb-ab-player').value;
+          if (!body.abNumber || !body.abMarket) throw new Error('Select AB number and market');
+          if (body.abMarket === 'pitch_count') {
+            body.abLine = document.getElementById('mlb-ab-line').value;
+            const activeDir = document.querySelector('.mlb-ab-dir-btn.active');
+            body.abDirection = activeDir ? activeDir.dataset.value : null;
+            if (!body.abLine || !body.abDirection) throw new Error('Enter pitch count line and Over/Under');
+          } else if (body.abMarket === 'exact_outcome') {
+            body.exactOutcome = document.getElementById('mlb-ab-outcome').value;
+            if (!body.exactOutcome) throw new Error('Select exact outcome');
+          } else if (body.abMarket === 'on_base') {
+            const activeOB = document.querySelector('.mlb-ab-onbase-btn.active');
+            body.onBase = activeOB ? activeOB.dataset.value : null;
+            if (!body.onBase) throw new Error('Select Yes or No for on base');
+          }
+        } else if (mlbType === 'inning') {
+          body.inningNumber = document.getElementById('mlb-inning-number').value;
+          body.inningMarket = document.getElementById('mlb-inning-market').value;
+          if (!body.inningNumber || !body.inningMarket) throw new Error('Select inning and market');
+          if (body.inningMarket === 'runs' || body.inningMarket === 'hits') {
+            body.inningLine = document.getElementById('mlb-inn-line').value;
+            const activeDir = document.querySelector('.mlb-inn-dir-btn.active');
+            body.inningDirection = activeDir ? activeDir.dataset.value : null;
+            if (!body.inningLine || !body.inningDirection) throw new Error('Enter line and Over/Under');
+          } else if (body.inningMarket === 'home_run') {
+            const activeHR = document.querySelector('.mlb-inn-hr-btn.active');
+            body.inningHomeRun = activeHR ? activeHR.dataset.value : null;
+            if (!body.inningHomeRun) throw new Error('Select Yes or No for HR');
+          }
+        } else if (mlbType === 'pitch') {
+          body.pitcherName = document.getElementById('mlb-pitcher-name').value;
+          body.pitchNumber = document.getElementById('mlb-pitch-number').value;
+          body.pitchMph = document.getElementById('mlb-pitch-mph').value;
+          const activeDir = document.querySelector('.mlb-pitch-dir-btn.active');
+          body.pitchDirection = activeDir ? activeDir.dataset.value : null;
+          if (!body.pitcherName || !body.pitchNumber || !body.pitchMph || !body.pitchDirection) throw new Error('Fill in all pitch fields');
+        }
       }
 
       // Sport-specific extras

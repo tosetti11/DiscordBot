@@ -13,6 +13,7 @@ const editbet = require('./commands/betting/editbet');
 const advancedstats = require('./commands/betting/advancedstats');
 const whaledick = require('./commands/betting/whaledick');
 const retrobet = require('./commands/betting/retrobet');
+const mlblive = require('./commands/betting/mlblive');
 const help = require('./commands/general/help');
 const convertodds = require('./commands/general/convertodds');
 const reminder = require('./commands/general/reminder');
@@ -29,6 +30,7 @@ const roleManager = require('./services/roleManager');
 const aiPickService = require('./services/aiPicks');
 const golfService = require('./services/golfRoundTotals');
 const mlbAnalysis = require('./services/mlbAnalysis');
+const streakService = require('./services/streakService');
 
 // ── Scoreboard helpers ──
 function findPlayer(players, playerName) {
@@ -71,7 +73,7 @@ const client = new Client({
 
 // Register commands in a collection
 client.commands = new Collection();
-const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, retrobet, help, convertodds, reminder, announce, follow, profile];
+const commandModules = [enterbet, closebet, mybets, mystats, leaderboard, viewbets, deletebet, editbet, advancedstats, whaledick, retrobet, mlblive, help, convertodds, reminder, announce, follow, profile];
 for (const mod of commandModules) {
   client.commands.set(mod.command.name, mod);
 }
@@ -769,16 +771,32 @@ client.once(Events.ClientReady, (c) => {
           continue; // Skip normal resolution path for golf
         }
 
-        // NRFI/YRFI can resolve mid-game (after 1st inning); props/totals can resolve when over-line hit
-        const earlyResolveSingle = ['nrfi', 'yrfi', 'prop', 'homerun', 'total', 'team_total'].includes(bet.wager_type);
+        // NRFI/YRFI can resolve mid-game (after 1st inning); props/totals/mlb_live can resolve when condition met
+        const earlyResolveSingle = ['nrfi', 'yrfi', 'prop', 'homerun', 'total', 'team_total', 'mlb_live'].includes(bet.wager_type);
         if (game.state === 'pre') continue; // no games started yet
         if (game.state !== 'post' && !earlyResolveSingle) continue;
 
-        // Get summary if needed for props/HR
+        // Get summary if needed for props/HR/mlb_live
         let summary = null;
         if (['prop', 'homerun'].includes(bet.wager_type)) {
           summary = await getSummary(bet.sport, bet.espn_game_id);
           summary = await getMlbStats(bet, summary);
+        }
+
+        // Attach MLB play-by-play data for mlb_live AB/pitch bets
+        if (bet.wager_type === 'mlb_live' && bet.sport === 'mlb') {
+          if (!summary) summary = {};
+          const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+          const pkKey = `${bet.team_a}:${bet.team_b}:${dateStr}`;
+          let gamePk = mlbGamePkCache.get(pkKey);
+          if (gamePk === undefined) {
+            gamePk = await espn.findMlbGamePk(bet.espn_game_id, dateStr, bet.team_a, bet.team_b);
+            mlbGamePkCache.set(pkKey, gamePk);
+          }
+          if (gamePk) {
+            const pbp = await espn.getMlbPlayByPlay(gamePk);
+            if (pbp) summary._mlbPlayByPlay = pbp;
+          }
         }
 
         const result = espn.resolveResult({
@@ -849,8 +867,8 @@ client.once(Events.ClientReady, (c) => {
           continue;
         }
 
-        // NRFI/YRFI can resolve mid-game (after 1st inning); props/totals can resolve when over-line hit
-        const earlyResolveLeg = ['nrfi', 'yrfi', 'prop', 'homerun', 'total', 'team_total'].includes(leg.wager_type);
+        // NRFI/YRFI can resolve mid-game (after 1st inning); props/totals/mlb_live can resolve when condition met
+        const earlyResolveLeg = ['nrfi', 'yrfi', 'prop', 'homerun', 'total', 'team_total', 'mlb_live'].includes(leg.wager_type);
         if (game.state === 'pre') continue;
         if (game.state !== 'post' && !earlyResolveLeg) continue;
 
@@ -858,6 +876,22 @@ client.once(Events.ClientReady, (c) => {
         if (['prop', 'homerun'].includes(leg.wager_type)) {
           summary = await getSummary(leg.sport, leg.espn_game_id);
           summary = await getMlbStats(leg, summary);
+        }
+
+        // Attach MLB play-by-play data for mlb_live AB/pitch legs
+        if (leg.wager_type === 'mlb_live' && leg.sport === 'mlb') {
+          if (!summary) summary = {};
+          const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+          const pkKey = `${leg.team_a}:${leg.team_b}:${dateStr}`;
+          let gamePk = mlbGamePkCache.get(pkKey);
+          if (gamePk === undefined) {
+            gamePk = await espn.findMlbGamePk(leg.espn_game_id, dateStr, leg.team_a, leg.team_b);
+            mlbGamePkCache.set(pkKey, gamePk);
+          }
+          if (gamePk) {
+            const pbp = await espn.getMlbPlayByPlay(gamePk);
+            if (pbp) summary._mlbPlayByPlay = pbp;
+          }
         }
 
         const result = espn.resolveResult({
@@ -1047,6 +1081,14 @@ client.once(Events.ClientReady, (c) => {
             }
           } catch (e) {}
 
+          // Check for win streak
+          if (result === 'win' && bet.guild_id) {
+            const fullBetForStreak = await db.getBet(bet.id);
+            streakService.checkAndNotifyStreak(client, fullBetForStreak, bet.guild_id).catch(e =>
+              console.error('[AutoClose] Streak check error:', e.message)
+            );
+          }
+
           console.log(`[AutoClose] Bet ${bet.slip_number} auto-closed as ${result}`);
         } catch (e) {
           console.error(`[AutoClose] Error closing ${bet.slip_number}:`, e.message);
@@ -1057,6 +1099,9 @@ client.once(Events.ClientReady, (c) => {
     }
   }, 60_000);
   console.log('   ⏰ Auto-close timer started (60s interval, 1hr grace period)');
+
+  // ─── Daily Kings Record Scheduler ───
+  streakService.startDailyRecordScheduler(client);
 
   // ─── AI Pick of the Day Scheduler ───
   const AI_GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -1319,6 +1364,31 @@ async function handleSelectMenu(interaction) {
     console.log('[SelectMenu] Routing to editbet.handleEditBetSelect');
     return editbet.handleEditBetSelect(interaction);
   }
+  // MLB Live select menus
+  if (id === 'mlblive_type') {
+    return mlblive.handleTypeSelect(interaction);
+  }
+  if (id === 'mlblive_ab_number') {
+    return mlblive.handleABNumberSelect(interaction);
+  }
+  if (id === 'mlblive_ab_market') {
+    return mlblive.handleABMarketSelect(interaction);
+  }
+  if (id === 'mlblive_ab_direction') {
+    return mlblive.handleABDirectionSelect(interaction);
+  }
+  if (id === 'mlblive_ab_outcome') {
+    return mlblive.handleABOutcomeSelect(interaction);
+  }
+  if (id === 'mlblive_inning_number') {
+    return mlblive.handleInningNumberSelect(interaction);
+  }
+  if (id === 'mlblive_inning_market') {
+    return mlblive.handleInningMarketSelect(interaction);
+  }
+  if (id === 'mlblive_inning_direction') {
+    return mlblive.handleInningDirectionSelect(interaction);
+  }
   // Log unhandled select menu
   console.warn('[SelectMenu] Unhandled select menu:', id);
   try {
@@ -1332,7 +1402,7 @@ async function handleSelectMenu(interaction) {
 async function handleButton(interaction) {
   const id = interaction.customId;
 
-  if (id.startsWith('closebet_leg_')) {
+  if (id.startsWith('closebet_leg_') || id.startsWith('closebet_legs_')) {
     return closebet.handleLegResultButton(interaction);
   }
   if (id === 'closebet_close_whole') {
@@ -1368,6 +1438,13 @@ async function handleButton(interaction) {
   if (id.startsWith('aipick_tail_') || id.startsWith('aipick_fade_')) {
     return aiPickService.handleTailFade(interaction);
   }
+  // MLB Live buttons
+  if (id === 'mlblive_confirm') {
+    return mlblive.handleConfirm(interaction);
+  }
+  if (id === 'mlblive_cancel') {
+    return mlblive.handleCancel(interaction);
+  }
 }
 
 // ─── Modal Submit Router ───
@@ -1388,6 +1465,16 @@ async function handleModalSubmit(interaction) {
   }
   if (id === 'enterbet_parlay_final') {
     return enterbet.handleParlayFinalSubmit(interaction);
+  }
+  // MLB Live modals
+  if (id === 'mlblive_ab_modal') {
+    return mlblive.handleABModalSubmit(interaction);
+  }
+  if (id === 'mlblive_inning_modal') {
+    return mlblive.handleInningModalSubmit(interaction);
+  }
+  if (id === 'mlblive_pitch_modal') {
+    return mlblive.handlePitchModalSubmit(interaction);
   }
   if (id === 'deletebet_confirm_modal') {
     return deletebet.handleDeleteConfirmModal(interaction);
