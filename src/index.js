@@ -1368,6 +1368,9 @@ async function handleSelectMenu(interaction) {
   if (id === 'mlblive_type') {
     return mlblive.handleTypeSelect(interaction);
   }
+  if (id === 'mlblive_next_pitch_ab') {
+    return mlblive.handleNextPitchABSelect(interaction);
+  }
   if (id === 'mlblive_next_pitch_outcome') {
     return mlblive.handleNextPitchOutcomeSelect(interaction);
   }

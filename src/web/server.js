@@ -2224,6 +2224,8 @@ For a SINGLE bet:
   "mlbLiveType": "<one of: next_pitch, at_bat, inning, pitch — only for mlb_live bets, null otherwise>",
   "nextPitchOutcome": "<one of: Strike (Called), Strike (Swinging), Foul Ball, Ball, In Play, Hit By Pitch — for next_pitch bets, or null>",
   "batterName": "<batter name for next_pitch bets, or null>",
+  "npAbNumber": "<which at-bat number the pitch is in (1-10) — for next_pitch bets, or null>",
+  "npPitchNumber": "<which pitch within that at-bat (1-30) — for next_pitch bets, or null>",
   "abNumber": "<at-bat number 1-10 or null>",
   "abMarket": "<one of: pitch_count, exact_outcome, on_base — or null>",
   "abDirection": "<Over or Under — for pitch count bets, or null>",
@@ -2269,6 +2271,8 @@ For a PARLAY (multiple legs):
       "mlbLiveType": "<next_pitch, at_bat, inning, or pitch — only for mlb_live legs, null otherwise>",
       "nextPitchOutcome": "<Strike (Called), Strike (Swinging), Foul Ball, Ball, In Play, Hit By Pitch — or null>",
       "batterName": "<batter name for next_pitch bets, or null>",
+      "npAbNumber": "<which at-bat number the pitch is in — or null>",
+      "npPitchNumber": "<which pitch within that at-bat — or null>",
       "abNumber": "<at-bat number or null>",
       "abMarket": "<pitch_count, exact_outcome, on_base — or null>",
       "abDirection": "<Over or Under or null>",
@@ -2319,7 +2323,7 @@ Rules:
 - FIGHT BETS (UFC/Boxing): If the bet mentions a specific round (e.g. "Round 3", "Rd 1-2", "goes the distance"), extract fightRound as the round number. If a method of victory is specified (e.g. "by KO/TKO", "by Submission", "by Decision", "by Points"), set fightMethod to the matching value (ko_tko, submission, decision, unanimous_decision, split_decision, dq, points).
 - GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds.
 - MLB LIVE / AT BAT BETS: These are live in-game MLB bets on specific at-bats, innings, or pitches. Use betCategory "mlb_live" and wagerType "mlb_live" for ALL of these. Set sport to "mlb". There are 4 sub-types:
-  1. NEXT PITCH (mlbLiveType "next_pitch"): Bets on the outcome of the very next pitch. Examples: "Next pitch - Strike", "Next pitch Ball", "Next pitch Foul Ball", "Next pitch In Play". Set pitcherName, batterName, and nextPitchOutcome to one of: "Strike (Called)", "Strike (Swinging)", "Foul Ball", "Ball", "In Play", "Hit By Pitch".
+  1. NEXT PITCH (mlbLiveType "next_pitch"): Bets on the outcome of the very next pitch. DraftKings slips show the specific at-bat and pitch number (e.g. "At Bat 3, Pitch 2 — Next Pitch Result: Strike"). Set pitcherName, batterName, nextPitchOutcome to one of: "Strike (Called)", "Strike (Swinging)", "Foul Ball", "Ball", "In Play", "Hit By Pitch". CRITICALLY: also extract npAbNumber (which at-bat number this pitch is in, e.g. 3) and npPitchNumber (which pitch within that AB, e.g. 2). These are REQUIRED for tracking.
   2. AT BAT BETS (mlbLiveType "at_bat"): Bets on a specific player's Nth at-bat in a game. Examples: "Ohtani 2nd AB Over 4.5 Pitches", "Judge 1st AB - Strikeout", "Soto 3rd AB to reach base". Set abNumber (1-10), mlbPlayerName to the batter, and:
      - Pitch Count O/U: Set abMarket "pitch_count", abDirection "Over"/"Under", abLine to the line (e.g. "4.5")
      - Exact Outcome: Set abMarket "exact_outcome", exactOutcome to the predicted result (Single, Double, Triple, Home Run, Walk, Strikeout, Strikeout Looking, Strikeout Swinging, Ground Out, Fly Out, Fly Ball Out, Line Drive Out, Pop Out, Hit By Pitch, Sacrifice, Fielders Choice, Error, Foul Out)
@@ -3734,7 +3738,9 @@ IMPORTANT RULES:
             }
           } else if (leg.betCategory === 'mlb_live') {
             if (leg.mlbLiveType === 'next_pitch') {
-              legPick = `Next Pitch: ${leg.nextPitchOutcome || '?'} — ${truncate(leg.pitcherName, 200) || '?'} to ${truncate(leg.batterName, 200) || '?'}`;
+              const abN = parseInt(leg.npAbNumber) || '?';
+              const pitchN = parseInt(leg.npPitchNumber) || '?';
+              legPick = `Next Pitch: ${leg.nextPitchOutcome || '?'} — ${truncate(leg.pitcherName, 200) || '?'} to ${truncate(leg.batterName, 200) || '?'} (AB ${abN}, Pitch ${pitchN})`;
             } else if (leg.mlbLiveType === 'at_bat') {
               if (leg.abMarket === 'pitch_count') legPick = `AB #${leg.abNumber} Pitch Count O/U`;
               else if (leg.abMarket === 'exact_outcome') legPick = `AB #${leg.abNumber} Exact Outcome`;
@@ -3916,12 +3922,14 @@ IMPORTANT RULES:
           const { mlbLiveType, abNumber, abMarket, abDirection, abLine, exactOutcome, onBase,
                   inningNumber, inningMarket, inningDirection, inningLine, inningHomeRun,
                   pitcherName, pitchNumber, pitchMph, pitchDirection, mlbPlayerName,
-                  batterName, nextPitchOutcome } = req.body;
+                  batterName, nextPitchOutcome, npAbNumber, npPitchNumber } = req.body;
           const safeMLBPlayer = truncate(mlbPlayerName, 200);
           const safePitcher = truncate(pitcherName, 200);
           const safeBatter = truncate(batterName, 200);
           if (mlbLiveType === 'next_pitch') {
-            finalPick = `Next Pitch: ${nextPitchOutcome} — ${safePitcher || '?'} to ${safeBatter || '?'}`;
+            const abN = parseInt(npAbNumber) || '?';
+            const pitchN = parseInt(npPitchNumber) || '?';
+            finalPick = `Next Pitch: ${nextPitchOutcome} — ${safePitcher || '?'} to ${safeBatter || '?'} (AB ${abN}, Pitch ${pitchN})`;
           } else if (mlbLiveType === 'at_bat') {
             if (abMarket === 'pitch_count') {
               finalPick = `AB #${abNumber} Pitch Count ${abDirection} ${abLine}`;

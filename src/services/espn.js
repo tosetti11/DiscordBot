@@ -1010,7 +1010,49 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       // MLB Live bets — resolve using ESPN linescore + MLB Stats API play-by-play
       if (!pick) return null;
 
-      // ── Next Pitch — cannot auto-resolve (no real-time pitch-by-pitch tracking) ──
+      // ── Next Pitch — resolve from play-by-play pitch events ──
+      // Pick format: "Next Pitch: Strike (Called) — Cole to Trout (3rd AB, Pitch 2) | NYY vs LAA"
+      const nextPitchMatch = pick.match(/Next Pitch:\s*(.+?)\s*—\s*(.+?)\s+to\s+(.+?)\s*\((?:(\d+)(?:st|nd|rd|th)\s+AB|AB\s+(\d+)),\s*Pitch\s+(\d+)\)/i);
+      if (nextPitchMatch) {
+        const expectedOutcome = nextPitchMatch[1].trim();
+        const pitcherName = nextPitchMatch[2].trim();
+        const batterName = nextPitchMatch[3].trim();
+        const abNum = parseInt(nextPitchMatch[4] || nextPitchMatch[5]);
+        const pitchNumInAB = parseInt(nextPitchMatch[6]);
+        const pbp = summary?._mlbPlayByPlay;
+        if (!pbp) return null;
+
+        // Find the batter's Nth plate appearance (including in-progress ones)
+        const atBat = findPlayerAtBatIncludeActive(pbp, batterName, abNum);
+        if (!atBat) return null;
+
+        // Find the specific pitch within this AB
+        const pitchEvents = (atBat.playEvents || []).filter(e => e.isPitch);
+        if (pitchNumInAB > pitchEvents.length) return null; // pitch hasn't happened yet
+        const pitch = pitchEvents[pitchNumInAB - 1];
+        if (!pitch) return null;
+
+        const callDesc = (pitch.details?.description || pitch.details?.call?.description || '').toLowerCase();
+
+        // Map MLB API pitch descriptions to our outcome values
+        const outcomeMap = {
+          'strike (called)': ['called strike', 'strike looking'],
+          'strike (swinging)': ['swinging strike', 'swinging strike (blocked)', 'missed bunt'],
+          'foul ball': ['foul', 'foul tip', 'foul bunt', 'foul pitchout'],
+          'ball': ['ball', 'ball in dirt', 'intent ball', 'pitchout', 'automatic ball'],
+          'in play': ['in play, out(s)', 'in play, no out', 'in play, run(s)', 'hit into play'],
+          'hit by pitch': ['hit by pitch'],
+        };
+
+        const expectedNorm = expectedOutcome.toLowerCase();
+        const matches = outcomeMap[expectedNorm];
+        if (matches) {
+          return matches.some(m => callDesc.includes(m)) ? 'win' : 'loss';
+        }
+        // Fallback direct comparison
+        return callDesc.includes(expectedNorm) ? 'win' : 'loss';
+      }
+      // Next pitch without AB/Pitch context — can't resolve
       if (pick.startsWith('Next Pitch:')) return null;
 
       // ── At Bat: Pitch Count O/U ──
@@ -1502,6 +1544,26 @@ async function getMlbPlayByPlay(gamePk) {
  * @param {number} abNumber - Which AB for this player (1st, 2nd, 3rd, etc.)
  * @returns {Object|null} The matching play object, or null
  */
+/**
+ * Find a player's Nth plate appearance, including in-progress ABs.
+ * Unlike findPlayerAtBat which only counts completed ABs, this counts
+ * all plate appearances so we can resolve pitch-level bets during an AB.
+ */
+function findPlayerAtBatIncludeActive(pbp, playerName, abNumber) {
+  if (!pbp?.allPlays || !playerName || !abNumber) return null;
+  const norm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+  let count = 0;
+  for (const play of pbp.allPlays) {
+    const batter = (play.matchup?.batter?.fullName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+    if (!batter) continue;
+    if (batter === norm || batter.includes(norm) || norm.includes(batter)) {
+      count++;
+      if (count === abNumber) return play;
+    }
+  }
+  return null;
+}
+
 function findPlayerAtBat(pbp, playerName, abNumber) {
   if (!pbp?.allPlays || !playerName || !abNumber) return null;
   const norm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();

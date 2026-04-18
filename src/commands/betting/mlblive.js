@@ -83,15 +83,21 @@ async function handleTypeSelect(interaction) {
   mlbLiveSessions.set(userId, session);
 
   if (session.liveType === 'next_pitch') {
-    // Select outcome for next pitch
+    // First select which AB this pitch is in
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
-        .setCustomId('mlblive_next_pitch_outcome')
-        .setPlaceholder('Select next pitch outcome')
-        .addOptions(NEXT_PITCH_OUTCOMES)
+        .setCustomId('mlblive_next_pitch_ab')
+        .setPlaceholder('Which at-bat is this pitch in?')
+        .addOptions(
+          Array.from({ length: 10 }, (_, i) => ({
+            label: `${ordinal(i + 1)} At Bat`,
+            value: `${i + 1}`,
+            emoji: '🦇',
+          }))
+        )
     );
     await interaction.update({
-      content: '⚾ **MLB Live — Next Pitch** — What will the next pitch be?',
+      content: '⚾ **MLB Live — Next Pitch** — Which at-bat is this pitch in?',
       components: [row],
     });
   } else if (session.liveType === 'at_bat') {
@@ -136,6 +142,27 @@ async function handleTypeSelect(interaction) {
   }
 }
 
+// ─── Next Pitch AB Selection → show outcome select ───
+async function handleNextPitchABSelect(interaction) {
+  const userId = interaction.user.id;
+  const session = mlbLiveSessions.get(userId);
+  if (!session) return interaction.update({ content: 'Session expired. Use `/mlblive` again.', components: [] });
+
+  session.nextPitchAB = parseInt(interaction.values[0]);
+  mlbLiveSessions.set(userId, session);
+
+  const row = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('mlblive_next_pitch_outcome')
+      .setPlaceholder('Select next pitch outcome')
+      .addOptions(NEXT_PITCH_OUTCOMES)
+  );
+  await interaction.update({
+    content: `⚾ **${ordinal(session.nextPitchAB)} AB — Next Pitch** — What will the next pitch be?`,
+    components: [row],
+  });
+}
+
 // ─── Next Pitch Outcome Selection → open modal ───
 async function handleNextPitchOutcomeSelect(interaction) {
   const userId = interaction.user.id;
@@ -165,6 +192,14 @@ async function handleNextPitchOutcomeSelect(interaction) {
     .setRequired(true)
     .setMaxLength(100);
 
+  const pitchNumInput = new TextInputBuilder()
+    .setCustomId('pitch_number_in_ab')
+    .setLabel('Pitch # in this At Bat (from DK slip)')
+    .setPlaceholder('e.g. 3 (the 3rd pitch of this AB)')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(5);
+
   const teamsInput = new TextInputBuilder()
     .setCustomId('teams')
     .setLabel('Teams (e.g. NYY vs LAA)')
@@ -173,28 +208,20 @@ async function handleNextPitchOutcomeSelect(interaction) {
     .setRequired(true)
     .setMaxLength(100);
 
-  const oddsInput = new TextInputBuilder()
-    .setCustomId('odds')
-    .setLabel('Odds (American)')
-    .setPlaceholder('e.g. -110, +150')
+  const oddsUnitsInput = new TextInputBuilder()
+    .setCustomId('odds_units')
+    .setLabel('Odds, Units (e.g. -110, 1)')
+    .setPlaceholder('e.g. -110, 2')
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
-    .setMaxLength(20);
-
-  const unitsInput = new TextInputBuilder()
-    .setCustomId('units')
-    .setLabel('Units')
-    .setPlaceholder('e.g. 1, 2, 5')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(10);
+    .setMaxLength(30);
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(pitcherInput),
     new ActionRowBuilder().addComponents(batterInput),
+    new ActionRowBuilder().addComponents(pitchNumInput),
     new ActionRowBuilder().addComponents(teamsInput),
-    new ActionRowBuilder().addComponents(oddsInput),
-    new ActionRowBuilder().addComponents(unitsInput),
+    new ActionRowBuilder().addComponents(oddsUnitsInput),
   );
 
   await interaction.showModal(modal);
@@ -208,24 +235,31 @@ async function handleNextPitchModalSubmit(interaction) {
 
   const pitcherName = interaction.fields.getTextInputValue('pitcher_name').trim();
   const batterName = interaction.fields.getTextInputValue('batter_name').trim();
+  const pitchNumInAB = parseInt(interaction.fields.getTextInputValue('pitch_number_in_ab').trim());
   const teamsRaw = interaction.fields.getTextInputValue('teams').trim();
-  const oddsRaw = interaction.fields.getTextInputValue('odds').trim();
-  const unitsRaw = interaction.fields.getTextInputValue('units').trim();
+  const oddsUnitsRaw = interaction.fields.getTextInputValue('odds_units').trim();
 
-  const oddsAmerican = parseInt(oddsRaw);
+  // Parse combined "odds, units" field
+  const ouParts = oddsUnitsRaw.split(/[,\s]+/).filter(Boolean);
+  const oddsAmerican = parseInt(ouParts[0]);
   if (isNaN(oddsAmerican)) {
-    return interaction.reply({ content: '❌ Invalid odds. Enter American odds (e.g. -110, +150)', ephemeral: true });
+    return interaction.reply({ content: '❌ Invalid odds. Format: -110, 2', ephemeral: true });
   }
   const oddsDecimal = americanToDecimal(oddsAmerican);
 
-  const units = parseFloat(unitsRaw);
+  const units = parseFloat(ouParts[1] || '1');
   if (isNaN(units) || units <= 0) {
-    return interaction.reply({ content: '❌ Invalid units. Enter a positive number.', ephemeral: true });
+    return interaction.reply({ content: '❌ Invalid units. Format: -110, 2', ephemeral: true });
+  }
+
+  if (isNaN(pitchNumInAB) || pitchNumInAB < 1) {
+    return interaction.reply({ content: '❌ Invalid pitch #. Enter the pitch number within the AB (e.g. 3).', ephemeral: true });
   }
 
   const { teamA, teamB } = parseTeams(teamsRaw);
 
-  const pick = `Next Pitch: ${session.nextPitchOutcome} — ${pitcherName} to ${batterName}`;
+  const abLabel = ordinal(session.nextPitchAB || 1);
+  const pick = `Next Pitch: ${session.nextPitchOutcome} — ${pitcherName} to ${batterName} (${abLabel} AB, Pitch ${pitchNumInAB})`;
 
   session.pendingBet = {
     pick,
@@ -930,6 +964,7 @@ module.exports = {
   command,
   execute,
   handleTypeSelect,
+  handleNextPitchABSelect,
   handleNextPitchOutcomeSelect,
   handleNextPitchModalSubmit,
   handleABNumberSelect,

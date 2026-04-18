@@ -1325,7 +1325,11 @@ async function handleSubmit(e) {
           body.pitcherName = document.getElementById('mlb-pitcher-name').value;
           body.batterName = document.getElementById('mlb-batter-name').value;
           body.nextPitchOutcome = document.getElementById('mlb-next-pitch-outcome').value;
+          body.npAbNumber = document.getElementById('mlb-np-ab-number').value;
+          body.npPitchNumber = document.getElementById('mlb-np-pitch-number').value;
           if (!body.nextPitchOutcome) throw new Error('Select next pitch outcome');
+          if (!body.npAbNumber) throw new Error('Select which at-bat this pitch is in');
+          if (!body.npPitchNumber) throw new Error('Enter the pitch number within the AB');
         } else if (mlbType === 'at_bat') {
           body.abNumber = document.getElementById('mlb-ab-number').value;
           body.abMarket = document.getElementById('mlb-ab-market').value;
@@ -1976,6 +1980,8 @@ function applySingleData(data) {
       if (data.pitcherName) { const el = document.getElementById('mlb-pitcher-name'); if (el) el.value = data.pitcherName; }
       if (data.batterName) { const el = document.getElementById('mlb-batter-name'); if (el) el.value = data.batterName; }
       if (data.nextPitchOutcome) { const el = document.getElementById('mlb-next-pitch-outcome'); if (el) el.value = data.nextPitchOutcome; }
+      if (data.npAbNumber) { const el = document.getElementById('mlb-np-ab-number'); if (el) el.value = data.npAbNumber; }
+      if (data.npPitchNumber) { const el = document.getElementById('mlb-np-pitch-number'); if (el) el.value = data.npPitchNumber; }
     } else if (data.mlbLiveType === 'pitch') {
       if (data.pitcherName) { const el = document.getElementById('mlb-pitch-player'); if (el) el.value = data.pitcherName; }
       if (data.pitchNumber) { const el = document.getElementById('mlb-pitch-number'); if (el) el.value = data.pitchNumber; }

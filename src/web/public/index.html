@@ -524,9 +524,32 @@
                   </div>
                 </div>
                 <div class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-np-ab-number">At Bat #</label>
+                    <select id="mlb-np-ab-number">
+                      <option value="">Select AB</option>
+                      <option value="1">1st AB</option>
+                      <option value="2">2nd AB</option>
+                      <option value="3">3rd AB</option>
+                      <option value="4">4th AB</option>
+                      <option value="5">5th AB</option>
+                      <option value="6">6th AB</option>
+                      <option value="7">7th AB</option>
+                      <option value="8">8th AB</option>
+                      <option value="9">9th AB</option>
+                      <option value="10">10th AB</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="mlb-np-pitch-number">Pitch # in AB</label>
+                    <input type="number" id="mlb-np-pitch-number" placeholder="e.g. 3" min="1" max="30">
+                  </div>
+                </div>
+                <div class="form-row">
                   <div class="form-group full-width">
                     <label for="mlb-next-pitch-outcome">Next Pitch Outcome</label>
                     <select id="mlb-next-pitch-outcome">
+                      <option value="">Select outcome</option>
                       <option value="Strike (Called)">🟢 Strike (Called)</option>
                       <option value="Strike (Swinging)">💨 Strike (Swinging)</option>
                       <option value="Foul Ball">⚡ Foul Ball</option>
