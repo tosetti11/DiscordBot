@@ -1368,6 +1368,9 @@ async function handleSelectMenu(interaction) {
   if (id === 'mlblive_type') {
     return mlblive.handleTypeSelect(interaction);
   }
+  if (id === 'mlblive_next_pitch_outcome') {
+    return mlblive.handleNextPitchOutcomeSelect(interaction);
+  }
   if (id === 'mlblive_ab_number') {
     return mlblive.handleABNumberSelect(interaction);
   }
@@ -1467,6 +1470,9 @@ async function handleModalSubmit(interaction) {
     return enterbet.handleParlayFinalSubmit(interaction);
   }
   // MLB Live modals
+  if (id === 'mlblive_next_pitch_modal') {
+    return mlblive.handleNextPitchModalSubmit(interaction);
+  }
   if (id === 'mlblive_ab_modal') {
     return mlblive.handleABModalSubmit(interaction);
   }

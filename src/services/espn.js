@@ -1010,6 +1010,9 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       // MLB Live bets — resolve using ESPN linescore + MLB Stats API play-by-play
       if (!pick) return null;
 
+      // ── Next Pitch — cannot auto-resolve (no real-time pitch-by-pitch tracking) ──
+      if (pick.startsWith('Next Pitch:')) return null;
+
       // ── At Bat: Pitch Count O/U ──
       // Pick format: "Player 1st AB — Pitch Count Over 4.5" or "AB #3 Pitch Count Over 4.5 (Player)"
       const abPitchMatch = pick.match(/(?:(\d+)(?:st|nd|rd|th) AB|AB #(\d+)).*Pitch Count (Over|Under) ([\d.]+)/i);

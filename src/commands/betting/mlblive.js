@@ -17,6 +17,16 @@ const { notifyFollowers } = require('../../utils/notifications');
 // In-memory store for MLB live bet sessions
 const mlbLiveSessions = new Map();
 
+// ── Next Pitch outcome options ──
+const NEXT_PITCH_OUTCOMES = [
+  { label: 'Strike (Called)', value: 'Strike (Called)', emoji: '🟢' },
+  { label: 'Strike (Swinging)', value: 'Strike (Swinging)', emoji: '💨' },
+  { label: 'Foul Ball', value: 'Foul Ball', emoji: '⚡' },
+  { label: 'Ball', value: 'Ball', emoji: '🔴' },
+  { label: 'In Play', value: 'In Play', emoji: '🏏' },
+  { label: 'Hit By Pitch', value: 'Hit By Pitch', emoji: '🤕' },
+];
+
 // ── At-Bat outcome options ──
 const AB_OUTCOMES = [
   { label: 'Single', value: 'Single', emoji: '🥎' },
@@ -49,9 +59,10 @@ async function execute(interaction) {
       .setCustomId('mlblive_type')
       .setPlaceholder('Select live bet type')
       .addOptions([
-        { label: 'At Bat', value: 'at_bat', description: 'Pitch count, exact outcome, or on base', emoji: '⚾' },
+        { label: 'Next Pitch', value: 'next_pitch', description: 'Strike, ball, foul, or in play', emoji: '⚾' },
+        { label: 'At Bat Result', value: 'at_bat', description: 'Pitch count, exact outcome, or on base', emoji: '🦇' },
         { label: 'Inning', value: 'inning', description: 'Runs, home runs, or hits in an inning', emoji: '🏟️' },
-        { label: 'Pitch by Pitch', value: 'pitch', description: 'Pitch speed (MPH) faster or slower', emoji: '🔥' },
+        { label: 'Pitch Speed', value: 'pitch', description: 'Pitch speed (MPH) faster or slower', emoji: '🔥' },
       ])
   );
 
@@ -71,7 +82,19 @@ async function handleTypeSelect(interaction) {
   session.liveType = interaction.values[0];
   mlbLiveSessions.set(userId, session);
 
-  if (session.liveType === 'at_bat') {
+  if (session.liveType === 'next_pitch') {
+    // Select outcome for next pitch
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('mlblive_next_pitch_outcome')
+        .setPlaceholder('Select next pitch outcome')
+        .addOptions(NEXT_PITCH_OUTCOMES)
+    );
+    await interaction.update({
+      content: '⚾ **MLB Live — Next Pitch** — What will the next pitch be?',
+      components: [row],
+    });
+  } else if (session.liveType === 'at_bat') {
     // Select AB number 1-10
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -111,6 +134,112 @@ async function handleTypeSelect(interaction) {
     // Pitch by Pitch → go straight to modal
     await showPitchModal(interaction, session);
   }
+}
+
+// ─── Next Pitch Outcome Selection → open modal ───
+async function handleNextPitchOutcomeSelect(interaction) {
+  const userId = interaction.user.id;
+  const session = mlbLiveSessions.get(userId);
+  if (!session) return interaction.update({ content: 'Session expired. Use `/mlblive` again.', components: [] });
+
+  session.nextPitchOutcome = interaction.values[0];
+  mlbLiveSessions.set(userId, session);
+
+  const modal = new ModalBuilder()
+    .setCustomId('mlblive_next_pitch_modal')
+    .setTitle(`Next Pitch — ${session.nextPitchOutcome}`);
+
+  const pitcherInput = new TextInputBuilder()
+    .setCustomId('pitcher_name')
+    .setLabel('Pitcher Name')
+    .setPlaceholder('e.g. Gerrit Cole')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100);
+
+  const batterInput = new TextInputBuilder()
+    .setCustomId('batter_name')
+    .setLabel('Batter Name')
+    .setPlaceholder('e.g. Mike Trout')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100);
+
+  const teamsInput = new TextInputBuilder()
+    .setCustomId('teams')
+    .setLabel('Teams (e.g. NYY vs LAA)')
+    .setPlaceholder('e.g. NYY vs LAA')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100);
+
+  const oddsInput = new TextInputBuilder()
+    .setCustomId('odds')
+    .setLabel('Odds (American)')
+    .setPlaceholder('e.g. -110, +150')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(20);
+
+  const unitsInput = new TextInputBuilder()
+    .setCustomId('units')
+    .setLabel('Units')
+    .setPlaceholder('e.g. 1, 2, 5')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(10);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(pitcherInput),
+    new ActionRowBuilder().addComponents(batterInput),
+    new ActionRowBuilder().addComponents(teamsInput),
+    new ActionRowBuilder().addComponents(oddsInput),
+    new ActionRowBuilder().addComponents(unitsInput),
+  );
+
+  await interaction.showModal(modal);
+}
+
+// ─── Next Pitch Modal Submit ───
+async function handleNextPitchModalSubmit(interaction) {
+  const userId = interaction.user.id;
+  const session = mlbLiveSessions.get(userId);
+  if (!session) return interaction.reply({ content: 'Session expired. Use `/mlblive` again.', ephemeral: true });
+
+  const pitcherName = interaction.fields.getTextInputValue('pitcher_name').trim();
+  const batterName = interaction.fields.getTextInputValue('batter_name').trim();
+  const teamsRaw = interaction.fields.getTextInputValue('teams').trim();
+  const oddsRaw = interaction.fields.getTextInputValue('odds').trim();
+  const unitsRaw = interaction.fields.getTextInputValue('units').trim();
+
+  const oddsAmerican = parseInt(oddsRaw);
+  if (isNaN(oddsAmerican)) {
+    return interaction.reply({ content: '❌ Invalid odds. Enter American odds (e.g. -110, +150)', ephemeral: true });
+  }
+  const oddsDecimal = americanToDecimal(oddsAmerican);
+
+  const units = parseFloat(unitsRaw);
+  if (isNaN(units) || units <= 0) {
+    return interaction.reply({ content: '❌ Invalid units. Enter a positive number.', ephemeral: true });
+  }
+
+  const { teamA, teamB } = parseTeams(teamsRaw);
+
+  const pick = `Next Pitch: ${session.nextPitchOutcome} — ${pitcherName} to ${batterName}`;
+
+  session.pendingBet = {
+    pick,
+    player_name: batterName,
+    team_a: teamA,
+    team_b: teamB,
+    odds_american: oddsAmerican,
+    odds_decimal: oddsDecimal,
+    units,
+    prop_description: pick,
+  };
+  mlbLiveSessions.set(userId, session);
+
+  await showConfirmation(interaction, session);
 }
 
 // ─── At Bat Number Selection ───
@@ -801,6 +930,8 @@ module.exports = {
   command,
   execute,
   handleTypeSelect,
+  handleNextPitchOutcomeSelect,
+  handleNextPitchModalSubmit,
   handleABNumberSelect,
   handleABMarketSelect,
   handleABDirectionSelect,

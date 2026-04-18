@@ -485,11 +485,13 @@ function setupEventListeners() {
   const mlbTypeSelect = document.getElementById('mlb-live-type');
   if (mlbTypeSelect) {
     mlbTypeSelect.addEventListener('change', function() {
+      document.getElementById('mlb-next-pitch-fields').classList.add('hidden');
       document.getElementById('mlb-ab-fields').classList.add('hidden');
       document.getElementById('mlb-inning-fields').classList.add('hidden');
       document.getElementById('mlb-pitch-fields').classList.add('hidden');
       const v = this.value;
-      if (v === 'at_bat') document.getElementById('mlb-ab-fields').classList.remove('hidden');
+      if (v === 'next_pitch') document.getElementById('mlb-next-pitch-fields').classList.remove('hidden');
+      else if (v === 'at_bat') document.getElementById('mlb-ab-fields').classList.remove('hidden');
       else if (v === 'inning') document.getElementById('mlb-inning-fields').classList.remove('hidden');
       else if (v === 'pitch') document.getElementById('mlb-pitch-fields').classList.remove('hidden');
     });
@@ -1316,10 +1318,15 @@ async function handleSubmit(e) {
         const mlbType = document.getElementById('mlb-live-type').value;
         if (!mlbType) throw new Error('Select MLB Live bet type');
         body.mlbLiveType = mlbType;
-        body.teamA = document.getElementById('mlb-team-a').value;
-        body.teamB = document.getElementById('mlb-team-b').value;
+        body.teamA = document.getElementById('mlb-live-team-a').value;
+        body.teamB = document.getElementById('mlb-live-team-b').value;
 
-        if (mlbType === 'at_bat') {
+        if (mlbType === 'next_pitch') {
+          body.pitcherName = document.getElementById('mlb-pitcher-name').value;
+          body.batterName = document.getElementById('mlb-batter-name').value;
+          body.nextPitchOutcome = document.getElementById('mlb-next-pitch-outcome').value;
+          if (!body.nextPitchOutcome) throw new Error('Select next pitch outcome');
+        } else if (mlbType === 'at_bat') {
           body.abNumber = document.getElementById('mlb-ab-number').value;
           body.abMarket = document.getElementById('mlb-ab-market').value;
           body.mlbPlayerName = document.getElementById('mlb-ab-player').value;
@@ -1352,7 +1359,7 @@ async function handleSubmit(e) {
             if (!body.inningHomeRun) throw new Error('Select Yes or No for HR');
           }
         } else if (mlbType === 'pitch') {
-          body.pitcherName = document.getElementById('mlb-pitcher-name').value;
+          body.pitcherName = document.getElementById('mlb-pitch-player').value;
           body.pitchNumber = document.getElementById('mlb-pitch-number').value;
           body.pitchMph = document.getElementById('mlb-pitch-mph').value;
           const activeDir = document.querySelector('.mlb-pitch-dir-btn.active');
@@ -1926,8 +1933,8 @@ function applySingleData(data) {
       }
     }
     // Teams
-    if (data.teamA) { const el = document.getElementById('mlb-team-a'); if (el) el.value = data.teamA; }
-    if (data.teamB) { const el = document.getElementById('mlb-team-b'); if (el) el.value = data.teamB; }
+    if (data.teamA) { const el = document.getElementById('mlb-live-team-a'); if (el) el.value = data.teamA; }
+    if (data.teamB) { const el = document.getElementById('mlb-live-team-b'); if (el) el.value = data.teamB; }
 
     if (data.mlbLiveType === 'at_bat') {
       if (data.abNumber) { const el = document.getElementById('mlb-ab-number'); if (el) el.value = data.abNumber; }
@@ -1965,8 +1972,12 @@ function applySingleData(data) {
           btn.classList.toggle('active', btn.dataset.value === data.inningHomeRun);
         });
       }
-    } else if (data.mlbLiveType === 'pitch') {
+    } else if (data.mlbLiveType === 'next_pitch') {
       if (data.pitcherName) { const el = document.getElementById('mlb-pitcher-name'); if (el) el.value = data.pitcherName; }
+      if (data.batterName) { const el = document.getElementById('mlb-batter-name'); if (el) el.value = data.batterName; }
+      if (data.nextPitchOutcome) { const el = document.getElementById('mlb-next-pitch-outcome'); if (el) el.value = data.nextPitchOutcome; }
+    } else if (data.mlbLiveType === 'pitch') {
+      if (data.pitcherName) { const el = document.getElementById('mlb-pitch-player'); if (el) el.value = data.pitcherName; }
       if (data.pitchNumber) { const el = document.getElementById('mlb-pitch-number'); if (el) el.value = data.pitchNumber; }
       if (data.pitchMph) { const el = document.getElementById('mlb-pitch-mph'); if (el) el.value = data.pitchMph; }
       if (data.pitchDirection) {

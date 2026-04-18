@@ -503,10 +503,38 @@
                   <label for="mlb-live-type">Live Bet Type</label>
                   <select id="mlb-live-type" required>
                     <option value="" disabled selected>Select type</option>
-                    <option value="at_bat">🦇 At Bat</option>
+                    <option value="next_pitch">⚾ Next Pitch</option>
+                    <option value="at_bat">🦇 At Bat Result</option>
                     <option value="inning">🏟️ Inning</option>
-                    <option value="pitch">🔥 Pitch by Pitch</option>
+                    <option value="pitch">🔥 Pitch Speed</option>
                   </select>
+                </div>
+              </div>
+
+              <!-- Next Pitch sub-fields -->
+              <div id="mlb-next-pitch-fields" class="hidden">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="mlb-pitcher-name">Pitcher Name</label>
+                    <input type="text" id="mlb-pitcher-name" placeholder="e.g. Gerrit Cole" maxlength="100">
+                  </div>
+                  <div class="form-group">
+                    <label for="mlb-batter-name">Batter Name</label>
+                    <input type="text" id="mlb-batter-name" placeholder="e.g. Mike Trout" maxlength="100">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group full-width">
+                    <label for="mlb-next-pitch-outcome">Next Pitch Outcome</label>
+                    <select id="mlb-next-pitch-outcome">
+                      <option value="Strike (Called)">🟢 Strike (Called)</option>
+                      <option value="Strike (Swinging)">💨 Strike (Swinging)</option>
+                      <option value="Foul Ball">⚡ Foul Ball</option>
+                      <option value="Ball">🔴 Ball</option>
+                      <option value="In Play">🏏 In Play</option>
+                      <option value="Hit By Pitch">🤕 Hit By Pitch</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
