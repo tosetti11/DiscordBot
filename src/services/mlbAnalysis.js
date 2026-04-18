@@ -1143,7 +1143,8 @@ async function autoResolveNrfi(client) {
   }
 
   // Update the card image if any were resolved
-  await refreshAnalysisCards(client, 'nrfi');
+  const nrfiDates = [...new Set(pending.map(e => e.analysis_date))];
+  for (const d of nrfiDates) await refreshAnalysisCards(client, 'nrfi', d);
 }
 
 async function autoResolveStrikeouts(client) {
@@ -1213,7 +1214,8 @@ async function autoResolveStrikeouts(client) {
     }
   }
 
-  await refreshAnalysisCards(client, 'strikeout');
+  const kDates = [...new Set(pending.map(e => e.analysis_date))];
+  for (const d of kDates) await refreshAnalysisCards(client, 'strikeout', d);
 }
 
 async function autoResolveHomeruns(client) {
@@ -1263,14 +1265,15 @@ async function autoResolveHomeruns(client) {
     }
   }
 
-  await refreshAnalysisCards(client, 'homerun');
+  const hrDates = [...new Set(pending.map(e => e.analysis_date))];
+  for (const d of hrDates) await refreshAnalysisCards(client, 'homerun', d);
 }
 
 /**
  * Refresh the card image for a market type (re-render with resolved results)
  */
-async function refreshAnalysisCards(client, marketType) {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+async function refreshAnalysisCards(client, marketType, analysisDate) {
+  const today = analysisDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const guildId = process.env.DISCORD_GUILD_ID;
   if (!guildId) return;
 

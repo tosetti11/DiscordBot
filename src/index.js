@@ -204,9 +204,15 @@ client.once(Events.ClientReady, (c) => {
   // Parse event_start_time → YYYYMMDD for ESPN scoreboard lookup
   // Handles ISO dates and "Fri Apr 10 9:41 PM ET" human-readable format
   const MONTH_NUM = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
-  function eventDateStr(eventStartTime) {
+  function eventDateStr(eventStartTime, createdAt) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-    if (!eventStartTime) return today;
+    if (!eventStartTime) {
+      if (createdAt) {
+        const d = new Date(createdAt);
+        if (!isNaN(d.getTime())) return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+      }
+      return today;
+    }
     // Try ISO parse first
     const iso = new Date(eventStartTime);
     if (!isNaN(iso.getTime())) {
@@ -251,20 +257,20 @@ client.once(Events.ClientReady, (c) => {
       for (const bet of openBets) {
         if (bet.espn_game_id && bet.sport) {
           const key = `${bet.sport}:${bet.espn_game_id}`;
-          if (!gameChecks.has(key)) gameChecks.set(key, { sport: bet.sport, gameId: bet.espn_game_id, eventStartTime: bet.event_start_time });
+          if (!gameChecks.has(key)) gameChecks.set(key, { sport: bet.sport, gameId: bet.espn_game_id, eventStartTime: bet.event_start_time, createdAt: bet.created_at });
         }
       }
       for (const leg of (openLegs || [])) {
         if (leg.espn_game_id && leg.sport) {
           const key = `${leg.sport}:${leg.espn_game_id}`;
-          if (!gameChecks.has(key)) gameChecks.set(key, { sport: leg.sport, gameId: leg.espn_game_id, eventStartTime: leg.event_start_time });
+          if (!gameChecks.has(key)) gameChecks.set(key, { sport: leg.sport, gameId: leg.espn_game_id, eventStartTime: leg.event_start_time, createdAt: leg.created_at });
         }
       }
 
       // Batch-fetch scoreboards by sport+date
       const sportDateSet = new Set();
-      for (const { sport, eventStartTime } of gameChecks.values()) {
-        sportDateSet.add(`${sport}:${eventDateStr(eventStartTime)}`);
+      for (const { sport, eventStartTime, createdAt } of gameChecks.values()) {
+        sportDateSet.add(`${sport}:${eventDateStr(eventStartTime, createdAt)}`);
       }
       const notifGames = [];
       for (const key of sportDateSet) {
@@ -391,7 +397,7 @@ client.once(Events.ClientReady, (c) => {
             const hashParts = [];
             for (const leg of legs) {
               if (!leg.espn_game_id) continue;
-              const dateStr = eventDateStr(leg.event_start_time || bet.event_start_time);
+              const dateStr = eventDateStr(leg.event_start_time || bet.event_start_time, leg.created_at || bet.created_at);
               let game;
               if (leg.sport === 'golf_pga' || leg.sport?.startsWith('golf')) {
                 // Golf events are filtered out by getTodaysGames (no home/away) — fetch directly
@@ -465,7 +471,7 @@ client.once(Events.ClientReady, (c) => {
               console.log(`[CardUpdate] ${bet.slip_number} golf update: thru ${golfData.holesCompleted}, score ${golfData.roundScore}`);
             }
           } else {
-            const dateStr = eventDateStr(bet.event_start_time);
+            const dateStr = eventDateStr(bet.event_start_time, bet.created_at);
             const games = await espn.getTodaysGames(bet.sport, dateStr);
             const game = games.find(g => g.id === bet.espn_game_id);
             if (game && (game.state === 'in' || game.state === 'post')) {
@@ -568,7 +574,7 @@ client.once(Events.ClientReady, (c) => {
           if (!pick.espn_game_id || !pick.espn_sport || !pick.message_id) continue;
 
           try {
-            const dateStr = eventDateStr(pick.event_start_time || pick.pick_date);
+            const dateStr = eventDateStr(pick.event_start_time || pick.pick_date, pick.created_at);
             const games = await espn.getTodaysGames(pick.espn_sport, dateStr);
             const game = games.find(g => g.id === pick.espn_game_id);
             if (!game || game.state === 'pre') continue;
@@ -662,7 +668,7 @@ client.once(Events.ClientReady, (c) => {
       const sportDateSet = new Set();
       for (const item of allItems) {
         if (!item.sport) continue;
-        sportDateSet.add(`${item.sport}:${eventDateStr(item.event_start_time)}`);
+        sportDateSet.add(`${item.sport}:${eventDateStr(item.event_start_time, item.created_at)}`);
       }
 
       // Fetch scoreboards per sport+date
@@ -704,7 +710,7 @@ client.once(Events.ClientReady, (c) => {
         if (!parsed || !espn.MLB_API_STATS.has(parsed.espnKey)) return summary;
 
         // Need MLB data for this prop
-        const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const dateStr = eventDateStr(bet.event_start_time, bet.created_at).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
         const pkKey = `${bet.team_a}:${bet.team_b}:${dateStr}`;
         let gamePk = mlbGamePkCache.get(pkKey);
         if (gamePk === undefined) {
@@ -786,7 +792,7 @@ client.once(Events.ClientReady, (c) => {
         // Attach MLB play-by-play data for mlb_live AB/pitch bets
         if (bet.wager_type === 'mlb_live' && bet.sport === 'mlb') {
           if (!summary) summary = {};
-          const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+          const dateStr = eventDateStr(bet.event_start_time, bet.created_at).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
           const pkKey = `${bet.team_a}:${bet.team_b}:${dateStr}`;
           let gamePk = mlbGamePkCache.get(pkKey);
           if (gamePk === undefined) {
@@ -881,7 +887,7 @@ client.once(Events.ClientReady, (c) => {
         // Attach MLB play-by-play data for mlb_live AB/pitch legs
         if (leg.wager_type === 'mlb_live' && leg.sport === 'mlb') {
           if (!summary) summary = {};
-          const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+          const dateStr = eventDateStr(leg.event_start_time, leg.created_at).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
           const pkKey = `${leg.team_a}:${leg.team_b}:${dateStr}`;
           let gamePk = mlbGamePkCache.get(pkKey);
           if (gamePk === undefined) {
