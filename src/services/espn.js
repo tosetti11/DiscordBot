@@ -708,6 +708,25 @@ async function resolveGameId(sport, teamA, teamB, eventStartTime) {
     game = matchTeamToGame(teamB, games);
   }
 
+  // If matched game is still 'pre' and we're past midnight ET, check yesterday's scoreboard
+  // (a game that started yesterday may still be in progress or just finished)
+  if (game && game.state === 'pre' && !dateStr) {
+    const now = new Date();
+    const etHour = parseInt(now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
+    if (etHour < 6) {
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yDateStr = yesterday.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+      try {
+        const yGames = await getTodaysGames(sport, yDateStr);
+        const yGame = matchTeamToGame(teamA, yGames) || (teamB ? matchTeamToGame(teamB, yGames) : null);
+        if (yGame && (yGame.state === 'in' || yGame.state === 'post')) {
+          return { gameId: yGame.id, game: yGame };
+        }
+      } catch {}
+    }
+  }
+
   if (game) return { gameId: game.id, game };
   return null;
 }

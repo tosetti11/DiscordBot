@@ -13,6 +13,7 @@ const { americanToDecimal } = require('../../utils/odds');
 const { generateBetCardImage } = require('../../utils/betCardImage');
 const db = require('../../database/queries');
 const { notifyFollowers } = require('../../utils/notifications');
+const { resolveGameId } = require('../../services/espn');
 
 // In-memory store for MLB live bet sessions
 const mlbLiveSessions = new Map();
@@ -921,6 +922,14 @@ async function handleConfirm(interaction) {
       units: bet.units,
       status: 'open',
     };
+
+    // Resolve ESPN game ID for live tracking
+    try {
+      const resolved = await resolveGameId('mlb', bet.team_a, bet.team_b);
+      if (resolved) betData.espn_game_id = resolved.gameId;
+    } catch (e) {
+      console.error('[MLB Live] ESPN game ID resolve error:', e.message);
+    }
 
     const savedBet = await db.createBet(betData, displayName);
 
