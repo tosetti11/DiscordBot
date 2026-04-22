@@ -198,7 +198,7 @@ client.once(Events.ClientReady, (c) => {
   // Polling tier intervals
   const FAST_INTERVAL = 30_000;    // 30s — team game bets (NBA, NFL, NHL, etc.)
   const STANDARD_INTERVAL = 60_000; // 60s — player props (need game summary)
-  const SLOW_INTERVAL = 300_000;   // 5min — golf, tennis, etc.
+  const SLOW_INTERVAL = 60_000;    // 1min — card updates
   const AUTO_CLOSE_DELAY = 60 * 60_000; // 1 hour
 
   // Parse event_start_time → YYYYMMDD for ESPN scoreboard lookup
