@@ -666,7 +666,11 @@ async function resolveGameId(sport, teamA, teamB, eventStartTime) {
   if (eventStartTime) {
     // Try ISO parse
     const d = new Date(eventStartTime);
-    if (!isNaN(d.getTime())) {
+    const currentYear = new Date().getFullYear();
+    // Sanity-check the year: new Date("1020") silently parses as year 1020, which
+    // would send ESPN queries to a nonsensical date. Only trust the parsed date if
+    // the year is within 5 years of today (catches bare time strings like "1020").
+    if (!isNaN(d.getTime()) && d.getFullYear() >= currentYear - 1 && d.getFullYear() <= currentYear + 5) {
       dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
     } else {
       // Try "Fri Apr 10 9:41 PM ET" format — extract month+day
@@ -1639,9 +1643,46 @@ function findPitcherPitch(pbp, pitcherName, pitchNumber) {
   return null;
 }
 
+/**
+ * Find a specific game by ESPN game ID, trying multiple dates to handle:
+ *  - Late-night games that cross midnight ET
+ *  - event_start_time entered incorrectly / off by a day
+ *  - UTC vs ET date mismatch in ESPN's API
+ *
+ * Tries: preferredDateStr → today (ET) → yesterday (ET) → tomorrow (ET)
+ *
+ * @param {string} sport - Internal sport key
+ * @param {string} gameId - ESPN game/event ID
+ * @param {string} [preferredDateStr] - YYYYMMDD date to try first
+ * @returns {Object|null} Game object or null if not found
+ */
+async function findGameById(sport, gameId, preferredDateStr) {
+  if (!sport || !gameId) return null;
+  const etDate = (offset = 0) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+  };
+  const today = etDate(0);
+  const yesterday = etDate(-1);
+  const tomorrow = etDate(1);
+
+  const datesToTry = [...new Set([preferredDateStr, today, yesterday, tomorrow].filter(Boolean))];
+
+  for (const ds of datesToTry) {
+    try {
+      const games = await getTodaysGames(sport, ds);
+      const game = games.find(g => g.id === gameId);
+      if (game) return game;
+    } catch {}
+  }
+  return null;
+}
+
 module.exports = {
   ESPN_PATHS,
   getTodaysGames,
+  findGameById,
   getGameSummary,
   getAllTodaysGames,
   matchTeamToGame,

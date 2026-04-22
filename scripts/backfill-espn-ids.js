@@ -1,18 +1,56 @@
 /**
  * Backfill ESPN game IDs for all open bets and parlay legs.
- * Run once after deploying the live tracker feature.
+ * Also refreshes Discord card images for any bets that get updated.
  *
  * Usage: node scripts/backfill-espn-ids.js
  */
 require('dotenv').config();
 
 const { createClient } = require('@supabase/supabase-js');
+const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
 const espn = require('../src/services/espn');
+const { generateBetCardImage } = require('../src/utils/betCardImage');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
+
+// Start a lightweight Discord client just for editing messages
+const discordClient = new Client({ intents: [GatewayIntentBits.Guilds] });
+let discordReady = false;
+discordClient.once('ready', () => { discordReady = true; console.log(`Discord client ready as ${discordClient.user.tag}`); });
+discordClient.login(process.env.DISCORD_TOKEN).catch(e => console.warn('[Discord] Login failed:', e.message));
+
+async function waitForDiscord(timeoutMs = 8000) {
+  if (discordReady) return;
+  const start = Date.now();
+  while (!discordReady && Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+}
+
+async function refreshDiscordCard(bet) {
+  if (!bet.message_id || !bet.channel_id) return;
+  try {
+    await waitForDiscord();
+    if (!discordReady) { console.warn(`  [discord] Client not ready — skipping card refresh for ${bet.id}`); return; }
+    const channel = await discordClient.channels.fetch(bet.channel_id);
+    if (!channel) return;
+    const message = await channel.messages.fetch(bet.message_id);
+    const imgBuffer = await generateBetCardImage(bet, null, null);
+    const attachment = new AttachmentBuilder(imgBuffer, { name: 'bet-card.png' });
+    const payload = { files: [attachment], embeds: [], attachments: [] };
+    // Preserve existing message content (share link etc.)
+    if (message.content) payload.content = message.content;
+    // Preserve buttons
+    if (message.components?.length) payload.components = message.components;
+    await message.edit(payload);
+    console.log(`  [discord] Card refreshed for bet ${bet.id}`);
+  } catch (e) {
+    console.warn(`  [discord] Card refresh failed for bet ${bet.id}:`, e.message);
+  }
+}
 
 async function backfill() {
   console.log('=== Backfilling ESPN Game IDs for Open Bets ===\n');
@@ -48,6 +86,9 @@ async function backfill() {
         } else {
           console.log(`  [ok] Bet ${bet.id} → ${resolved.gameId} (${bet.team_a} vs ${bet.team_b})`);
           singleUpdated++;
+          // Refresh the Discord card with the new ESPN ID
+          const { data: fullBet } = await supabase.from('bets').select('*').eq('id', bet.id).single();
+          if (fullBet) await refreshDiscordCard(fullBet);
         }
       } else {
         console.log(`  [miss] Bet ${bet.id} — no ESPN match for ${bet.team_a} vs ${bet.team_b} (${bet.sport})`);
@@ -69,6 +110,7 @@ async function backfill() {
   console.log(`Found ${parlayLegs.length} parlay legs without ESPN game IDs`);
 
   let legUpdated = 0;
+  const refreshedParlays = new Set();
   for (const leg of parlayLegs) {
     if (leg.bet_category === 'futures' || !leg.sport) {
       console.log(`  [skip] Leg ${leg.id} — ${leg.bet_category || 'no sport'}`);
@@ -88,6 +130,12 @@ async function backfill() {
         } else {
           console.log(`  [ok] Leg ${leg.id} (bet ${leg.bet_id}) → ${resolved.gameId} (${leg.team_a} vs ${leg.team_b})`);
           legUpdated++;
+          // Refresh the parent parlay card once per bet (not once per leg)
+          if (!refreshedParlays.has(leg.bet_id)) {
+            refreshedParlays.add(leg.bet_id);
+            const { data: fullBet } = await supabase.from('bets').select('*').eq('id', leg.bet_id).single();
+            if (fullBet) await refreshDiscordCard(fullBet);
+          }
         }
       } else {
         console.log(`  [miss] Leg ${leg.id} — no ESPN match for ${leg.team_a} vs ${leg.team_b} (${leg.sport})`);
@@ -99,6 +147,5 @@ async function backfill() {
   console.log(`\nParlay legs updated: ${legUpdated}/${parlayLegs.length}\n`);
 
   console.log('=== Backfill complete ===');
+  discordClient.destroy();
 }
-
-backfill().catch(console.error);

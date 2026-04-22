@@ -74,12 +74,21 @@ async function updateAiPickTailCount(pickId, tailCount, fadeCount) {
   if (error) throw error;
 }
 
+async function updateAiPickEspnId(pickId, espnGameId) {
+  const { error } = await supabase
+    .from('ai_picks')
+    .update({ espn_game_id: espnGameId })
+    .eq('id', pickId);
+  if (error) throw error;
+}
+
 async function getAiPickRecord(guildId) {
   const { data, error } = await supabase
     .from('ai_picks')
     .select('status')
     .eq('guild_id', guildId)
-    .in('status', ['win', 'loss', 'push']);
+    .in('status', ['win', 'loss', 'push'])
+    .not('pick_type', 'in', '("golf_round","golf_matchup")');
   if (error) throw error;
   const record = { wins: 0, losses: 0, pushes: 0 };
   for (const p of (data || [])) {
@@ -96,6 +105,7 @@ async function getAiPickFullRecord(guildId) {
     .select('*')
     .eq('guild_id', guildId)
     .in('status', ['win', 'loss', 'push'])
+    .not('pick_type', 'in', '("golf_round","golf_matchup")')
     .order('pick_date', { ascending: false });
   if (error) throw error;
   return data || [];
@@ -107,6 +117,7 @@ async function getAiPickStreak(guildId) {
     .select('status')
     .eq('guild_id', guildId)
     .in('status', ['win', 'loss'])
+    .not('pick_type', 'in', '("golf_round","golf_matchup")')
     .order('pick_date', { ascending: false })
     .limit(50);
   if (error) throw error;
@@ -393,6 +404,7 @@ module.exports = {
   updateAiPickMessage,
   updateAiPickMirrorMessage,
   updateAiPickTailCount,
+  updateAiPickEspnId,
   getAiPickRecord,
   getAiPickFullRecord,
   getAiPickStreak,

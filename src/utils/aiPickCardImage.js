@@ -73,6 +73,23 @@ function drawPill(ctx, x, y, text, bg, fg, fontSize = 11, padX = 10, padY = 4) {
   return pw;
 }
 
+function getAnalyticsItems(pick) {
+  const metrics = [];
+  if (pick.model_win_probability !== null && pick.model_win_probability !== undefined) {
+    metrics.push(`Win Prob ${Number(pick.model_win_probability).toFixed(1)}%`);
+  }
+  if (pick.market_implied_probability !== null && pick.market_implied_probability !== undefined) {
+    metrics.push(`Market ${Number(pick.market_implied_probability).toFixed(1)}%`);
+  }
+  if (pick.model_edge !== null && pick.model_edge !== undefined) {
+    const edge = Number(pick.model_edge);
+    metrics.push(`Edge ${edge >= 0 ? '+' : ''}${edge.toFixed(1)}%`);
+  }
+
+  const factors = [pick.analytics_1, pick.analytics_2, pick.analytics_3].filter(Boolean);
+  return { metrics, factors };
+}
+
 // ── Preload brand logo ──
 let brandLogoPromise = null;
 function getBrandLogo() {
@@ -132,6 +149,15 @@ async function generateAiPickCardImage(pick, record, streak, totalUnits, liveSco
   // Confidence meter
   y += 40;
   y += 12;
+
+  const analytics = getAnalyticsItems(pick);
+  if (analytics.metrics.length || analytics.factors.length || pick.analytics_source) {
+    y += 16;
+    if (analytics.metrics.length) y += 30;
+    if (pick.analytics_source) y += 18;
+    if (analytics.factors.length) y += analytics.factors.length * 18 + 10;
+    y += 12;
+  }
 
   // Reasoning
   if (pick.reasoning) {
@@ -380,6 +406,56 @@ async function generateAiPickCardImage(pick, record, streak, totalUnits, liveSco
 
   curY += barH + 12;
 
+  if (analytics.metrics.length || analytics.factors.length || pick.analytics_source) {
+    let analyticsHeight = 16;
+    if (analytics.metrics.length) analyticsHeight += 30;
+    if (pick.analytics_source) analyticsHeight += 18;
+    if (analytics.factors.length) analyticsHeight += analytics.factors.length * 18 + 10;
+    analyticsHeight += 12;
+
+    roundRect(ctx, PAD, curY, INNER, analyticsHeight, 6);
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.06)';
+    ctx.fill();
+    roundRect(ctx, PAD, curY, INNER, analyticsHeight, 6);
+    ctx.strokeStyle = 'rgba(255, 215, 0, 0.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    let analyticsY = curY + 16;
+    ctx.font = `700 11px ${FF}`;
+    ctx.fillStyle = C.gold;
+    ctx.fillText('ANALYTICS SNAPSHOT', PAD + 10, analyticsY);
+    analyticsY += 12;
+
+    if (pick.analytics_source) {
+      ctx.font = `600 11px ${FF}`;
+      ctx.fillStyle = C.gray;
+      ctx.fillText(`${pick.analytics_source}`, PAD + 10, analyticsY + 10);
+      analyticsY += 18;
+    }
+
+    if (analytics.metrics.length) {
+      let metricX = PAD + 10;
+      for (const metric of analytics.metrics) {
+        const width = drawPill(ctx, metricX, analyticsY, metric, C.goldFaint, C.gold, 10, 8, 3);
+        metricX += width + 8;
+      }
+      analyticsY += 30;
+    }
+
+    if (analytics.factors.length) {
+      ctx.font = `500 12px ${FF}`;
+      ctx.fillStyle = C.gray;
+      for (const factor of analytics.factors) {
+        ctx.fillText(`• ${factor}`, PAD + 10, analyticsY + 10);
+        analyticsY += 18;
+      }
+      analyticsY += 4;
+    }
+
+    curY += analyticsHeight + 12;
+  }
+
   // ── Reasoning ──
   if (pick.reasoning) {
     roundRect(ctx, PAD, curY, INNER, 0, 6); // placeholder
@@ -456,7 +532,7 @@ async function generateAiPickCardImage(pick, record, streak, totalUnits, liveSco
   ctx.font = `500 10px ${FF}`;
   ctx.fillStyle = C.muted;
   ctx.fillText('1u flat bet on every pick', PAD + 5, curY + 22);
-  const poweredStr = 'Powered by GPT-4o';
+  const poweredStr = pick.analytics_source ? `Selection: ${pick.analytics_source}` : 'Selection: GPT-4o';
   const pwW = ctx.measureText(poweredStr).width;
   ctx.fillText(poweredStr, W - PAD - pwW, curY + 22);
 

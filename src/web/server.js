@@ -1929,6 +1929,20 @@ function createWebServer() {
           if (gParts.length) fields.pick += ` (${gParts.join(', ')})`;
         }
 
+        // Re-resolve ESPN game ID if any game-identifying fields changed and the bet is not retro/futures
+        const espnTriggerFields = ['sport', 'team_a', 'team_b', 'event_start_time'];
+        const espnShouldResolve = espnTriggerFields.some(f => fields[f] !== undefined) || (!bet.espn_game_id && mergedBet.status === 'open');
+        if (espnShouldResolve && mergedBet.bet_category !== 'futures' && !bet.is_retro && mergedBet.sport) {
+          try {
+            const resolved = await espn.resolveGameId(
+              mergedBet.sport, mergedBet.team_a, mergedBet.team_b, mergedBet.event_start_time
+            );
+            if (resolved) fields.espn_game_id = resolved.gameId;
+          } catch (e) {
+            console.error('[ESPN] Edit bet game ID resolve error:', e.message);
+          }
+        }
+
         await db.updateBetFields(betId, fields);
       }
 
@@ -2007,6 +2021,21 @@ function createWebServer() {
             if (leg.golfRound) gParts.push(`R${leg.golfRound}`);
             if (leg.golfHole) gParts.push(`Hole ${leg.golfHole}`);
             if (gParts.length) legFields.pick += ` (${gParts.join(', ')})`;
+          }
+
+          // Re-resolve ESPN game ID for this leg if game-identifying fields changed
+          const legEspnTrigger = ['sport', 'team_a', 'team_b', 'event_start_time'].some(f => legFields[f] !== undefined);
+          if (legEspnTrigger && (legFields.bet_category || leg.betCategory) !== 'futures' && !bet.is_retro && (legFields.sport || leg.sport)) {
+            try {
+              const lSport = legFields.sport || leg.sport;
+              const lTeamA = legFields.team_a || leg.teamA || null;
+              const lTeamB = leg.teamB || null;
+              const lTime = legFields.event_start_time || leg.eventStartTime || null;
+              const lResolved = await espn.resolveGameId(lSport, lTeamA, lTeamB, lTime);
+              if (lResolved) legFields.espn_game_id = lResolved.gameId;
+            } catch (e) {
+              console.error('[ESPN] Edit leg game ID resolve error:', e.message);
+            }
           }
 
           if (Object.keys(legFields).length > 0) {
@@ -3485,6 +3514,38 @@ IMPORTANT RULES:
       const golfAiPicksDb = require('../database/aiPicks');
       const record = await golfAiPicksDb.getGolfRoundRecord(guildId);
 
+      // Resolve ESPN event ID for this tournament so picks can be auto-closed later
+      // Try today + next 4 days (covers upcoming tournaments) then fall back to no-date (current/recent)
+      let espnEventId = null;
+      let espnPickDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      try {
+        const tNorm = (tournament || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+        const tryUrls = [];
+        for (let offset = 0; offset <= 4; offset++) {
+          const d = new Date();
+          d.setDate(d.getDate() + offset);
+          const ds = d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+          tryUrls.push(`https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=${ds}`);
+        }
+        // Final fallback: no date = ESPN returns current/most-recent tournament
+        tryUrls.push(`https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard`);
+
+        for (const url of tryUrls) {
+          const sbRes = await fetch(url);
+          if (!sbRes.ok) continue;
+          const events = (await sbRes.json()).events || [];
+          const match = tNorm
+            ? events.find(e => {
+                const eName = (e.name || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+                return eName.includes(tNorm) || tNorm.includes(eName);
+              })
+            : events[0] || null;
+          if (match) { espnEventId = match.id; break; }
+        }
+      } catch (e) {
+        console.warn('[Golf] Could not fetch ESPN event ID:', e.message);
+      }
+
       const totalPicks = picks.length;
       const posted = [];
 
@@ -3505,6 +3566,8 @@ IMPORTANT RULES:
           reasoning: p.reasoning,
           confidence: p.confidence,
           espn_sport: 'golf_pga',
+          espn_game_id: espnEventId,
+          pick_date: espnPickDate,
           record_wins: record.wins,
           record_losses: record.losses,
           record_pushes: record.pushes,

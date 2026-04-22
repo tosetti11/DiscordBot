@@ -695,11 +695,20 @@ async function generateGolfTournamentRecapImage(picks, tournamentName, record) {
  * Generate a golf Round Score O/U pick card (green theme)
  * pick shape: { player_name, line, pick_side ('Over'|'Under'), odds_american, confidence, reasoning, tournament_name, round_label }
  */
-async function generateGolfRoundOUCardImage(pick, record, pickNum, totalPicks) {
+/**
+ * @param {object} result  Optional — when provided, overlays a WIN/LOSS/PUSH stamp.
+ *                         { status: 'win'|'loss'|'push', playerScore: number, note: string }
+ */
+async function generateGolfRoundOUCardImage(pick, record, pickNum, totalPicks, result = null) {
   const brandLogo = await getBrandLogo();
   const W = 520;
   const PAD = 24;
   const INNER = W - PAD * 2;
+
+  // When showing result, swap accent colour
+  const resultColor = result
+    ? (result.status === 'win' ? C.green : result.status === 'loss' ? C.red : C.gold)
+    : null;
 
   // Pre-calculate height
   const tempCanvas = createCanvas(W, 1200);
@@ -752,17 +761,19 @@ async function generateGolfRoundOUCardImage(pick, record, pickNum, totalPicks) {
   ctx.fillStyle = bgGrad;
   ctx.fill();
 
-  // Green border
+  // Border (result colour when resolved, else green)
   roundRect(ctx, 0, 0, W, H, 16);
-  ctx.strokeStyle = C.greenBorder;
+  ctx.strokeStyle = result
+    ? (result.status === 'win' ? 'rgba(63, 185, 80, 0.5)' : result.status === 'loss' ? 'rgba(248, 81, 73, 0.5)' : 'rgba(255, 215, 0, 0.4)')
+    : C.greenBorder;
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Left green accent bar
+  // Left accent bar (result colour when resolved, else green)
   ctx.save();
   roundRect(ctx, 0, 0, W, H, 16);
   ctx.clip();
-  ctx.fillStyle = C.green;
+  ctx.fillStyle = resultColor || C.green;
   ctx.fillRect(0, 0, 5, H);
   ctx.restore();
 
@@ -899,35 +910,62 @@ async function generateGolfRoundOUCardImage(pick, record, pickNum, totalPicks) {
   curY += 52;
   curY += 12;
 
-  // ── Confidence meter ──
-  ctx.font = `700 11px ${FF}`;
-  ctx.fillStyle = C.gray;
-  ctx.fillText('CONFIDENCE', PAD + 5, curY + 12);
-  const confPct = pick.confidence || 80;
-  ctx.fillStyle = C.white;
-  ctx.font = `800 11px ${FF}`;
-  const pctStr = `${confPct}%`;
-  const pctW = ctx.measureText(pctStr).width;
-  ctx.fillText(pctStr, W - PAD - pctW, curY + 12);
-  curY += 18;
+  // ── Confidence meter OR Result bar ──
+  if (result) {
+    // Result replaces confidence section
+    const resColor = resultColor;
+    const resFaint = result.status === 'win' ? 'rgba(63, 185, 80, 0.12)' : result.status === 'loss' ? 'rgba(248, 81, 73, 0.12)' : 'rgba(255, 215, 0, 0.1)';
+    const resBorder = result.status === 'win' ? 'rgba(63, 185, 80, 0.4)' : result.status === 'loss' ? 'rgba(248, 81, 73, 0.4)' : 'rgba(255, 215, 0, 0.35)';
+    const resEmoji = result.status === 'win' ? '✅' : result.status === 'loss' ? '❌' : '🔄';
+    const resLabel = result.status === 'win' ? 'WIN' : result.status === 'loss' ? 'LOSS' : 'PUSH';
+    const scoreLabel = result.playerScore != null ? `Shot ${result.playerScore}` : '';
 
-  const barX = PAD + 5;
-  const barW = INNER - 10;
-  const barH = 10;
-  roundRect(ctx, barX, curY, barW, barH, 5);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-  ctx.fill();
+    roundRect(ctx, PAD, curY, INNER, 40, 8);
+    ctx.fillStyle = resFaint;
+    ctx.fill();
+    roundRect(ctx, PAD, curY, INNER, 40, 8);
+    ctx.strokeStyle = resBorder;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
-  const fillW = (confPct / 100) * barW;
-  const barGrad = ctx.createLinearGradient(barX, 0, barX + fillW, 0);
-  barGrad.addColorStop(0, '#196c2e');
-  barGrad.addColorStop(0.5, C.green);
-  barGrad.addColorStop(1, '#56d364');
-  roundRect(ctx, barX, curY, fillW, barH, 5);
-  ctx.fillStyle = barGrad;
-  ctx.fill();
+    // Result label centred
+    const resStr = `${resEmoji} ${resLabel}${scoreLabel ? `  •  ${scoreLabel}` : ''}`;
+    ctx.font = `900 16px ${FF}`;
+    ctx.fillStyle = resColor;
+    const rsW = ctx.measureText(resStr).width;
+    ctx.fillText(resStr, PAD + (INNER - rsW) / 2, curY + 27);
 
-  curY += barH + 12;
+    curY += 40 + 12;
+  } else {
+    ctx.font = `700 11px ${FF}`;
+    ctx.fillStyle = C.gray;
+    ctx.fillText('CONFIDENCE', PAD + 5, curY + 12);
+    const confPct = pick.confidence || 80;
+    ctx.fillStyle = C.white;
+    ctx.font = `800 11px ${FF}`;
+    const pctStr = `${confPct}%`;
+    const pctW = ctx.measureText(pctStr).width;
+    ctx.fillText(pctStr, W - PAD - pctW, curY + 12);
+    curY += 18;
+
+    const barX = PAD + 5;
+    const barW = INNER - 10;
+    const barH = 10;
+    roundRect(ctx, barX, curY, barW, barH, 5);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.fill();
+
+    const fillW = (confPct / 100) * barW;
+    const barGrad = ctx.createLinearGradient(barX, 0, barX + fillW, 0);
+    barGrad.addColorStop(0, '#196c2e');
+    barGrad.addColorStop(0.5, C.green);
+    barGrad.addColorStop(1, '#56d364');
+    roundRect(ctx, barX, curY, fillW, barH, 5);
+    ctx.fillStyle = barGrad;
+    ctx.fill();
+
+    curY += barH + 12;
+  }
 
   // ── Reasoning ──
   if (pick.reasoning) {

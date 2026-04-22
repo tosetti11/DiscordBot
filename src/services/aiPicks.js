@@ -3,10 +3,11 @@
  * Generates daily "lock" picks using ESPN game data + GPT-4o analysis.
  * Handles: pick generation, Discord posting, auto-closing, monthly recaps.
  */
-const { getAllTodaysGames, getTodaysGames } = require('./espn');
+const { getTodaysGames } = require('./espn');
 const { SPORT_NAMES } = require('../config/constants');
 const aiPicksDb = require('../database/aiPicks');
 const { generateAiPickCardImage, generateAiRecordImage, generateMonthlyRecapImage } = require('../utils/aiPickCardImage');
+const nbaGamePicks = require('./nbaGamePicks');
 
 const AI_CHANNEL_ID = '1483720217044713674';
 const AI_OPEN_SLIPS_CHANNEL_ID = '1485903920906895370';
@@ -21,6 +22,262 @@ function getSeasonalSports() {
   if (month === 6) return ['mlb', 'wnba', 'mls', 'kbo', 'npb', 'golf_pga'];
   if (month >= 7 && month <= 8) return ['mlb', 'wnba', 'mls', 'mma', 'kbo', 'npb', 'golf_pga', 'epl'];
   return ['nba', 'nfl', 'mlb', 'nhl', 'epl'];
+}
+
+function americanToImpliedProbability(odds) {
+  if (typeof odds !== 'number' || Number.isNaN(odds) || odds === 0) return null;
+  if (odds < 0) return Math.abs(odds) / (Math.abs(odds) + 100);
+  return 100 / (odds + 100);
+}
+
+function normalizePercent(value) {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  if (num <= 0) return null;
+  if (num <= 1) return num;
+  if (num <= 100) return num / 100;
+  return null;
+}
+
+function extractPredictorProbabilities(summaryJson) {
+  const predictor = summaryJson?.predictor;
+  if (!predictor) return null;
+
+  const candidatePairs = [
+    [predictor.homeTeam?.gameProjection, predictor.awayTeam?.gameProjection],
+    [predictor.homeTeam?.probability, predictor.awayTeam?.probability],
+    [predictor.homeTeam?.winChance, predictor.awayTeam?.winChance],
+    [predictor.home?.gameProjection, predictor.away?.gameProjection],
+    [predictor.home?.probability, predictor.away?.probability],
+    [predictor.homeWinPercentage, predictor.awayWinPercentage],
+    [predictor.homeChance, predictor.awayChance],
+  ];
+
+  for (const [homeRaw, awayRaw] of candidatePairs) {
+    const home = normalizePercent(homeRaw);
+    const away = normalizePercent(awayRaw);
+    if (home !== null && away !== null) {
+      return { home, away };
+    }
+  }
+
+  return null;
+}
+
+function extractMoneylines(summaryJson) {
+  const odds = summaryJson?.header?.competitions?.[0]?.odds?.[0]
+    || summaryJson?.pickcenter?.[0]
+    || null;
+
+  if (!odds) return { home: null, away: null };
+
+  const home = odds.homeTeamOdds?.moneyLine
+    ?? odds.moneyline?.home?.close?.odds
+    ?? odds.moneyline?.home?.current?.odds
+    ?? odds.homeMoneyLine
+    ?? null;
+  const away = odds.awayTeamOdds?.moneyLine
+    ?? odds.moneyline?.away?.close?.odds
+    ?? odds.moneyline?.away?.current?.odds
+    ?? odds.awayMoneyLine
+    ?? null;
+
+  return {
+    home: typeof home === 'number' ? home : Number(home),
+    away: typeof away === 'number' ? away : Number(away),
+  };
+}
+
+async function fetchSummaryJson(sport, gameId) {
+  const pathMap = {
+    nba: 'basketball/nba',
+    nfl: 'football/nfl',
+    mlb: 'baseball/mlb',
+    nhl: 'hockey/nhl',
+    wnba: 'basketball/wnba',
+    ncaa_mbb: 'basketball/mens-college-basketball',
+    ncaa_football: 'football/college-football',
+    epl: 'soccer/eng.1',
+    la_liga: 'soccer/esp.1',
+    serie_a: 'soccer/ita.1',
+    bundesliga: 'soccer/ger.1',
+    ucl: 'soccer/uefa.champions',
+    mls: 'soccer/usa.1',
+    kbo: 'baseball/kbo',
+    npb: 'baseball/npb',
+  };
+
+  const espnPath = pathMap[sport];
+  if (!espnPath) return null;
+
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${espnPath}/summary?event=${gameId}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function toPercentString(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'N/A';
+  const normalized = value <= 1 ? value * 100 : value;
+  return `${normalized.toFixed(1)}%`;
+}
+
+function buildLocalReasoning(candidate) {
+  const factorText = (candidate.analyticsFactors || []).filter(Boolean).slice(0, 2).join(' ');
+  const source = candidate.analyticsSource || 'Model';
+  return `${source} makes this ${candidate.pick} a high-likelihood play with ${toPercentString(candidate.modelWinProbability)} win probability against a market implied ${toPercentString(candidate.marketImpliedProbability)}. ${factorText}`.trim();
+}
+
+async function generateReasoningFromAnalytics(candidate, record, recentPerformance, openAiApiKey) {
+  if (!openAiApiKey) return buildLocalReasoning(candidate);
+
+  const prompt = `You are writing the public explanation for a sports betting pick that has ALREADY been selected by an analytics model.
+
+Current record: ${record.wins}-${record.losses}-${record.pushes}
+Recent results: ${recentPerformance || 'No recent picks'}
+
+Selected pick data:
+- Sport: ${candidate.sportName || candidate.sport}
+- Pick: ${candidate.pick}
+- Odds: ${candidate.oddsAmerican}
+- Model win probability: ${toPercentString(candidate.modelWinProbability)}
+- Market implied probability: ${toPercentString(candidate.marketImpliedProbability)}
+- Model edge: ${toPercentString(candidate.modelEdge)}
+- Analytics source: ${candidate.analyticsSource}
+- Key factors: ${(candidate.analyticsFactors || []).slice(0, 3).join(' | ')}
+
+Write exactly 2 sentences.
+- Focus on why this is more likely than not to hit.
+- Emphasize matchup quality, probability, and market mismatch.
+- Do NOT invent any stats or facts beyond the data above.
+- Do NOT mention OpenAI or say "edge" unless describing the market mismatch clearly.`;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openAiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.2,
+        max_tokens: 150,
+      }),
+    });
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim();
+    return text || buildLocalReasoning(candidate);
+  } catch {
+    return buildLocalReasoning(candidate);
+  }
+}
+
+function makeAnalyticsCandidate(base) {
+  const implied = americanToImpliedProbability(base.oddsAmerican);
+  if (implied === null || base.modelWinProbability === null) return null;
+
+  const edge = base.modelWinProbability - implied;
+  if (base.oddsAmerican > -120 || base.oddsAmerican < -150) return null;
+  if (base.modelWinProbability < 0.57) return null;
+  if (edge < 0.015) return null;
+
+  return {
+    ...base,
+    marketImpliedProbability: implied,
+    modelEdge: edge,
+    selectionScore: (base.modelWinProbability * 100) + (edge * 100 * 1.75),
+    confidence: Math.max(58, Math.min(79, Math.round(base.modelWinProbability * 100))),
+  };
+}
+
+async function buildAnalyticsCandidates(allGames) {
+  const candidates = [];
+
+  try {
+    const nbaTopPicks = await nbaGamePicks.generateTopGamePicks();
+    for (const pick of (nbaTopPicks.moneyline || [])) {
+      const odds = pick.pickTeam === 'home' ? pick.game?.odds?.homeML : pick.game?.odds?.awayML;
+      const candidate = makeAnalyticsCandidate({
+        sport: 'nba',
+        sportName: SPORT_NAMES.nba,
+        espnGameId: pick.game?.id,
+        pick: `${pick.pick} ML`,
+        teamA: pick.pickTeam === 'home' ? pick.game?.home?.name : pick.game?.away?.name,
+        teamB: pick.pickTeam === 'home' ? pick.game?.away?.name : pick.game?.home?.name,
+        wagerType: 'moneyline',
+        betCategory: 'team_game',
+        oddsAmerican: odds,
+        eventStartTime: pick.game?.startTime || null,
+        modelWinProbability: typeof pick.probability === 'number' ? pick.probability / 100 : null,
+        analyticsSource: 'NBA team model',
+        analyticsFactors: (pick.factors || []).slice(0, 3).map(f => f.detail),
+      });
+      if (candidate) candidates.push(candidate);
+    }
+  } catch (err) {
+    console.error('[AI Pick] NBA analytics build error:', err.message);
+  }
+
+  const nonNbaGames = allGames.filter(game => game.sport !== 'nba');
+  for (const game of nonNbaGames) {
+    const summaryJson = await fetchSummaryJson(game.sport, game.espnGameId);
+    if (!summaryJson) continue;
+
+    const probs = extractPredictorProbabilities(summaryJson);
+    const moneylines = extractMoneylines(summaryJson);
+    if (!probs) continue;
+
+    const homeCandidate = makeAnalyticsCandidate({
+      sport: game.sport,
+      sportName: game.sportName,
+      espnGameId: game.espnGameId,
+      pick: `${game.homeAbbr} ML`,
+      teamA: game.home,
+      teamB: game.away,
+      wagerType: 'moneyline',
+      betCategory: 'team_game',
+      oddsAmerican: moneylines.home,
+      eventStartTime: game.startTime || null,
+      modelWinProbability: probs.home,
+      analyticsSource: 'ESPN predictor',
+      analyticsFactors: [
+        `${game.homeAbbr} win probability ${toPercentString(probs.home * 100 / 100)}`,
+        `Market price ${moneylines.home > 0 ? '+' : ''}${moneylines.home}`,
+        `${game.awayRecord || 'N/A'} on one side vs ${game.homeRecord || 'N/A'} on the other`,
+      ],
+    });
+    const awayCandidate = makeAnalyticsCandidate({
+      sport: game.sport,
+      sportName: game.sportName,
+      espnGameId: game.espnGameId,
+      pick: `${game.awayAbbr} ML`,
+      teamA: game.away,
+      teamB: game.home,
+      wagerType: 'moneyline',
+      betCategory: 'team_game',
+      oddsAmerican: moneylines.away,
+      eventStartTime: game.startTime || null,
+      modelWinProbability: probs.away,
+      analyticsSource: 'ESPN predictor',
+      analyticsFactors: [
+        `${game.awayAbbr} win probability ${toPercentString(probs.away * 100 / 100)}`,
+        `Market price ${moneylines.away > 0 ? '+' : ''}${moneylines.away}`,
+        `${game.awayRecord || 'N/A'} on one side vs ${game.homeRecord || 'N/A'} on the other`,
+      ],
+    });
+
+    if (homeCandidate) candidates.push(homeCandidate);
+    if (awayCandidate) candidates.push(awayCandidate);
+  }
+
+  candidates.sort((a, b) => b.selectionScore - a.selectionScore);
+  return candidates;
 }
 
 /**
@@ -40,11 +297,7 @@ async function generateDailyPick(client, guildId) {
     return existing;
   }
 
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-  if (!OPENAI_API_KEY) {
-    console.error('[AI Pick] OPENAI_API_KEY not set');
-    return null;
-  }
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY || null;
 
   // Fetch games from in-season sports
   const seasonalSports = getSeasonalSports();
@@ -119,6 +372,63 @@ async function generateDailyPick(client, guildId) {
   const lastSport = last5Sports[0] || null;
   const last3WagerTypes = recentForVariety.slice(0, 3).map(p => p.wager_type);
 
+  const analyticsCandidates = await buildAnalyticsCandidates(allGames);
+  const analyticsShortlist = analyticsCandidates.slice(0, 5).map(candidate => ({
+    sport: candidate.sport,
+    pick: candidate.pick,
+    odds: candidate.oddsAmerican,
+    winProbability: Math.round(candidate.modelWinProbability * 1000) / 10,
+    impliedProbability: Math.round(candidate.marketImpliedProbability * 1000) / 10,
+    edge: Math.round(candidate.modelEdge * 1000) / 10,
+    source: candidate.analyticsSource,
+  }));
+
+  if (analyticsCandidates.length > 0) {
+    const selected = analyticsCandidates[0];
+    const reasoning = await generateReasoningFromAnalytics(selected, record, recentPerformance, OPENAI_API_KEY);
+    const aiPick = await aiPicksDb.createAiPick({
+      guild_id: guildId,
+      channel_id: AI_CHANNEL_ID,
+      sport: selected.sport,
+      bet_category: selected.betCategory,
+      wager_type: selected.wagerType,
+      pick: selected.pick,
+      team_a: selected.teamA || null,
+      team_b: selected.teamB || null,
+      player_name: null,
+      prop_description: null,
+      spread_value: null,
+      over_under: null,
+      odds_american: selected.oddsAmerican,
+      reasoning,
+      confidence: selected.confidence,
+      espn_game_id: selected.espnGameId || null,
+      espn_sport: selected.sport,
+      event_start_time: selected.eventStartTime,
+      record_wins: record.wins,
+      record_losses: record.losses,
+      record_pushes: record.pushes,
+      record_units: calculateUnitsFromRecord(record, selected.oddsAmerican),
+      streak,
+      analytics_source: selected.analyticsSource,
+      model_win_probability: Math.round(selected.modelWinProbability * 1000) / 10,
+      market_implied_probability: Math.round(selected.marketImpliedProbability * 1000) / 10,
+      model_edge: Math.round(selected.modelEdge * 1000) / 10,
+      selection_score: Math.round(selected.selectionScore * 10) / 10,
+      analytics_1: selected.analyticsFactors?.[0] || null,
+      analytics_2: selected.analyticsFactors?.[1] || null,
+      analytics_3: selected.analyticsFactors?.[2] || null,
+    });
+
+    await postPickToDiscord(client, aiPick, guildId);
+    return aiPick;
+  }
+
+  if (!OPENAI_API_KEY) {
+    console.error('[AI Pick] No analytics candidates available and OPENAI_API_KEY not set');
+    return null;
+  }
+
   const gamesJson = JSON.stringify(allGames.map(g => {
     const obj = {
       sport: g.sport,
@@ -148,28 +458,28 @@ ${last3WagerTypes.length > 0 ? `- Last 3 wager types: ${last3WagerTypes.join(', 
 - PRIORITIZE variety. NHL, Golf, Soccer, and player props are GREAT options. Don't default to MLB.
 
 === ODDS RANGE (STRICT) ===
-- Odds MUST be between -140 and -110. This is a HARD requirement. No plus odds. No heavy favorites beyond -140.
-- Target the -110 to -130 sweet spot. These are smart, sharp, high-probability plays.
+- Odds MUST be between -150 and -120. This is a HARD requirement. No plus odds. No heavy favorites beyond -150.
+- Target the -120 to -145 sweet spot. These are strong favorites without paying extreme juice.
 
 STRATEGY NOTES:
-- Analyze which bet types have been winning vs losing in recent history
-- If spreads have been losing, lean toward moneylines or totals
-- Look for genuine line value — where the market may be off
+- Primary objective is hit rate, not long-shot upside. Favor the most likely winner in a reasonable price band.
+- Use analytics and market mismatch first. Only take a pick if the book looks light versus the probability.
 - Consider situational factors: rest days, travel, motivation, injuries
 - For MLB: pitcher matchups are critical — a strong pitcher vs weak lineup is high value
-- Over/unders and team totals often provide the best value — don't sleep on them
-- NHL pucklines, soccer draw no bet, golf round matchups are all excellent pick types
-- Player props (strikeouts, points, assists, etc.) can be high-value if the matchup is right
+- If no strong mismatch exists, prefer passing on thin edges and choose the cleanest favorite in-range.
+
+Analytics shortlist from model-first ranking (if available):
+${analyticsShortlist.length ? JSON.stringify(analyticsShortlist, null, 2) : 'No shortlist available'}
 
 Today's available games:
 ${gamesJson}
 
 Select ONE "Lock Pick of the Day" — your single best value play. Requirements:
-- Odds MUST be between -140 and -110 (NO exceptions — no plus odds, no heavy juice)
-- Strongly consider: over/unders, team totals, pucklines, player props — not just moneylines and spreads
+- Odds MUST be between -150 and -120 (NO exceptions — no plus odds, no heavy juice beyond -150)
+- Prefer moneylines and analytically-supported favorites over thin contrarian plays.
 - Team total = one team's score over/under a line (e.g. 'Lakers Over 112.5')
-- Focus on value — find where the line is off or where one side has a clear edge
-- You MUST pick a different sport than your last pick. Variety is critical.
+- Focus on book mismatches where the win probability is clearly higher than the market implies.
+- Variety is secondary to quality. Do not force variety if the strongest analytics point elsewhere.
 - Consider the matchup, records, situational factors, and line value
 
 Return a JSON object with this EXACT structure:
@@ -184,7 +494,7 @@ Return a JSON object with this EXACT structure:
   "propDescription": "<prop description if player_prop, else null>",
   "spreadValue": <numeric spread or total line, or null>,
   "overUnder": "Over" or "Under" or null,
-  "oddsAmerican": <American odds number between -140 and -110>,
+  "oddsAmerican": <American odds number between -150 and -120>,
   "espnGameId": "<ESPN game ID from the data>",
   "confidence": <number 85-99 representing confidence level>,
   "reasoning": "<2-3 sentence analysis explaining WHY this is the lock pick. Be specific about matchup advantages, trends, or line value.>"
@@ -230,9 +540,9 @@ IMPORTANT: Return ONLY valid JSON. No markdown, no explanation outside the JSON.
       const odds = candidate.oddsAmerican;
       const violations = [];
 
-      // Check odds range: must be -140 to -110
-      if (odds > -110 || odds < -140) {
-        violations.push(`odds ${odds} outside -140 to -110`);
+      // Check odds range: must be -150 to -120
+      if (odds > -120 || odds < -150) {
+        violations.push(`odds ${odds} outside -150 to -120`);
       }
 
       // Check sport variety: must not repeat last pick's sport
@@ -620,7 +930,9 @@ async function autoClosePendingPicks(client) {
   const pending = await aiPicksDb.getPendingAiPicks();
   if (pending.length === 0) return;
 
+  // ── Regular team-sport picks ──────────────────────────────────────────────
   for (const pick of pending) {
+    if (pick.pick_type === 'golf_round') continue; // handled separately below
     if (!pick.espn_game_id || !pick.espn_sport) continue;
 
     try {
@@ -640,6 +952,131 @@ async function autoClosePendingPicks(client) {
       console.log(`[AI Pick] Auto-closed pick ${pick.id}: ${result.status} (${finalScore})`);
     } catch (err) {
       console.error(`[AI Pick] Auto-close error for ${pick.id}:`, err.message);
+    }
+  }
+
+  // ── Golf round picks ──────────────────────────────────────────────────────
+  // Include golf picks even without espn_game_id — we'll try to match by tournament name
+  const golfPending = pending.filter(p => p.pick_type === 'golf_round');
+  if (golfPending.length === 0) return;
+
+  // Group by (espn_game_id or tournament_name) + round number so we only fetch each scoreboard once
+  const golfGroups = new Map();
+  for (const pick of golfPending) {
+    const key = `${pick.espn_game_id || pick.tournament_name || 'unknown'}:${pick.round_number}`;
+    if (!golfGroups.has(key)) {
+      golfGroups.set(key, {
+        eventId: pick.espn_game_id || null,
+        tournamentName: pick.tournament_name || null,
+        roundNum: pick.round_number,
+        pickDate: pick.pick_date,
+        picks: [],
+      });
+    }
+    golfGroups.get(key).picks.push(pick);
+  }
+
+  for (const [, group] of golfGroups) {
+    const { eventId, tournamentName, roundNum, pickDate, picks: groupPicks } = group;
+    try {
+      // Build a prioritised list of URLs to try:
+      // 1. pick_date specific (most precise)
+      // 2. no-date = ESPN returns current/most-recent tournament (handles null pick_date)
+      const dateStr = getDateStr(pickDate);
+      const urls = [];
+      if (dateStr) urls.push(`https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard?dates=${dateStr}`);
+      urls.push(`https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard`);
+
+      let event = null;
+      let resolvedEventId = eventId;
+
+      for (const url of urls) {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const events = (await res.json()).events || [];
+        if (eventId) {
+          event = events.find(e => e.id === eventId) || null;
+        }
+        // Fallback: match by tournament name (covers picks without espn_game_id)
+        if (!event && tournamentName) {
+          const tNorm = tournamentName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+          event = events.find(e => {
+            const eName = (e.name || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+            return eName.includes(tNorm) || tNorm.includes(eName);
+          }) || null;
+          if (event) resolvedEventId = event.id;
+        }
+        if (event) break;
+      }
+      if (!event) continue;
+
+      // Back-fill espn_game_id on any picks in this group that were missing it
+      if (resolvedEventId && resolvedEventId !== eventId) {
+        for (const pick of groupPicks) {
+          if (!pick.espn_game_id) {
+            await aiPicksDb.updateAiPickEspnId(pick.id, resolvedEventId);
+          }
+        }
+      }
+
+      const competitors = event.competitions?.[0]?.competitors || [];
+      const rIdx = roundNum - 1;
+
+      // Check if the round is complete: at least 80% of the field has a score
+      const withScore = competitors.filter(c => {
+        const r = c.linescores?.[rIdx];
+        return r && r.value != null;
+      }).length;
+      const roundComplete = withScore >= Math.max(1, Math.floor(competitors.length * 0.8));
+      if (!roundComplete) continue;
+
+      // Build player → round score map (normalised name → strokes)
+      const scoreMap = new Map();
+      for (const c of competitors) {
+        const name = (c.athlete?.displayName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+        const score = c.linescores?.[rIdx]?.value ?? null;
+        if (name && score != null) scoreMap.set(name, score);
+      }
+
+      for (const pick of groupPicks) {
+        try {
+          // prop_description format: "Round N Score Over/Under X.X"
+          const desc = (pick.prop_description || '').toLowerCase();
+          const m = desc.match(/(?:round\s*\d+\s+)?score\s+(over|under)\s+([\d.]+)/i);
+          if (!m) continue;
+          const side = m[1].toLowerCase(); // 'over' or 'under'
+          const line = parseFloat(m[2]);
+
+          // Find player score (with fuzzy fallback)
+          const normName = (pick.player_name || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+          let playerScore = scoreMap.get(normName) ?? null;
+          if (playerScore == null) {
+            for (const [k, v] of scoreMap) {
+              if (k.includes(normName) || normName.includes(k)) { playerScore = v; break; }
+            }
+          }
+          if (playerScore == null) continue; // player not found yet — skip
+
+          let status, note;
+          if (side === 'over') {
+            if (playerScore > line) { status = 'win'; note = `Auto-resolved: ${pick.player_name} R${roundNum} shot ${playerScore} (OVER ${line}) ✅`; }
+            else if (playerScore < line) { status = 'loss'; note = `Auto-resolved: ${pick.player_name} R${roundNum} shot ${playerScore} (OVER ${line} failed) ❌`; }
+            else { status = 'push'; note = `Auto-resolved: ${pick.player_name} R${roundNum} shot ${playerScore} exactly ${line} 🔄`; }
+          } else {
+            if (playerScore < line) { status = 'win'; note = `Auto-resolved: ${pick.player_name} R${roundNum} shot ${playerScore} (UNDER ${line}) ✅`; }
+            else if (playerScore > line) { status = 'loss'; note = `Auto-resolved: ${pick.player_name} R${roundNum} shot ${playerScore} (UNDER ${line} failed) ❌`; }
+            else { status = 'push'; note = `Auto-resolved: ${pick.player_name} R${roundNum} shot ${playerScore} exactly ${line} 🔄`; }
+          }
+
+          const closedPick = await aiPicksDb.closeAiPick(pick.id, status, note, `R${roundNum}: ${playerScore}`);
+          await postResultToDiscord(client, closedPick, pick.guild_id);
+          console.log(`[AI Pick] Auto-closed golf pick ${pick.id}: ${status} (${note})`);
+        } catch (err) {
+          console.error(`[AI Pick] Golf auto-close error for pick ${pick.id}:`, err.message);
+        }
+      }
+    } catch (err) {
+      console.error(`[AI Pick] Golf group auto-close error (event ${eventId} R${roundNum}):`, err.message);
     }
   }
 }
@@ -726,28 +1163,12 @@ async function postResultToDiscord(client, closedPick, guildId) {
   const { AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
   try {
-    const channel = await client.channels.fetch(AI_CHANNEL_ID);
+    // Use the pick's own channel so golf picks post to the golf channel
+    const targetChannelId = closedPick.channel_id || AI_CHANNEL_ID;
+    const channel = await client.channels.fetch(targetChannelId);
     if (!channel) return;
 
-    // Get updated record
-    const record = await aiPicksDb.getAiPickRecord(guildId);
-    const streak = await aiPicksDb.getAiPickStreak(guildId);
-    const totalUnits = await calculateTotalUnits(guildId);
-
-    // Generate record graphic
-    const imgBuffer = await generateAiRecordImage(closedPick, record, streak, totalUnits);
-    const attachment = new AttachmentBuilder(imgBuffer, { name: 'ai-result.png' });
-
-    const emoji = closedPick.status === 'win' ? '✅' : closedPick.status === 'loss' ? '❌' : '🔄';
-    const statusText = closedPick.status === 'win' ? 'WIN' : closedPick.status === 'loss' ? 'LOSS' : 'PUSH';
-    const resultContent = `${emoji} **AI PICK RESULT: ${statusText}** ${emoji}\n${closedPick.result_note || ''}\n📊 Record: **${record.wins}-${record.losses}-${record.pushes}** | Units: **${totalUnits >= 0 ? '+' : ''}${totalUnits}u**`;
-
-    await channel.send({
-      content: resultContent,
-      files: [attachment],
-    });
-
-    // Build disabled button row
+    // Build disabled button row (used for both paths)
     const disabledRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`aipick_tail_${closedPick.id}`)
@@ -760,6 +1181,73 @@ async function postResultToDiscord(client, closedPick, guildId) {
         .setStyle(ButtonStyle.Danger)
         .setDisabled(true),
     );
+
+    // ── Golf picks: edit the original card image to show WIN/LOSS stamp ──
+    if (closedPick.pick_type === 'golf_round') {
+      if (closedPick.message_id) {
+        try {
+          const { generateGolfRoundOUCardImage } = require('../utils/golfPickCardImage');
+          const origMsg = await channel.messages.fetch(closedPick.message_id);
+
+          // Extract the pick number/total from original message content (e.g. "Pick 3/10")
+          const numMatch = (origMsg.content || '').match(/Pick (\d+)\/(\d+)/i);
+          const pickNum = numMatch ? parseInt(numMatch[1]) : 1;
+          const totalPicks = numMatch ? parseInt(numMatch[2]) : 1;
+
+          // Parse playerScore from final_score ("R4: 67" → 67)
+          const scoreMatch = (closedPick.final_score || '').match(/:\s*(\d+)/);
+          const playerScore = scoreMatch ? parseInt(scoreMatch[1]) : null;
+
+          // Rebuild a pick object from the closed pick record
+          const pickForCard = {
+            player_name: closedPick.player_name || closedPick.pick,
+            line: (() => {
+              const lm = (closedPick.prop_description || '').match(/([\d.]+)\s*$/);
+              return lm ? parseFloat(lm[1]) : null;
+            })(),
+            pick_side: (() => {
+              const pm = (closedPick.prop_description || '').match(/\b(over|under)\b/i);
+              return pm ? pm[1] : closedPick.pick?.split(' ')[1] || 'Over';
+            })(),
+            odds_american: closedPick.odds_american,
+            confidence: closedPick.confidence,
+            reasoning: closedPick.reasoning,
+            tournament_name: closedPick.tournament_name,
+            round_label: closedPick.round_number ? `Round ${closedPick.round_number}` : 'Round',
+          };
+
+          // Fetch golf record for footer
+          const golfRecord = await aiPicksDb.getGolfRoundRecord(guildId);
+
+          const result = { status: closedPick.status, playerScore, note: closedPick.result_note };
+          const imgBuffer = await generateGolfRoundOUCardImage(pickForCard, golfRecord, pickNum, totalPicks, result);
+          const attachment = new AttachmentBuilder(imgBuffer, { name: 'golf-pick-result.png' });
+
+          await origMsg.edit({ files: [attachment], components: [disabledRow] });
+          console.log(`[AI Pick] Edited golf pick image for ${closedPick.id}: ${closedPick.status}`);
+        } catch (e) {
+          console.error('[AI Pick] Failed to edit golf pick message:', e.message);
+        }
+      }
+      return; // Golf picks: no separate result post needed
+    }
+
+    // ── Regular daily picks: post a new result card + disable original buttons ──
+    const record = await aiPicksDb.getAiPickRecord(guildId);
+    const streak = await aiPicksDb.getAiPickStreak(guildId);
+    const totalUnits = await calculateTotalUnits(guildId);
+
+    const imgBuffer = await generateAiRecordImage(closedPick, record, streak, totalUnits);
+    const attachment = new AttachmentBuilder(imgBuffer, { name: 'ai-result.png' });
+
+    const emoji = closedPick.status === 'win' ? '✅' : closedPick.status === 'loss' ? '❌' : '🔄';
+    const statusText = closedPick.status === 'win' ? 'WIN' : closedPick.status === 'loss' ? 'LOSS' : 'PUSH';
+    const resultContent = `${emoji} **AI PICK RESULT: ${statusText}** ${emoji}\n${closedPick.result_note || ''}\n📊 Record: **${record.wins}-${record.losses}-${record.pushes}** | Units: **${totalUnits >= 0 ? '+' : ''}${totalUnits}u**`;
+
+    await channel.send({
+      content: resultContent,
+      files: [attachment],
+    });
 
     // Disable buttons on original message
     if (closedPick.message_id) {

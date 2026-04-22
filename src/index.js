@@ -277,6 +277,14 @@ client.once(Events.ClientReady, (c) => {
       for (const { sport, eventStartTime, createdAt } of gameChecks.values()) {
         sportDateSet.add(`${sport}:${eventDateStr(eventStartTime, createdAt)}`);
       }
+      // Always include today and yesterday ET per sport to handle midnight crossings.
+      const _etDateN = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, ''); };
+      for (const { sport } of gameChecks.values()) {
+        if (sport && sport !== 'golf_pga') {
+          sportDateSet.add(`${sport}:${_etDateN(0)}`);
+          sportDateSet.add(`${sport}:${_etDateN(-1)}`);
+        }
+      }
       const notifGames = [];
       for (const key of sportDateSet) {
         const [sport, dateStr] = key.split(':');
@@ -477,8 +485,7 @@ client.once(Events.ClientReady, (c) => {
             }
           } else {
             const dateStr = eventDateStr(bet.event_start_time, bet.created_at);
-            const games = await espn.getTodaysGames(bet.sport, dateStr);
-            const game = games.find(g => g.id === bet.espn_game_id);
+            const game = await espn.findGameById(bet.sport, bet.espn_game_id, dateStr);
             if (game && (game.state === 'in' || game.state === 'post')) {
               if (game.state !== 'post') allGamesPost = false;
               let hash = `${game.home?.score}:${game.away?.score}:${game.state}`;
@@ -580,8 +587,7 @@ client.once(Events.ClientReady, (c) => {
 
           try {
             const dateStr = eventDateStr(pick.event_start_time || pick.pick_date, pick.created_at);
-            const games = await espn.getTodaysGames(pick.espn_sport, dateStr);
-            const game = games.find(g => g.id === pick.espn_game_id);
+            const game = await espn.findGameById(pick.espn_sport, pick.espn_game_id, dateStr);
             if (!game || game.state === 'pre') continue;
 
             // Build live score data
@@ -674,6 +680,15 @@ client.once(Events.ClientReady, (c) => {
       for (const item of allItems) {
         if (!item.sport) continue;
         sportDateSet.add(`${item.sport}:${eventDateStr(item.event_start_time, item.created_at)}`);
+      }
+      // Always also check today and yesterday ET for every active sport to
+      // handle late-night games that cross midnight or have a mismatched date.
+      const _etDate = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, ''); };
+      const _etToday = _etDate(0), _etYday = _etDate(-1);
+      for (const item of allItems) {
+        if (!item.sport || item.sport === 'golf_pga') continue;
+        sportDateSet.add(`${item.sport}:${_etToday}`);
+        sportDateSet.add(`${item.sport}:${_etYday}`);
       }
 
       // Fetch scoreboards per sport+date
