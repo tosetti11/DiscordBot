@@ -8825,6 +8825,8 @@ async function csGenerate() {
   document.getElementById('cs-result').classList.add('hidden');
   document.getElementById('cs-status').classList.remove('hidden');
   document.getElementById('cs-generate-btn').disabled = true;
+  const regenBtn = document.getElementById('cs-regenerate-btn');
+  if (regenBtn) regenBtn.disabled = true;
 
   try {
     const body = {};
@@ -8849,6 +8851,8 @@ async function csGenerate() {
   } finally {
     document.getElementById('cs-status').classList.add('hidden');
     document.getElementById('cs-generate-btn').disabled = false;
+    const regenBtn = document.getElementById('cs-regenerate-btn');
+    if (regenBtn) regenBtn.disabled = false;
   }
 }
 

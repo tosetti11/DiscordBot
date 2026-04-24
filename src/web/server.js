@@ -2553,8 +2553,13 @@ Rules:
       });
 
       const oaiData = await oaiRes.json();
+      if (oaiData.error) {
+        console.error('[Content Studio] OpenAI error:', JSON.stringify(oaiData.error));
+        return res.status(502).json({ error: oaiData.error.message || 'OpenAI API error' });
+      }
       if (!oaiData.choices?.[0]?.message?.content) {
-        return res.status(502).json({ error: 'No response from AI' });
+        console.error('[Content Studio] No content in response:', JSON.stringify(oaiData).substring(0, 300));
+        return res.status(502).json({ error: 'No response from AI — please try again' });
       }
 
       let raw = oaiData.choices[0].message.content.trim();
