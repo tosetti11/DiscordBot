@@ -502,7 +502,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       const legGdPre = legGolfData[li];
       if (legGdPre && legGdPre.roundStatus !== 'pre') y += 42; // golf tracker
       const legMpdPre = legMatchPlayData[li];
-      if (legMpdPre && legMpdPre.overallStatus !== 'pre') y += 52; // match-play tracker
+      if (legMpdPre && legMpdPre.overallStatus !== 'pre') y += 60; // match-play tracker
       if (legPropStats[li]) y += 18; // prop stat progress
       if (legBattingLines[li]) y += 16; // batting line
       if (leg.odds_american) y += 15; // odds line
@@ -1147,8 +1147,9 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       if (legMpd && legMpd.overallStatus !== 'pre') {
         const mpLive = legMpd.overallStatus === 'in';
         const mpFinal = legMpd.overallStatus === 'post';
+        const mpFmtScore = (s) => { if (s == null) return '-'; const n = parseInt(s); if (isNaN(n)) return '-'; if (n === 0) return 'E'; return n > 0 ? `+${n}` : `${n}`; };
         const mpBg = mpLive ? 'rgba(80, 200, 80, 0.08)' : 'rgba(128, 128, 128, 0.06)';
-        const mpH = 50;
+        const mpH = 56;
         roundRect(ctx, legX - 2, curY + 2, legInner + 4, mpH, 5);
         ctx.fillStyle = mpBg;
         ctx.fill();
@@ -1156,28 +1157,39 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         ctx.lineWidth = 1;
         roundRect(ctx, legX - 2, curY + 2, legInner + 4, mpH, 5);
         ctx.stroke();
+
         const mx = legX + 4;
-        const msLabel = legMpd.matchStatus
-          ? legMpd.matchStatus.label
-          : 'AS';
+        const msLabel = legMpd.matchStatus ? legMpd.matchStatus.label : 'AS';
         const msColor = legMpd.matchStatus?.ahead === true ? C.win : (legMpd.matchStatus?.ahead === false ? C.loss : C.textMuted);
         const thruStr = legMpd.maxHoles > 0
           ? (mpFinal ? 'Final' : `Thru ${legMpd.maxHoles}`)
           : (mpFinal ? 'Final' : 'In Progress');
-        ctx.font = 'bold 10px ' + FF;
+
+        // Group A row
+        ctx.font = '600 10px ' + FF;
         ctx.fillStyle = mpLive ? C.win : C.textSecondary;
-        const grpAStr = `${legMpd.groupA.displayName}: ${legMpd.groupA.roundScore != null ? legMpd.groupA.roundScore : '-'}`;
-        ctx.fillText(grpAStr, mx, curY + 14);
-        ctx.font = '10px ' + FF;
-        ctx.fillStyle = C.textMuted;
-        const grpBStr = `${legMpd.groupB.displayName}: ${legMpd.groupB.roundScore != null ? legMpd.groupB.roundScore : '-'}`;
-        ctx.fillText(grpBStr, mx, curY + 26);
-        ctx.font = 'bold 10px ' + FF;
+        ctx.fillText(legMpd.groupA.displayName, mx, curY + 14);
+        ctx.font = '700 10px ' + FF;
+        const gAStr = `${mpFmtScore(legMpd.groupA.roundScore)} ${thruStr}`;
+        const gAW = ctx.measureText(gAStr).width;
+        ctx.fillText(gAStr, legX + legInner - gAW, curY + 14);
+
+        // Match status badge (centered between rows)
+        ctx.font = 'bold 11px ' + FF;
         ctx.fillStyle = msColor;
-        const statusStr = `${msLabel}  ${thruStr}`;
-        const sw = ctx.measureText(statusStr).width;
-        ctx.fillText(statusStr, legX + legInner - sw, curY + 14);
-        curY += 52;
+        const bw = ctx.measureText(msLabel).width;
+        ctx.fillText(msLabel, legX + legInner / 2 - bw / 2, curY + 28);
+
+        // Group B row
+        ctx.font = '600 10px ' + FF;
+        ctx.fillStyle = C.textMuted;
+        ctx.fillText(legMpd.groupB.displayName, mx, curY + 42);
+        ctx.font = '700 10px ' + FF;
+        const gBStr = mpFmtScore(legMpd.groupB.roundScore);
+        const gBW = ctx.measureText(gBStr).width;
+        ctx.fillText(gBStr, legX + legInner - gBW, curY + 42);
+
+        curY += 58;
       }
       // Leg prop stat progress
       const legPs = legPropStats[i];
