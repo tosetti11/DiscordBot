@@ -570,26 +570,24 @@ function setupEventListeners() {
 }
 
 // ── Category / Wager Field Visibility ──
+function syncTieRowVisibility() {
+  const wager = document.getElementById('wager-type')?.value;
+  const tieRow = document.getElementById('matchplay-tie-row');
+  if (tieRow) tieRow.style.display = (wager === '2ball' || wager === '3ball') ? '' : 'none';
+  if (!(wager === '2ball' || wager === '3ball')) {
+    const tieEl = document.getElementById('matchplay-bet-tie');
+    if (tieEl) tieEl.checked = false;
+  }
+}
+
 function updateCategoryFields(category) {
   document.getElementById('team-fields').classList.add('hidden');
   document.getElementById('prop-fields').classList.add('hidden');
   document.getElementById('futures-fields').classList.add('hidden');
   document.getElementById('mlb-live-fields').classList.add('hidden');
-  // Show/hide tie toggle based on whether wager is 2ball/3ball
-  const golfHoleEl = document.getElementById('golf-hole');
-  const matchplayHoleEl = document.getElementById('matchplay-hole');
-  const tieRow = document.getElementById('matchplay-tie-row');
-  function syncTieRowVisibility() {
-    const wager = document.getElementById('wager-type')?.value;
-    if (tieRow) tieRow.style.display = (wager === '2ball' || wager === '3ball') ? '' : 'none';
-    if (!(wager === '2ball' || wager === '3ball')) {
-      const tieEl = document.getElementById('matchplay-bet-tie');
-      if (tieEl) tieEl.checked = false;
-    }
-  }
-  golfHoleEl?.addEventListener('change', syncTieRowVisibility);
-  matchplayHoleEl?.addEventListener('change', syncTieRowVisibility);
-  // Also call syncTieRowVisibility when wager type changes (already handled in onWagerTypeChange via existing listener)
+  // Wire up tie row visibility listeners (idempotent — addEventListener won't double-fire)
+  document.getElementById('golf-hole')?.addEventListener('change', syncTieRowVisibility);
+  document.getElementById('matchplay-hole')?.addEventListener('change', syncTieRowVisibility);
   document.getElementById('wager-type')?.addEventListener('change', syncTieRowVisibility);
 
   document.getElementById('matchplay-fields')?.classList.add('hidden');
