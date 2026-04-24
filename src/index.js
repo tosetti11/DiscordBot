@@ -197,8 +197,8 @@ client.once(Events.ClientReady, (c) => {
 
   // Polling tier intervals
   const FAST_INTERVAL = 30_000;    // 30s — team game bets (NBA, NFL, NHL, etc.)
-  const STANDARD_INTERVAL = 60_000; // 60s — player props (need game summary)
-  const SLOW_INTERVAL = 60_000;    // 1min — card updates
+  const STANDARD_INTERVAL = 30_000; // 30s — player props
+  const SLOW_INTERVAL = 30_000;    // 30s — card updates
   const AUTO_CLOSE_DELAY = 60 * 60_000; // 1 hour
 
   // Parse event_start_time → YYYYMMDD for ESPN scoreboard lookup
@@ -693,7 +693,7 @@ client.once(Events.ClientReady, (c) => {
       console.error('[LiveTracker] Card update error:', err.message);
     }
   }, SLOW_INTERVAL);
-  console.log('   🖼️  Live card update poller started (5min interval)');
+  console.log('   🖼️  Live card update poller started (30s interval)');
 
   // ── Auto-Resolve Poller (every 30s) ──
   // Checks finished games, resolves single bets and parlay legs, sets auto-close timer
