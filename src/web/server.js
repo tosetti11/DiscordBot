@@ -3483,7 +3483,12 @@ IMPORTANT RULES:
       const content = oaiData.choices?.[0]?.message?.content?.trim();
       if (!content) return res.status(502).json({ error: 'Empty OpenAI response' });
 
-      const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      // Strip markdown fences and fix +120 style odds (not valid JSON — JSON forbids leading +)
+      const jsonStr = content
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .replace(/:\s*\+(\d)/g, ': $1')   // "+120" → "120"
+        .trim();
       const picks = JSON.parse(jsonStr);
 
       if (!Array.isArray(picks) || picks.length === 0) {
