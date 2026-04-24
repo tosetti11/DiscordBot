@@ -695,15 +695,22 @@ function updateWagerFields(wager) {
     if (label) label.textContent = wager === '3ball' ? '⛳ 3-Ball Match Details' : '⛳ 2-Ball Match Details';
     const playerCRow = document.getElementById('matchplay-playerc-row');
     if (playerCRow) playerCRow.style.display = wager === '3ball' ? '' : 'none';
+    // Always show tie checkbox for 2ball/3ball
+    const tieRowEl = document.getElementById('matchplay-tie-row');
+    if (tieRowEl) tieRowEl.style.display = '';
     return;
   } else {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
     periodRow.classList.add('hidden');
   }
-  // Hide matchplay fields when switching away from 2ball/3ball
+  // Hide matchplay fields and tie row when switching away from 2ball/3ball
   const matchplayFields = document.getElementById('matchplay-fields');
   if (matchplayFields) matchplayFields.classList.add('hidden');
+  const tieRowEl2 = document.getElementById('matchplay-tie-row');
+  if (tieRowEl2) tieRowEl2.style.display = 'none';
+  const tieEl2 = document.getElementById('matchplay-bet-tie');
+  if (tieEl2) tieEl2.checked = false;
 }
 
 // ── Sport-specific field visibility (single bet) ──
@@ -1872,7 +1879,7 @@ async function handleSlipFile(e) {
     trackActivity('ocr_scan');
 
   } catch (err) {
-    showToast(err.message || 'Failed to scan bet slip');
+    showToast(err.message || 'Failed to scan bet slip', 12000);
   } finally {
     scanStatus.classList.add('hidden');
     document.getElementById('scan-slip-btn').disabled = false;
