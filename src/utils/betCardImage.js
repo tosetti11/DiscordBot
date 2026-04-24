@@ -313,6 +313,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   let golfData = null;
   let legGolfData = [];
   let matchPlayData = null;
+  let legMatchPlayData = [];
 
   const isGolf = bet.sport?.startsWith('golf');
   const is2Ball = isGolf && (bet.wager_type === '2ball' || bet.wager_type === '3ball') && bet.match_player_a && bet.match_player_b;
@@ -342,6 +343,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       bet.parlay_legs.map(leg => {
         if (!leg.espn_game_id) return null;
         if (leg.sport?.startsWith('golf') && leg.player_name) return null; // handled by legGolfData
+        if (leg.sport?.startsWith('golf') && ['2ball','3ball'].includes(leg.wager_type)) return null; // handled by legMatchPlayData
         return fetchLiveScore(leg.sport, leg.espn_game_id, leg.wager_type);
       })
     );
@@ -349,6 +351,19 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       bet.parlay_legs.map(leg => {
         if (!leg.espn_game_id || !leg.sport?.startsWith('golf') || !leg.player_name) return null;
         return getGolfPlayerRound(leg.player_name, leg.golf_round || null);
+      })
+    );
+    legMatchPlayData = await Promise.all(
+      bet.parlay_legs.map(leg => {
+        const isLeg2Ball = leg.sport?.startsWith('golf') &&
+          ['2ball', '3ball'].includes(leg.wager_type) &&
+          leg.match_player_a && leg.match_player_b;
+        if (!isLeg2Ball) return null;
+        return getGolf2BallLive({
+          playerA: leg.match_player_a, playerA2: leg.match_player_a2 || null,
+          playerB: leg.match_player_b, playerB2: leg.match_player_b2 || null,
+          playerC: leg.match_player_c || null, roundNum: leg.golf_round || null
+        }).catch(() => null);
       })
     );
   }
@@ -486,6 +501,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       if (legScoreData && legScoreData.state !== 'pre') y += 20;
       const legGdPre = legGolfData[li];
       if (legGdPre && legGdPre.roundStatus !== 'pre') y += 42; // golf tracker
+      const legMpdPre = legMatchPlayData[li];
+      if (legMpdPre && legMpdPre.overallStatus !== 'pre') y += 52; // match-play tracker
       if (legPropStats[li]) y += 18; // prop stat progress
       if (legBattingLines[li]) y += 16; // batting line
       if (leg.odds_american) y += 15; // odds line
@@ -952,9 +969,11 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       const legSport = (SPORT_NAMES[leg.sport] || leg.sport || '').toUpperCase();
       const legLsData = legLiveScores[i];
       const legGd = legGolfData[i];
+      const legMpd = legMatchPlayData[i];
       const legIsLive = leg.status === 'open' && (
         (legLsData && legLsData.state === 'in') ||
-        (legGd && legGd.roundStatus === 'in')
+        (legGd && legGd.roundStatus === 'in') ||
+        (legMpd && legMpd.overallStatus === 'in')
       );
 
       // Draw status indicator
@@ -1123,6 +1142,42 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         const btw = ctx.measureText(bText).width;
         ctx.fillText(bText, bx + (bw - btw) / 2, by + 7);
         curY += 42;
+      }
+      // Leg match-play tracker (2ball / 3ball)
+      if (legMpd && legMpd.overallStatus !== 'pre') {
+        const mpLive = legMpd.overallStatus === 'in';
+        const mpFinal = legMpd.overallStatus === 'post';
+        const mpBg = mpLive ? 'rgba(80, 200, 80, 0.08)' : 'rgba(128, 128, 128, 0.06)';
+        const mpH = 50;
+        roundRect(ctx, legX - 2, curY + 2, legInner + 4, mpH, 5);
+        ctx.fillStyle = mpBg;
+        ctx.fill();
+        ctx.strokeStyle = mpLive ? 'rgba(80, 200, 80, 0.3)' : 'rgba(128, 128, 128, 0.15)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, legX - 2, curY + 2, legInner + 4, mpH, 5);
+        ctx.stroke();
+        const mx = legX + 4;
+        const msLabel = legMpd.matchStatus
+          ? legMpd.matchStatus.label
+          : 'AS';
+        const msColor = legMpd.matchStatus?.ahead === true ? C.win : (legMpd.matchStatus?.ahead === false ? C.loss : C.textMuted);
+        const thruStr = legMpd.maxHoles > 0
+          ? (mpFinal ? 'Final' : `Thru ${legMpd.maxHoles}`)
+          : (mpFinal ? 'Final' : 'In Progress');
+        ctx.font = 'bold 10px ' + FF;
+        ctx.fillStyle = mpLive ? C.win : C.textSecondary;
+        const grpAStr = `${legMpd.groupA.displayName}: ${legMpd.groupA.roundScore != null ? legMpd.groupA.roundScore : '-'}`;
+        ctx.fillText(grpAStr, mx, curY + 14);
+        ctx.font = '10px ' + FF;
+        ctx.fillStyle = C.textMuted;
+        const grpBStr = `${legMpd.groupB.displayName}: ${legMpd.groupB.roundScore != null ? legMpd.groupB.roundScore : '-'}`;
+        ctx.fillText(grpBStr, mx, curY + 26);
+        ctx.font = 'bold 10px ' + FF;
+        ctx.fillStyle = msColor;
+        const statusStr = `${msLabel}  ${thruStr}`;
+        const sw = ctx.measureText(statusStr).width;
+        ctx.fillText(statusStr, legX + legInner - sw, curY + 14);
+        curY += 52;
       }
       // Leg prop stat progress
       const legPs = legPropStats[i];

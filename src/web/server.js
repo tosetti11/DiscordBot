@@ -4719,6 +4719,24 @@ IMPORTANT RULES:
         for (const [sport, legs] of Object.entries(sportLegs)) {
           const games = await espn.getTodaysGames(sport);
           for (const leg of legs) {
+            // 2ball / 3ball matchup legs — use match-play live tracker instead of game scores
+            if (['2ball', '3ball'].includes(leg.wager_type) && leg.match_player_a && leg.match_player_b) {
+              try {
+                const matchData = await espn.getGolf2BallLive({
+                  playerA: leg.match_player_a,
+                  playerA2: leg.match_player_a2 || null,
+                  playerB: leg.match_player_b,
+                  playerB2: leg.match_player_b2 || null,
+                  playerC: leg.match_player_c || null,
+                  roundNum: leg.golf_round || null
+                });
+                if (matchData) results.legs[leg.id] = { matchPlay: matchData };
+              } catch (e) {
+                console.error('[LiveTracker] 2ball parlay leg error:', e.message);
+              }
+              continue;
+            }
+
             const game = games.find(g => g.id === leg.espn_game_id);
             if (!game) continue;
 

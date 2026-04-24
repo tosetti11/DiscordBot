@@ -3877,7 +3877,12 @@ async function fetchLiveTracker(betId) {
       // Parlay — render per-leg trackers
       for (const [legId, legData] of Object.entries(data.legs)) {
         const legEl = document.getElementById(`leg-tracker-${legId}`);
-        if (legEl) renderBetTracker(legEl, legData, true);
+        if (!legEl) continue;
+        if (legData.matchPlay) {
+          renderMatchPlayTracker(legEl, legData.matchPlay);
+        } else {
+          renderBetTracker(legEl, legData, true);
+        }
       }
       // Clear the main tracker area for parlays (legs have their own)
       el.innerHTML = '';
@@ -3907,7 +3912,11 @@ function checkAllFinal(data) {
   if (data.bet && data.bet.state !== 'post') return false;
   if (data.legs) {
     for (const leg of Object.values(data.legs)) {
-      if (leg.state !== 'post') return false;
+      if (leg.matchPlay) {
+        if (leg.matchPlay.overallStatus !== 'post') return false;
+      } else if (leg.state !== 'post') {
+        return false;
+      }
     }
   }
   return true;
