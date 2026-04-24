@@ -1697,7 +1697,7 @@ async function findGameById(sport, gameId, preferredDateStr) {
  * @param {number}  [params.roundNum] - Tournament round (1-4)
  * @returns {Object|null} match-play data structure
  */
-async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC, roundNum } = {}) {
+async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC, roundNum, holeNum } = {}) {
   if (!playerA || !playerB) return null;
 
   const espnPath = ESPN_PATHS.golf_pga;
@@ -1751,7 +1751,7 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
 
     // Extract per-player round info
     function extractPlayer(comp, rNum) {
-      if (!comp) return { name: null, found: false, roundScore: null, holesCompleted: 0, roundStatus: 'pre', overallScore: 'E' };
+      if (!comp) return { name: null, found: false, roundScore: null, holesCompleted: 0, roundStatus: 'pre', overallScore: 'E', holeStrokes: null, holeCompleted: false };
 
       const rounds = comp.linescores || [];
       const currentRound = event.competitions?.[0]?.status?.period || rounds.length || 1;
@@ -1762,6 +1762,8 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
       let toParScore = 0;
       let hasToParData = false;
       let strokeCount = 0;
+      let holeStrokes = null;   // strokes on the specific holeNum (null = not yet played)
+      let holeCompleted = false;
 
       if (round?.linescores?.length) {
         holesCompleted = round.linescores.length;
@@ -1772,6 +1774,11 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
           if (tpStr !== undefined && tpStr !== null) {
             hasToParData = true;
             toParScore += tpStr === 'E' ? 0 : (parseInt(tpStr) || 0);
+          }
+          // Hole-specific: hole.period is the hole number (1-18)
+          if (holeNum && hole.period === holeNum) {
+            holeStrokes = hole.value || 0;
+            holeCompleted = true;
           }
         }
       }
@@ -1802,6 +1809,8 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
         roundStatus,
         overallScore: comp.score || 'E',
         position: comp.order || null,
+        holeStrokes,
+        holeCompleted,
       };
     }
 
@@ -1864,12 +1873,67 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
     if (statuses.every(s => s === 'post')) overallStatus = 'post';
     else if (statuses.some(s => s === 'in' || s === 'post')) overallStatus = 'in';
 
+    // ── Hole-specific mode ──
+    // When holeNum is set, compute per-group hole strokes and a hole winner.
+    // For team format (A2/B2), lowest single-player stroke count on the hole wins (best-ball/alt-shot TBD).
+    let holeMode = false;
+    let holeData = null;
+    if (holeNum) {
+      holeMode = true;
+      // Find holes completed for the target hole from each primary player
+      const holeA = pA.holeCompleted ? pA.holeStrokes : (isTeamFormat && pA2.holeCompleted ? pA2.holeStrokes : null);
+      const holeB = pB.holeCompleted ? pB.holeStrokes : (isTeamFormat && pB2.holeCompleted ? pB2.holeStrokes : null);
+      const holeC = is3Ball && pC.holeCompleted ? pC.holeStrokes : null;
+
+      // A hole is completed for a group once we have their strokes for it
+      const holeADone = holeA != null;
+      const holeBDone = holeB != null;
+      const holeCDone = !is3Ball || holeC != null;
+      const holeCompleted = holeADone && holeBDone && holeCDone;
+
+      // Hole winner (lower strokes wins; tie = all square)
+      let holeWinner = null; // 'A', 'B', 'C', or 'tie'
+      if (holeCompleted) {
+        const scores = [
+          { group: 'A', strokes: holeA },
+          { group: 'B', strokes: holeB },
+          ...(is3Ball ? [{ group: 'C', strokes: holeC }] : []),
+        ];
+        const minStrokes = Math.min(...scores.map(s => s.strokes));
+        const winners = scores.filter(s => s.strokes === minStrokes);
+        holeWinner = winners.length === 1 ? winners[0].group : 'tie';
+      }
+
+      // Hole status: 'pre' if nobody on the hole yet, 'in' if some are done, 'post' if all done
+      const anyStarted = holeADone || holeBDone || (is3Ball && holeC != null);
+      const holeStatus = holeCompleted ? 'post' : (anyStarted ? 'in' : 'pre');
+      // Also treat as post if everyone has passed the hole already (holesCompleted >= holeNum)
+      const allPastHole = allPlayers.every(p => p.holesCompleted >= holeNum);
+      const holeOverallStatus = (holeCompleted || allPastHole) ? 'post' : holeStatus;
+
+      holeData = {
+        holeNum,
+        holeA, holeB, holeC,
+        holeCompleted: holeCompleted || allPastHole,
+        holeWinner,       // 'A', 'B', 'C', 'tie', or null
+        overallStatus: holeOverallStatus,
+      };
+
+      // When in hole mode, overallStatus tracks the hole completion status
+      if (holeOverallStatus === 'post') overallStatus = 'post';
+      else if (holeOverallStatus === 'in' || holeOverallStatus === 'pre') {
+        overallStatus = anyStarted ? 'in' : 'pre';
+      }
+    }
+
     return {
       tournamentName,
       roundNum: roundNum || (event.competitions?.[0]?.status?.period || 1),
       overallStatus,
       isTeamFormat,
       is3Ball,
+      holeMode,
+      holeData,
       maxHoles,
       groupA: {
         displayName: groupADisplayName,
@@ -1880,6 +1944,7 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
           ? pA.strokeCount + (!teamAisSingleEntry && isTeamFormat && pA2.strokeCount != null ? pA2.strokeCount : 0)
           : null,
         holesCompleted: Math.max(pA.holesCompleted, isTeamFormat && !teamAisSingleEntry ? (pA2.holesCompleted || 0) : 0),
+        holeStrokes: holeMode ? (holeData?.holeA ?? null) : null,
       },
       groupB: {
         displayName: groupBDisplayName,
@@ -1890,6 +1955,7 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
           ? pB.strokeCount + (!teamBisSingleEntry && isTeamFormat && pB2.strokeCount != null ? pB2.strokeCount : 0)
           : null,
         holesCompleted: Math.max(pB.holesCompleted, isTeamFormat && !teamBisSingleEntry ? (pB2.holesCompleted || 0) : 0),
+        holeStrokes: holeMode ? (holeData?.holeB ?? null) : null,
       },
       groupC: is3Ball ? {
         displayName: pC.name || playerC,
@@ -1897,6 +1963,7 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
         player2: null,
         roundScore: groupCScore,
         holesCompleted: pC.holesCompleted,
+        holeStrokes: holeMode ? (holeData?.holeC ?? null) : null,
       } : null,
       matchStatus: statusVsB,
       matchStatusVsC: statusVsC,

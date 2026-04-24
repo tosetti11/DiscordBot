@@ -4667,6 +4667,7 @@ IMPORTANT RULES:
             playerB2: bet.match_player_b2 || null,
             playerC:  bet.match_player_c  || null,
             roundNum: bet.golf_round || null,
+            holeNum:  bet.golf_hole  || null,
           });
           if (matchData) results.matchPlay = matchData;
         } catch (e) {
@@ -4738,7 +4739,8 @@ IMPORTANT RULES:
                   playerB: leg.match_player_b,
                   playerB2: leg.match_player_b2 || null,
                   playerC: leg.match_player_c || null,
-                  roundNum: leg.golf_round || null
+                  roundNum: leg.golf_round || null,
+                  holeNum:  leg.golf_hole  || null,
                 });
                 if (matchData) results.legs[leg.id] = { matchPlay: matchData };
               } catch (e) {

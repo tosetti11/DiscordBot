@@ -418,12 +418,13 @@ client.once(Events.ClientReady, (c) => {
                   const mpData = await espn.getGolf2BallLive({
                     playerA: leg.match_player_a, playerA2: leg.match_player_a2 || null,
                     playerB: leg.match_player_b, playerB2: leg.match_player_b2 || null,
-                    playerC: leg.match_player_c || null, roundNum: leg.golf_round || null
+                    playerC: leg.match_player_c || null, roundNum: leg.golf_round || null,
+                    holeNum: leg.golf_hole || null,
                   });
                   if (mpData && (mpData.overallStatus === 'in' || mpData.overallStatus === 'post')) {
                     if (mpData.overallStatus !== 'post') allGamesPost = false;
                     else allGamesPost = allGamesPost && true;
-                    const hashPart = `2ball:${leg.id}:${mpData.maxHoles}:${mpData.groupA.roundScore}:${mpData.groupB.roundScore}:${mpData.matchStatus?.label}`;
+                    const hashPart = `2ball:${leg.id}:${mpData.maxHoles}:${mpData.groupA.roundScore}:${mpData.groupB.roundScore}:${mpData.matchStatus?.label}:${mpData.holeData?.holeWinner ?? ''}`;
                     hashParts.push(hashPart);
                     if (mpData.overallStatus === 'in') isLive = true;
                   }
@@ -497,11 +498,12 @@ client.once(Events.ClientReady, (c) => {
               const mpData = await espn.getGolf2BallLive({
                 playerA: bet.match_player_a, playerA2: bet.match_player_a2 || null,
                 playerB: bet.match_player_b, playerB2: bet.match_player_b2 || null,
-                playerC: bet.match_player_c || null, roundNum: bet.golf_round || null
+                playerC: bet.match_player_c || null, roundNum: bet.golf_round || null,
+                holeNum: bet.golf_hole || null,
               }).catch(() => null);
               if (mpData && (mpData.overallStatus === 'in' || mpData.overallStatus === 'post')) {
                 if (mpData.overallStatus !== 'post') allGamesPost = false;
-                const hash = `mp:${mpData.maxHoles}:${mpData.groupA.roundScore}:${mpData.groupB.roundScore}:${mpData.matchStatus?.label}:${mpData.overallStatus}`;
+                const hash = `mp:${mpData.maxHoles}:${mpData.groupA.roundScore}:${mpData.groupB.roundScore}:${mpData.matchStatus?.label}:${mpData.overallStatus}:${mpData.holeData?.holeWinner ?? ''}`;
                 if (cardUpdateTracker.get(bet.id) === hash) {
                   if (allGamesPost) cardFinalRendered.add(bet.id);
                   continue;
@@ -981,6 +983,100 @@ client.once(Events.ClientReady, (c) => {
           await db.updateParlayLegStatus(leg.id, result);
           parlayBetsToCheck.add(leg.bet_id);
           console.log(`[LiveTracker] Parlay leg ${leg.id} resolved: ${result}`);
+        }
+      }
+
+      // ── Resolve 2ball/3ball hole-score single bets ──
+      const { data: open2BallSingles } = await supa
+        .from('bets')
+        .select('*')
+        .eq('status', 'open')
+        .eq('bet_type', 'single')
+        .in('wager_type', ['2ball', '3ball'])
+        .not('match_player_a', 'is', null)
+        .not('golf_hole', 'is', null)
+        .is('auto_close_at', null);
+
+      for (const bet of (open2BallSingles || [])) {
+        try {
+          const mpData = await espn.getGolf2BallLive({
+            playerA: bet.match_player_a, playerA2: bet.match_player_a2 || null,
+            playerB: bet.match_player_b, playerB2: bet.match_player_b2 || null,
+            playerC: bet.match_player_c || null, roundNum: bet.golf_round || null,
+            holeNum: bet.golf_hole || null,
+          });
+          if (!mpData || mpData.overallStatus !== 'post') continue;
+
+          // Hole-score bet: only resolve when the specific hole is complete
+          if (!mpData.holeMode || !mpData.holeData) continue;
+          const { holeWinner } = mpData.holeData;
+          if (holeWinner === null) continue; // hole not yet complete
+          let result = null;
+          if (holeWinner === 'tie') result = 'push';
+          else if (holeWinner === 'A') result = 'win';
+          else result = 'loss';
+
+          if (result) {
+            const autoCloseAt = new Date(Date.now() + AUTO_CLOSE_DELAY).toISOString();
+            const noteHole = bet.golf_hole ? ` (Hole ${bet.golf_hole})` : '';
+            await supa.from('bets').update({
+              auto_close_at: autoCloseAt,
+              result_note: `Auto-resolved: ${result}${noteHole}`,
+            }).eq('id', bet.id);
+            try {
+              const user = await client.users.fetch(bet.discord_id).catch(() => null);
+              if (user) {
+                const emoji = result === 'win' ? '✅' : result === 'loss' ? '❌' : '🔄';
+                const holeLabel = bet.golf_hole ? `Hole ${bet.golf_hole}` : 'Round';
+                const scoreA = mpData.holeMode ? mpData.holeData.holeA : mpData.groupA.roundScore;
+                const scoreB = mpData.holeMode ? mpData.holeData.holeB : mpData.groupB.roundScore;
+                await user.send(
+                  `⛳ **${holeLabel} Complete** — ${mpData.groupA.displayName} (${scoreA}) vs ${mpData.groupB.displayName} (${scoreB})\n${emoji} \`${bet.slip_number}\` looks like a **${result.toUpperCase()}**!\n> ${bet.pick}\n\n⏰ Auto-closing in 1 hour.`
+                ).catch(() => {});
+              }
+            } catch {}
+            console.log(`[LiveTracker] 2ball/3ball bet ${bet.slip_number} auto-resolved: ${result}`);
+          }
+        } catch (e) {
+          console.error('[LiveTracker] 2ball auto-resolve error:', e.message);
+        }
+      }
+
+      // ── Resolve 2ball/3ball hole-score parlay legs ──
+      const { data: open2BallLegs } = await supa
+        .from('parlay_legs')
+        .select('*')
+        .eq('status', 'open')
+        .in('wager_type', ['2ball', '3ball'])
+        .not('match_player_a', 'is', null)
+        .not('golf_hole', 'is', null);
+
+      for (const leg of (open2BallLegs || [])) {
+        try {
+          const mpData = await espn.getGolf2BallLive({
+            playerA: leg.match_player_a, playerA2: leg.match_player_a2 || null,
+            playerB: leg.match_player_b, playerB2: leg.match_player_b2 || null,
+            playerC: leg.match_player_c || null, roundNum: leg.golf_round || null,
+            holeNum: leg.golf_hole || null,
+          });
+          if (!mpData || mpData.overallStatus !== 'post') continue;
+
+          // Hole-score leg: only resolve when the specific hole is complete
+          if (!mpData.holeMode || !mpData.holeData) continue;
+          const { holeWinner } = mpData.holeData;
+          if (holeWinner === null) continue;
+          let result = null;
+          if (holeWinner === 'tie') result = 'push';
+          else if (holeWinner === 'A') result = 'win';
+          else result = 'loss';
+
+          if (result) {
+            await db.updateParlayLegStatus(leg.id, result);
+            parlayBetsToCheck.add(leg.bet_id);
+            console.log(`[LiveTracker] 2ball parlay leg ${leg.id} resolved: ${result}`);
+          }
+        } catch (e) {
+          console.error('[LiveTracker] 2ball parlay leg error:', e.message);
         }
       }
 

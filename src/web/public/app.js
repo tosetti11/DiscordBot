@@ -3935,6 +3935,48 @@ function renderMatchPlayTracker(el, mp) {
 
   const isLive = mp.overallStatus === 'in';
   const isFinal = mp.overallStatus === 'post';
+
+  // ── Hole-score mode ──
+  if (mp.holeMode && mp.holeData) {
+    const hd = mp.holeData;
+    const holeLabel = `Hole ${hd.holeNum}`;
+    const statusHtml = isLive
+      ? `<span class="tracker-status tracker-live">🔴 LIVE — ${holeLabel}</span>`
+      : isFinal
+        ? `<span class="tracker-status tracker-final">🏁 FINAL — ${holeLabel}</span>`
+        : `<span class="tracker-status">⏳ ${holeLabel} — Waiting...</span>`;
+
+    const holeGroupRow = (group, holeStrokes) => {
+      if (!group) return '';
+      const strokesStr = holeStrokes != null ? `${holeStrokes}` : '—';
+      return `<div class="matchplay-group-row"><span class="matchplay-group-name">${esc(group.displayName)}: <span class="matchplay-group-score">${strokesStr}</span></span></div>`;
+    };
+
+    let resultBadge = '';
+    if (hd.holeWinner) {
+      if (hd.holeWinner === 'tie') {
+        resultBadge = `<div class="matchplay-status-badge matchplay-badge-as">TIE</div>`;
+      } else {
+        const winGroup = hd.holeWinner === 'A' ? mp.groupA : hd.holeWinner === 'B' ? mp.groupB : mp.groupC;
+        const winName = winGroup?.displayName || hd.holeWinner;
+        resultBadge = `<div class="matchplay-status-badge matchplay-badge-up">${esc(winName)} wins</div>`;
+      }
+    }
+
+    el.innerHTML = `
+      <div class="tracker-content">
+        ${statusHtml}
+        <div class="matchplay-scorecard">
+          ${holeGroupRow(mp.groupA, hd.holeA)}
+          ${resultBadge}
+          ${holeGroupRow(mp.groupB, hd.holeB)}
+          ${mp.groupC ? holeGroupRow(mp.groupC, hd.holeC) : ''}
+        </div>
+      </div>`;
+    return;
+  }
+
+  // ── Round matchup mode ──
   const statusHtml = isLive
     ? `<span class="tracker-status tracker-live">🔴 LIVE — R${mp.roundNum || ''}</span>`
     : isFinal
