@@ -1431,7 +1431,9 @@ async function handleSubmit(e) {
           if (mpRound) body.golfRound = parseInt(mpRound);
           const mpHole = document.getElementById('matchplay-hole')?.value;
           if (mpHole) body.golfHole = parseInt(mpHole);
-          body.teamA = mpA2 ? `${mpA} / ${mpA2}` : mpA;
+          const isTieBet = !!(document.getElementById('matchplay-bet-tie')?.checked);
+          if (isTieBet) body.isTieBet = true;
+          body.teamA = isTieBet ? 'Tie' : (mpA2 ? `${mpA} / ${mpA2}` : mpA);
           body.teamB = mpB2 ? `${mpB} / ${mpB2}` : mpB;
         } else {
           body.teamA = document.getElementById('team-a').value;
