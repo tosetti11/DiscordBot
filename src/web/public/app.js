@@ -8404,6 +8404,245 @@ function renderMlbEntry(e, market) {
   `;
 }
 
+          }
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════
+//  MLB Analytics
+// ═══════════════════════════════════════════════
+
+const mlbAnalyticsCache = {};
+
+function switchMlbView(market, view) {
+  document.querySelectorAll(`.mlb-view-tab[data-market="${market}"]`).forEach(t => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+  document.getElementById(`mlb-view-games-${market}`).classList.toggle('hidden', view !== 'games');
+  document.getElementById(`mlb-view-analytics-${market}`).classList.toggle('hidden', view !== 'analytics');
+  if (view === 'analytics' && !mlbAnalyticsCache[market]) {
+    loadMlbAnalytics(market);
+  }
+}
+
+async function loadMlbAnalytics(market) {
+  if (!aiPicksGuildId) return;
+  const el = document.getElementById(`mlb-analytics-${market}`);
+  el.innerHTML = '<p class="muted-text">Loading analytics...</p>';
+  try {
+    const res = await fetch(`/api/guilds/${aiPicksGuildId}/mlb-analysis/analytics?market_type=${market}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    mlbAnalyticsCache[market] = data;
+    el.innerHTML = renderMlbAnalytics(market, data);
+  } catch (err) {
+    console.error(`MLB analytics (${market}) error:`, err);
+    el.innerHTML = '<p class="muted-text">Failed to load analytics.</p>';
+  }
+}
+
+function pctColor(pct) {
+  if (pct === null || pct === undefined) return 'var(--text-muted)';
+  if (pct >= 65) return '#3fb950';
+  if (pct >= 55) return '#FFD700';
+  return '#f85149';
+}
+
+function analyticsStatBar(pct) {
+  if (pct === null || pct === undefined) return '';
+  const color = pctColor(pct);
+  return `<div class="mlb-stat-bar"><div class="mlb-stat-bar-fill" style="width:${Math.min(pct, 100)}%;background:${color}"></div></div>`;
+}
+
+function analyticsTable(headers, rows) {
+  return `<table class="mlb-analytics-table">
+    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.join('')}</tbody>
+  </table>`;
+}
+
+function renderConfidenceTiers(byConfidence) {
+  if (!byConfidence || byConfidence.length === 0) return '<p class="muted-text">Not enough data yet.</p>';
+  const rows = byConfidence.map(t => `<tr>
+    <td class="mlb-at-label">${t.tier}</td>
+    <td class="hit-val">${t.hits}</td>
+    <td class="miss-val">${t.misses}</td>
+    <td style="color:${pctColor(t.pct)};font-weight:800">${t.pct !== null ? t.pct + '%' : '—'}</td>
+    <td>${analyticsStatBar(t.pct)}</td>
+  </tr>`);
+  return analyticsTable(['Confidence', 'Hits', 'Misses', 'Hit %', ''], rows);
+}
+
+function renderMlbAnalytics(market, data) {
+  if (!data || data.totalResolved === 0) {
+    return `<div class="mlb-analytics-panel"><p class="muted-text" style="padding:24px 0">Not enough resolved picks yet to show analytics.</p></div>`;
+  }
+  const { overall } = data;
+  const pctCol = pctColor(overall.pct);
+
+  // ── Summary grid ──
+  let summaryCards = `
+    <div class="mlb-stat-card">
+      <div class="mlb-stat-value">${data.totalResolved}</div>
+      <div class="mlb-stat-label">Total Resolved</div>
+    </div>
+    <div class="mlb-stat-card">
+      <div class="mlb-stat-value" style="color:${pctCol}">${overall.pct !== null ? overall.pct + '%' : '—'}</div>
+      <div class="mlb-stat-label">Overall Hit Rate</div>
+    </div>
+    <div class="mlb-stat-card">
+      <div class="mlb-stat-value" style="color:#3fb950">${overall.hits}</div>
+      <div class="mlb-stat-label">Hits</div>
+    </div>
+    <div class="mlb-stat-card">
+      <div class="mlb-stat-value" style="color:#f85149">${overall.misses}</div>
+      <div class="mlb-stat-label">Misses</div>
+    </div>`;
+
+  if (market === 'nrfi' && data.bySuggestion) {
+    const nr = data.bySuggestion.find(s => s.suggestion === 'NRFI');
+    const yr = data.bySuggestion.find(s => s.suggestion === 'YRFI');
+    if (nr) summaryCards += `<div class="mlb-stat-card"><div class="mlb-stat-value" style="color:${pctColor(nr.pct)}">${nr.pct !== null ? nr.pct + '%' : '—'}</div><div class="mlb-stat-label">NRFI Hit %</div></div>`;
+    if (yr) summaryCards += `<div class="mlb-stat-card"><div class="mlb-stat-value" style="color:${pctColor(yr.pct)}">${yr.pct !== null ? yr.pct + '%' : '—'}</div><div class="mlb-stat-label">YRFI Hit %</div></div>`;
+  } else if (market === 'f5ml' && data.bySide) {
+    const home = data.bySide.find(s => s.side === 'home');
+    const away = data.bySide.find(s => s.side === 'away');
+    if (home) summaryCards += `<div class="mlb-stat-card"><div class="mlb-stat-value" style="color:${pctColor(home.pct)}">${home.pct !== null ? home.pct + '%' : '—'}</div><div class="mlb-stat-label">Home Pick %</div></div>`;
+    if (away) summaryCards += `<div class="mlb-stat-card"><div class="mlb-stat-value" style="color:${pctColor(away.pct)}">${away.pct !== null ? away.pct + '%' : '—'}</div><div class="mlb-stat-label">Away Pick %</div></div>`;
+  } else if (market === 'teamtotal' && data.byDirection) {
+    const ov = data.byDirection.find(d => d.direction === 'Over');
+    const un = data.byDirection.find(d => d.direction === 'Under');
+    if (ov) summaryCards += `<div class="mlb-stat-card"><div class="mlb-stat-value" style="color:${pctColor(ov.pct)}">${ov.pct !== null ? ov.pct + '%' : '—'}</div><div class="mlb-stat-label">Over Hit %</div></div>`;
+    if (un) summaryCards += `<div class="mlb-stat-card"><div class="mlb-stat-value" style="color:${pctColor(un.pct)}">${un.pct !== null ? un.pct + '%' : '—'}</div><div class="mlb-stat-label">Under Hit %</div></div>`;
+  }
+
+  let html = `<div class="mlb-analytics-panel">
+    <div class="mlb-analytics-grid">${summaryCards}</div>
+    <div class="mlb-analytics-section">
+      <h4 class="mlb-analytics-title">📈 Hit Rate by Confidence</h4>
+      ${renderConfidenceTiers(data.byConfidence)}
+    </div>`;
+
+  // ── NRFI sections ──
+  if (market === 'nrfi') {
+    if (data.bySuggestion && data.bySuggestion.length > 0) {
+      const rows = data.bySuggestion.map(s => `<tr>
+        <td><span class="mlb-suggestion-pill" style="background:${s.suggestion === 'NRFI' ? '#3fb95020' : '#f8514920'};color:${s.suggestion === 'NRFI' ? '#3fb950' : '#f85149'};border:1px solid ${s.suggestion === 'NRFI' ? '#3fb95040' : '#f8514940'}">${s.suggestion}</span></td>
+        <td class="hit-val">${s.hits}</td><td class="miss-val">${s.misses}</td>
+        <td style="color:${pctColor(s.pct)};font-weight:800">${s.pct !== null ? s.pct + '%' : '—'}</td>
+        <td>${analyticsStatBar(s.pct)}</td>
+      </tr>`);
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">⚾ NRFI vs YRFI Split</h4>${analyticsTable(['Pick', 'Hits', 'Misses', 'Hit %', ''], rows)}</div>`;
+    }
+    if (data.byTeam && data.byTeam.length > 0) {
+      const homeTeams = data.byTeam.filter(t => t.role === 'home').slice(0, 20);
+      const awayTeams = data.byTeam.filter(t => t.role === 'away').slice(0, 20);
+      if (homeTeams.length > 0) {
+        const rows = homeTeams.map(t => `<tr>
+          <td class="mlb-at-label"><strong>${t.team}</strong></td>
+          <td class="hit-val">${t.nrfiHits}-${t.nrfiMisses}</td>
+          <td style="color:${pctColor(t.nrfiPct)};font-weight:700">${t.nrfiPct !== null ? t.nrfiPct + '%' : '—'}</td>
+          <td class="hit-val">${t.yrfiHits}-${t.yrfiMisses}</td>
+          <td style="color:${pctColor(t.yrfiPct)};font-weight:700">${t.yrfiPct !== null ? t.yrfiPct + '%' : '—'}</td>
+        </tr>`);
+        html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">🏠 By Home Team</h4>${analyticsTable(['Team', 'NRFI W-L', 'NRFI %', 'YRFI W-L', 'YRFI %'], rows)}</div>`;
+      }
+      if (awayTeams.length > 0) {
+        const rows = awayTeams.map(t => `<tr>
+          <td class="mlb-at-label"><strong>${t.team}</strong></td>
+          <td class="hit-val">${t.nrfiHits}-${t.nrfiMisses}</td>
+          <td style="color:${pctColor(t.nrfiPct)};font-weight:700">${t.nrfiPct !== null ? t.nrfiPct + '%' : '—'}</td>
+          <td class="hit-val">${t.yrfiHits}-${t.yrfiMisses}</td>
+          <td style="color:${pctColor(t.yrfiPct)};font-weight:700">${t.yrfiPct !== null ? t.yrfiPct + '%' : '—'}</td>
+        </tr>`);
+        html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">✈️ By Away Team</h4>${analyticsTable(['Team', 'NRFI W-L', 'NRFI %', 'YRFI W-L', 'YRFI %'], rows)}</div>`;
+      }
+    } else {
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">🏟️ By Team</h4><p class="muted-text">Need 3+ resolved games per team to show.</p></div>`;
+    }
+
+  // ── F5 ML sections ──
+  } else if (market === 'f5ml') {
+    if (data.bySide && data.bySide.length > 0) {
+      const rows = data.bySide.map(s => `<tr>
+        <td class="mlb-at-label">${s.side === 'home' ? '🏠 Home pick' : '✈️ Away pick'}</td>
+        <td class="hit-val">${s.hits}</td><td class="miss-val">${s.misses}</td>
+        <td style="color:${pctColor(s.pct)};font-weight:800">${s.pct !== null ? s.pct + '%' : '—'}</td>
+        <td>${analyticsStatBar(s.pct)}</td>
+      </tr>`);
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">🏠 Home vs Away Picks</h4>${analyticsTable(['Side', 'Hits', 'Misses', 'Hit %', ''], rows)}</div>`;
+    }
+    if (data.byOddsRange && data.byOddsRange.length > 0) {
+      const rows = data.byOddsRange.map(r => `<tr>
+        <td class="mlb-at-label">${r.range}</td>
+        <td class="hit-val">${r.hits}</td><td class="miss-val">${r.misses}</td>
+        <td style="color:${pctColor(r.pct)};font-weight:800">${r.pct !== null ? r.pct + '%' : '—'}</td>
+        <td>${analyticsStatBar(r.pct)}</td>
+      </tr>`);
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">💰 Hit Rate by Odds Range</h4>${analyticsTable(['Odds Range', 'Hits', 'Misses', 'Hit %', ''], rows)}</div>`;
+    }
+    if (data.byPickedTeam && data.byPickedTeam.length > 0) {
+      const rows = data.byPickedTeam.slice(0, 20).map(t => `<tr>
+        <td class="mlb-at-label"><strong>${t.team}</strong></td>
+        <td class="hit-val">${t.hits}</td><td class="miss-val">${t.misses}</td>
+        <td style="color:${pctColor(t.pct)};font-weight:800">${t.pct !== null ? t.pct + '%' : '—'}</td>
+        <td>${analyticsStatBar(t.pct)}</td>
+      </tr>`);
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">🎯 Hit Rate by Picked Team</h4>${analyticsTable(['Team', 'Hits', 'Misses', 'Hit %', ''], rows)}</div>`;
+    } else {
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">🎯 By Picked Team</h4><p class="muted-text">Need 3+ picks per team to show.</p></div>`;
+    }
+
+  // ── Team Total sections ──
+  } else if (market === 'teamtotal') {
+    if (data.byDirection && data.byDirection.length > 0) {
+      const rows = data.byDirection.map(d => `<tr>
+        <td><span class="mlb-suggestion-pill" style="background:${d.direction === 'Over' ? '#3fb95020' : '#f8514920'};color:${d.direction === 'Over' ? '#3fb950' : '#f85149'};border:1px solid ${d.direction === 'Over' ? '#3fb95040' : '#f8514940'}">${d.direction}</span></td>
+        <td class="hit-val">${d.hits}</td><td class="miss-val">${d.misses}</td>
+        <td style="color:${pctColor(d.pct)};font-weight:800">${d.pct !== null ? d.pct + '%' : '—'}</td>
+        <td>${analyticsStatBar(d.pct)}</td>
+      </tr>`);
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">📈 Over vs Under</h4>${analyticsTable(['Direction', 'Hits', 'Misses', 'Hit %', ''], rows)}</div>`;
+    }
+    if (data.bySide && data.bySide.length > 0) {
+      const rows = data.bySide.map(s => `<tr>
+        <td class="mlb-at-label">${s.label}</td>
+        <td class="hit-val">${s.hits}</td><td class="miss-val">${s.misses}</td>
+        <td style="color:${pctColor(s.pct)};font-weight:800">${s.pct !== null ? s.pct + '%' : '—'}</td>
+        <td>${analyticsStatBar(s.pct)}</td>
+      </tr>`);
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">🏠 Home vs Away Team Total</h4>${analyticsTable(['Side', 'Hits', 'Misses', 'Hit %', ''], rows)}</div>`;
+    }
+    if (data.byLine && data.byLine.length > 0) {
+      const rows = data.byLine.map(r => `<tr>
+        <td class="mlb-at-label">${r.range}</td>
+        <td class="hit-val">${r.hits}</td><td class="miss-val">${r.misses}</td>
+        <td style="color:${pctColor(r.pct)};font-weight:800">${r.pct !== null ? r.pct + '%' : '—'}</td>
+        <td>${analyticsStatBar(r.pct)}</td>
+      </tr>`);
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">📏 Hit Rate by Line</h4>${analyticsTable(['Line Range', 'Hits', 'Misses', 'Hit %', ''], rows)}</div>`;
+    }
+    if (data.byTeam && data.byTeam.length > 0) {
+      const rows = data.byTeam.slice(0, 20).map(t => `<tr>
+        <td class="mlb-at-label"><strong>${t.team}</strong></td>
+        <td class="hit-val">${t.overHits}-${t.overMisses}</td>
+        <td style="color:${pctColor(t.overPct)};font-weight:700">${t.overPct !== null ? t.overPct + '%' : '—'}</td>
+        <td class="hit-val">${t.underHits}-${t.underMisses}</td>
+        <td style="color:${pctColor(t.underPct)};font-weight:700">${t.underPct !== null ? t.underPct + '%' : '—'}</td>
+      </tr>`);
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">🎯 Over/Under by Team</h4>${analyticsTable(['Team', 'Over W-L', 'Over %', 'Under W-L', 'Under %'], rows)}</div>`;
+    } else {
+      html += `<div class="mlb-analytics-section"><h4 class="mlb-analytics-title">🎯 By Team</h4><p class="muted-text">Need 3+ picks per team to show.</p></div>`;
+    }
+  }
+
+  html += '</div>'; // end panel
+  return html;
+}
+
 // ═══════════════════════════════════════════════
 //  Golf Admin (Screenshot → GPT-4o → Discord)
 // ═══════════════════════════════════════════════

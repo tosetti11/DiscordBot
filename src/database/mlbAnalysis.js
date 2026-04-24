@@ -173,6 +173,18 @@ async function deleteAnalysisForToday(marketType, guildId, date) {
   console.log(`[MLB DB] Deleted ${marketType} entries + message for ${date} / ${guildId}`);
 }
 
+async function getAllResolved(marketType, guildId) {
+  const { data, error } = await supabase
+    .from('mlb_daily_analysis')
+    .select('suggestion, confidence, status, home_abbr, away_abbr, line, espn_game_id, odds')
+    .eq('market_type', marketType)
+    .eq('guild_id', guildId)
+    .in('status', ['hit', 'miss', 'push'])
+    .order('analysis_date', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
 module.exports = {
   createAnalysisEntries,
   getAnalysisByDate,
@@ -185,4 +197,5 @@ module.exports = {
   saveMessage,
   getMessage,
   deleteAnalysisForToday,
+  getAllResolved,
 };

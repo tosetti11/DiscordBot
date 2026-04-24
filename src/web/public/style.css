@@ -6881,6 +6881,119 @@ textarea {
 }
 
 /* ═══════════════════════════════════════════════
+   MLB View Tabs (Games | Analytics)
+   ═══════════════════════════════════════════════ */
+.mlb-view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.mlb-view-tab {
+  padding: 6px 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.mlb-view-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.mlb-view-tab.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: rgba(255,255,255,0.22);
+}
+
+/* ═══ MLB Analytics Panel ═══ */
+.mlb-analytics-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+}
+.mlb-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.mlb-stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-hover);
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-align: center;
+}
+.mlb-stat-card .mlb-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+.mlb-stat-card .mlb-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.mlb-analytics-section {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-hover);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.mlb-analytics-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+.mlb-analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.mlb-analytics-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 6px 8px;
+  border-bottom: 1px solid var(--bg-hover);
+}
+.mlb-analytics-table td {
+  padding: 7px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+.mlb-analytics-table tr:last-child td { border-bottom: none; }
+.mlb-at-label { color: var(--text-primary); }
+.hit-val { color: #3fb950; font-weight: 700; }
+.miss-val { color: #f85149; font-weight: 700; }
+.mlb-stat-bar {
+  width: 80px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.07);
+  overflow: hidden;
+}
+.mlb-stat-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+@media (max-width: 640px) {
+  .mlb-analytics-grid { grid-template-columns: repeat(2, 1fr); }
+  .mlb-stat-bar { display: none; }
+  .mlb-view-tab { font-size: 12px; padding: 5px 12px; }
+}
+
+/* ═══════════════════════════════════════════════
    Golf Admin Page
    ═══════════════════════════════════════════════ */
 

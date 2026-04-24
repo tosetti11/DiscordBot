@@ -4468,6 +4468,133 @@ IMPORTANT RULES:
     }
   });
 
+  app.get('/api/guilds/:guildId/mlb-analysis/analytics', authMiddleware, async (req, res) => {
+    try {
+      const { market_type } = req.query;
+      const allowed = ['nrfi', 'f5ml', 'teamtotal'];
+      if (!allowed.includes(market_type)) return res.status(400).json({ error: 'Invalid market_type' });
+
+      const entries = await mlbAnalysisDb.getAllResolved(market_type, req.params.guildId);
+
+      function groupStats(arr) {
+        const hits = arr.filter(e => e.status === 'hit').length;
+        const misses = arr.filter(e => e.status === 'miss').length;
+        const pushes = arr.filter(e => e.status === 'push').length;
+        const denom = hits + misses;
+        return { hits, misses, pushes, pct: denom > 0 ? Math.round(hits / denom * 1000) / 10 : null };
+      }
+      function byConf(arr) {
+        return [
+          { tier: '55–64%', min: 0, max: 65 },
+          { tier: '65–74%', min: 65, max: 75 },
+          { tier: '75%+', min: 75, max: 101 },
+        ].map(t => ({ tier: t.tier, ...groupStats(arr.filter(e => e.confidence >= t.min && e.confidence < t.max)) }))
+          .filter(t => t.hits + t.misses + t.pushes > 0);
+      }
+      const pct = (h, m) => h + m > 0 ? Math.round(h / (h + m) * 1000) / 10 : null;
+
+      const overall = groupStats(entries);
+      const result = { market: market_type, totalResolved: entries.length, overall, byConfidence: byConf(entries) };
+
+      if (market_type === 'nrfi') {
+        result.bySuggestion = ['NRFI', 'YRFI'].map(s => ({
+          suggestion: s,
+          ...groupStats(entries.filter(e => e.suggestion === s)),
+        })).filter(s => s.hits + s.misses + s.pushes > 0);
+
+        const teamMap = {};
+        for (const e of entries) {
+          for (const [role, abbr] of [['home', e.home_abbr], ['away', e.away_abbr]]) {
+            if (!abbr) continue;
+            const key = `${abbr}_${role}`;
+            if (!teamMap[key]) teamMap[key] = { team: abbr, role, nrfiHits: 0, nrfiMisses: 0, yrfiHits: 0, yrfiMisses: 0 };
+            const isNrfi = e.suggestion === 'NRFI';
+            if (e.status === 'hit') isNrfi ? teamMap[key].nrfiHits++ : teamMap[key].yrfiHits++;
+            else if (e.status === 'miss') isNrfi ? teamMap[key].nrfiMisses++ : teamMap[key].yrfiMisses++;
+          }
+        }
+        result.byTeam = Object.values(teamMap).map(t => ({
+          ...t,
+          total: t.nrfiHits + t.nrfiMisses + t.yrfiHits + t.yrfiMisses,
+          nrfiPct: pct(t.nrfiHits, t.nrfiMisses),
+          yrfiPct: pct(t.yrfiHits, t.yrfiMisses),
+        })).filter(t => t.total >= 3).sort((a, b) => b.total - a.total);
+
+      } else if (market_type === 'f5ml') {
+        result.bySide = ['home', 'away'].map(side => ({
+          side,
+          ...groupStats(entries.filter(e => e.line === side)),
+        })).filter(s => s.hits + s.misses + s.pushes > 0);
+
+        const oddsRanges = [
+          { range: 'Heavy Fav (<-150)', test: o => o < -150 },
+          { range: 'Fav (-150 to -110)', test: o => o >= -150 && o <= -110 },
+          { range: "Pick'em (-109 to +109)", test: o => o > -110 && o < 110 },
+          { range: 'Dog (+110 or more)', test: o => o >= 110 },
+        ];
+        result.byOddsRange = oddsRanges.map(r => ({
+          range: r.range,
+          ...groupStats(entries.filter(e => { const o = parseInt(e.odds); return !isNaN(o) && r.test(o); })),
+        })).filter(r => r.hits + r.misses + r.pushes > 0);
+
+        const teamMap = {};
+        for (const e of entries) {
+          const abbr = (e.suggestion || '').split(' ')[0];
+          if (!abbr || abbr.length > 4) continue;
+          if (!teamMap[abbr]) teamMap[abbr] = { team: abbr, hits: 0, misses: 0, pushes: 0 };
+          if (e.status === 'hit') teamMap[abbr].hits++;
+          else if (e.status === 'miss') teamMap[abbr].misses++;
+          else if (e.status === 'push') teamMap[abbr].pushes++;
+        }
+        result.byPickedTeam = Object.values(teamMap).map(t => ({
+          ...t, total: t.hits + t.misses + t.pushes,
+          pct: pct(t.hits, t.misses),
+        })).filter(t => t.total >= 3).sort((a, b) => b.total - a.total);
+
+      } else if (market_type === 'teamtotal') {
+        result.byDirection = ['Over', 'Under'].map(dir => ({
+          direction: dir,
+          ...groupStats(entries.filter(e => (e.suggestion || '').includes(dir))),
+        })).filter(d => d.hits + d.misses + d.pushes > 0);
+
+        result.bySide = ['home', 'away'].map(side => ({
+          side, label: side === 'home' ? 'Home Team' : 'Away Team',
+          ...groupStats(entries.filter(e => (e.espn_game_id || '').endsWith(`_${side}`))),
+        })).filter(s => s.hits + s.misses + s.pushes > 0);
+
+        const lineRanges = [
+          { range: '≤3.5', test: l => l <= 3.5 },
+          { range: '4.0–4.5', test: l => l >= 4.0 && l <= 4.5 },
+          { range: '5.0+', test: l => l >= 5.0 },
+        ];
+        result.byLine = lineRanges.map(r => ({
+          range: r.range,
+          ...groupStats(entries.filter(e => { const l = parseFloat(e.line); return !isNaN(l) && r.test(l); })),
+        })).filter(r => r.hits + r.misses + r.pushes > 0);
+
+        const teamMap = {};
+        for (const e of entries) {
+          const abbr = (e.suggestion || '').split(' ')[0];
+          const isOver = (e.suggestion || '').includes('Over');
+          if (!abbr || abbr.length > 4) continue;
+          if (!teamMap[abbr]) teamMap[abbr] = { team: abbr, overHits: 0, overMisses: 0, underHits: 0, underMisses: 0 };
+          if (isOver) { if (e.status === 'hit') teamMap[abbr].overHits++; else if (e.status === 'miss') teamMap[abbr].overMisses++; }
+          else { if (e.status === 'hit') teamMap[abbr].underHits++; else if (e.status === 'miss') teamMap[abbr].underMisses++; }
+        }
+        result.byTeam = Object.values(teamMap).map(t => ({
+          ...t, total: t.overHits + t.overMisses + t.underHits + t.underMisses,
+          overPct: pct(t.overHits, t.overMisses),
+          underPct: pct(t.underHits, t.underMisses),
+        })).filter(t => t.total >= 3).sort((a, b) => b.total - a.total);
+      }
+
+      res.json(result);
+    } catch (err) {
+      console.error('[API] MLB analytics error:', err.message);
+      res.status(500).json({ error: 'Failed to compute analytics' });
+    }
+  });
+
   // ─── Live Tracker API ───
   // Returns live game data for a bet's ESPN game IDs
   app.get('/api/live-tracker/:betId', authMiddleware, async (req, res) => {
