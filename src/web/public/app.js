@@ -3782,7 +3782,7 @@ function renderBetCard(bet, showOwner = false) {
       </div>
     </div>
 
-    ${(bet.espnGameId || bet.legs?.some(l => l.espnGameId)) ? `
+    ${(bet.espnGameId || bet.legs?.some(l => l.espnGameId) || (['2ball','3ball'].includes(bet.wagerType) && bet.matchPlayerA && bet.matchPlayerB) || bet.legs?.some(l => ['2ball','3ball'].includes(l.wagerType) && l.matchPlayerA && l.matchPlayerB)) ? `
     <div class="ticket-divider"></div>
     <div class="ticket-live-tracker" id="tracker-${bet.id}" data-bet-id="${bet.id}" data-has-espn="true">
       <div class="tracker-loading">Loading live data...</div>

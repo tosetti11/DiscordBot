@@ -1512,6 +1512,11 @@ function createWebServer() {
       fightMethod: bet.fight_method || null,
       golfHole: bet.golf_hole || null,
       golfRound: bet.golf_round || null,
+      matchPlayerA:  bet.match_player_a  || null,
+      matchPlayerA2: bet.match_player_a2 || null,
+      matchPlayerB:  bet.match_player_b  || null,
+      matchPlayerB2: bet.match_player_b2 || null,
+      matchPlayerC:  bet.match_player_c  || null,
       overUnder,
       legs: (bet.parlay_legs || []).map(l => {
         let legOU = null;
@@ -1541,6 +1546,11 @@ function createWebServer() {
           fightMethod: l.fight_method || null,
           golfHole: l.golf_hole || null,
           golfRound: l.golf_round || null,
+          matchPlayerA:  l.match_player_a  || null,
+          matchPlayerA2: l.match_player_a2 || null,
+          matchPlayerB:  l.match_player_b  || null,
+          matchPlayerB2: l.match_player_b2 || null,
+          matchPlayerC:  l.match_player_c  || null,
           overUnder: legOU,
         };
       }),
