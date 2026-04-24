@@ -4436,7 +4436,7 @@ IMPORTANT RULES:
       if (!date || !market_type) {
         return res.status(400).json({ error: 'date and market_type are required' });
       }
-      const allowed = ['nrfi', 'strikeout', 'homerun'];
+      const allowed = ['nrfi', 'f5ml', 'teamtotal'];
       if (!allowed.includes(market_type)) {
         return res.status(400).json({ error: 'Invalid market_type' });
       }

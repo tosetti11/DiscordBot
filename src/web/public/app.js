@@ -8249,8 +8249,8 @@ async function fetchAiLeaderboard() {
 //  AI Top-Tab Switching (Daily Lock / MLB tabs)
 // ═══════════════════════════════════════════════
 
-const MLB_MARKET_LABELS = { nrfi: 'NRFI', homerun: 'Home Runs', strikeout: 'Strikeouts' };
-const MLB_MARKET_COLORS = { nrfi: '#3fb950', homerun: '#a855f7', strikeout: '#f85149' };
+const MLB_MARKET_LABELS = { nrfi: 'NRFI', f5ml: 'First 5 ML', teamtotal: 'Team Totals' };
+const MLB_MARKET_COLORS = { nrfi: '#3fb950', f5ml: '#58a6ff', teamtotal: '#f0a500' };
 let currentAiTopTab = 'daily-lock';
 
 function switchAiTopTab(tab) {
@@ -8357,11 +8357,12 @@ function renderMlbEntry(e, market) {
   if (market === 'nrfi') {
     const pillColor = e.suggestion === 'NRFI' ? '#3fb950' : '#f85149';
     suggestionPill = `<span class="mlb-suggestion-pill" style="background: ${pillColor}20; color: ${pillColor}; border: 1px solid ${pillColor}40">${esc(e.suggestion)}</span>`;
-  } else if (market === 'strikeout') {
-    const pillColor = '#f85149';
-    suggestionPill = `<span class="mlb-suggestion-pill" style="background: ${pillColor}20; color: ${pillColor}; border: 1px solid ${pillColor}40">${esc(e.suggestion)}${e.line ? ' ' + e.line : ''}</span>`;
-  } else if (market === 'homerun') {
-    const pillColor = '#a855f7';
+  } else if (market === 'f5ml') {
+    const pillColor = '#58a6ff';
+    suggestionPill = `<span class="mlb-suggestion-pill" style="background: ${pillColor}20; color: ${pillColor}; border: 1px solid ${pillColor}40">${esc(e.suggestion)}</span>`;
+  } else if (market === 'teamtotal') {
+    const isOver = (e.suggestion || '').toLowerCase().includes('over');
+    const pillColor = isOver ? '#3fb950' : '#f85149';
     suggestionPill = `<span class="mlb-suggestion-pill" style="background: ${pillColor}20; color: ${pillColor}; border: 1px solid ${pillColor}40">${esc(e.suggestion)}</span>`;
   }
 
@@ -8390,8 +8391,13 @@ function renderMlbEntry(e, market) {
         </div>
         ${e.reasoning ? `<div class="mlb-reasoning">${esc(e.reasoning)}</div>` : ''}
         <div class="mlb-pitchers">
-          ${e.away_pitcher ? `<span>⚾ ${esc(e.away_pitcher)}</span>` : ''}
-          ${e.home_pitcher ? `<span>vs ${esc(e.home_pitcher)}</span>` : ''}
+          ${market === 'teamtotal'
+            ? (e.espn_game_id && e.espn_game_id.endsWith('_home')
+                ? (e.away_pitcher ? `<span>vs SP: ${esc(e.away_pitcher)}</span>` : '')
+                : (e.home_pitcher ? `<span>vs SP: ${esc(e.home_pitcher)}</span>` : ''))
+            : `${e.away_pitcher ? `<span>⚾ ${esc(e.away_pitcher)}</span>` : ''}
+               ${e.home_pitcher ? `<span>vs ${esc(e.home_pitcher)}</span>` : ''}`
+          }
         </div>
       </div>
     </div>

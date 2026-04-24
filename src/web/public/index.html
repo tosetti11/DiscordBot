@@ -2224,8 +2224,8 @@
       <div class="ai-picks-tabs ai-top-tabs">
         <button class="ai-tab active" data-aitoptab="daily-lock" onclick="switchAiTopTab('daily-lock')">🔒 Daily Lock</button>
         <button class="ai-tab" data-aitoptab="nrfi" onclick="switchAiTopTab('nrfi')">⚾ NRFI</button>
-        <button class="ai-tab" data-aitoptab="homerun" onclick="switchAiTopTab('homerun')">💣 Home Runs</button>
-        <button class="ai-tab" data-aitoptab="strikeout" onclick="switchAiTopTab('strikeout')">🔥 Strikeouts</button>
+        <button class="ai-tab" data-aitoptab="f5ml" onclick="switchAiTopTab('f5ml')">5️⃣ First 5 ML</button>
+        <button class="ai-tab" data-aitoptab="teamtotal" onclick="switchAiTopTab('teamtotal')">📊 Team Totals</button>
       </div>
 
       <!-- ═══ Daily Lock Section ═══ -->
@@ -2272,7 +2272,7 @@
         </div>
       </div>
 
-      <!-- ═══ MLB Analysis Sections (NRFI / HR / Strikeouts) ═══ -->
+      <!-- ═══ MLB Analysis Sections (NRFI / F5 ML / Team Totals) ═══ -->
       <div id="ai-section-nrfi" class="ai-top-section hidden" data-market="nrfi">
         <div class="mlb-analysis-header">
           <div class="mlb-date-nav">
@@ -2288,33 +2288,33 @@
         </div>
       </div>
 
-      <div id="ai-section-homerun" class="ai-top-section hidden" data-market="homerun">
+      <div id="ai-section-f5ml" class="ai-top-section hidden" data-market="f5ml">
         <div class="mlb-analysis-header">
           <div class="mlb-date-nav">
-            <button class="mlb-date-btn" onclick="mlbDateNav('homerun', -1)">◀</button>
-            <input type="date" class="mlb-date-input" id="mlb-date-homerun" onchange="loadMlbAnalysis('homerun')">
-            <button class="mlb-date-btn" onclick="mlbDateNav('homerun', 1)">▶</button>
-            <button class="mlb-date-btn mlb-today-btn" onclick="mlbDateToday('homerun')">Today</button>
+            <button class="mlb-date-btn" onclick="mlbDateNav('f5ml', -1)">◀</button>
+            <input type="date" class="mlb-date-input" id="mlb-date-f5ml" onchange="loadMlbAnalysis('f5ml')">
+            <button class="mlb-date-btn" onclick="mlbDateNav('f5ml', 1)">▶</button>
+            <button class="mlb-date-btn mlb-today-btn" onclick="mlbDateToday('f5ml')">Today</button>
           </div>
-          <div class="mlb-record-bar" id="mlb-record-homerun"></div>
+          <div class="mlb-record-bar" id="mlb-record-f5ml"></div>
         </div>
-        <div id="mlb-entries-homerun" class="mlb-entries-list">
-          <p class="muted-text">Loading Home Run analysis...</p>
+        <div id="mlb-entries-f5ml" class="mlb-entries-list">
+          <p class="muted-text">Loading First 5 ML analysis...</p>
         </div>
       </div>
 
-      <div id="ai-section-strikeout" class="ai-top-section hidden" data-market="strikeout">
+      <div id="ai-section-teamtotal" class="ai-top-section hidden" data-market="teamtotal">
         <div class="mlb-analysis-header">
           <div class="mlb-date-nav">
-            <button class="mlb-date-btn" onclick="mlbDateNav('strikeout', -1)">◀</button>
-            <input type="date" class="mlb-date-input" id="mlb-date-strikeout" onchange="loadMlbAnalysis('strikeout')">
-            <button class="mlb-date-btn" onclick="mlbDateNav('strikeout', 1)">▶</button>
-            <button class="mlb-date-btn mlb-today-btn" onclick="mlbDateToday('strikeout')">Today</button>
+            <button class="mlb-date-btn" onclick="mlbDateNav('teamtotal', -1)">◀</button>
+            <input type="date" class="mlb-date-input" id="mlb-date-teamtotal" onchange="loadMlbAnalysis('teamtotal')">
+            <button class="mlb-date-btn" onclick="mlbDateNav('teamtotal', 1)">▶</button>
+            <button class="mlb-date-btn mlb-today-btn" onclick="mlbDateToday('teamtotal')">Today</button>
           </div>
-          <div class="mlb-record-bar" id="mlb-record-strikeout"></div>
+          <div class="mlb-record-bar" id="mlb-record-teamtotal"></div>
         </div>
-        <div id="mlb-entries-strikeout" class="mlb-entries-list">
-          <p class="muted-text">Loading Strikeout analysis...</p>
+        <div id="mlb-entries-teamtotal" class="mlb-entries-list">
+          <p class="muted-text">Loading Team Totals analysis...</p>
         </div>
       </div>
     </div>

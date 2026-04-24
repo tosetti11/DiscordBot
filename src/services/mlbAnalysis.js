@@ -5,23 +5,23 @@
  */
 const { getTodaysGames, getGameSummary } = require('./espn');
 const mlbDb = require('../database/mlbAnalysis');
-const { generateNrfiCardImage, generateStrikeoutCardImage, generateHomerunCardImage } = require('../utils/mlbAnalysisCardImage');
+const { generateNrfiCardImage, generateF5CardImage, generateTeamTotalCardImage } = require('../utils/mlbAnalysisCardImage');
 
 // Channel IDs
 const NRFI_CHANNEL_ID = '1490775859664257157';
-const STRIKEOUT_CHANNEL_ID = '1490776189810381022';
-const HOMERUN_CHANNEL_ID = '1490776370500862173';
+const F5ML_CHANNEL_ID = '1497124815885176903';
+const TEAMTOTAL_CHANNEL_ID = '1497125090582859806';
 
 const MARKET_CHANNELS = {
   nrfi: NRFI_CHANNEL_ID,
-  strikeout: STRIKEOUT_CHANNEL_ID,
-  homerun: HOMERUN_CHANNEL_ID,
+  f5ml: F5ML_CHANNEL_ID,
+  teamtotal: TEAMTOTAL_CHANNEL_ID,
 };
 
 const MARKET_HEADERS = {
   nrfi: '⚾ **MLB NRFI DAILY ANALYSIS** ⚾',
-  strikeout: '🔥 **MLB STRIKEOUT O/U DAILY ANALYSIS** 🔥',
-  homerun: '💣 **MLB HOME RUN DAILY ANALYSIS** 💣',
+  f5ml: '5️⃣ **MLB FIRST 5 INNINGS ML** 5️⃣',
+  teamtotal: '📊 **MLB TEAM TOTALS DAILY** 📊',
 };
 
 /**
@@ -483,476 +483,6 @@ Order by confidence (highest first). Return ONLY valid JSON array. No markdown.`
   }
 }
 
-// ══════════════════════════════════════════════════
-// Strikeout O/U Analysis
-// ══════════════════════════════════════════════════
-
-async function generateStrikeoutAnalysis(client, guildId) {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-
-  const existing = await mlbDb.hasAnalysisForToday('strikeout', guildId, today);
-  if (existing) {
-    console.log('[MLB K] Already have analysis for today, checking for unposted...');
-    const msg = await mlbDb.getMessage(today, 'strikeout', guildId);
-    if (!msg) await postAnalysisToDiscord(client, guildId, 'strikeout', today);
-    return;
-  }
-
-  const games = await fetchMLBScoreboardRaw();
-  if (games.length === 0) {
-    console.log('[MLB K] No MLB games today.');
-    return;
-  }
-
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-  if (!OPENAI_API_KEY) return;
-
-  const record = await mlbDb.getRecord('strikeout', guildId);
-
-  // Fetch detailed pitcher stats and team batting stats in parallel
-  console.log('[MLB K] Fetching detailed pitcher stats and team batting data...');
-  const pitcherStatsCache = {};
-  const teamBattingCache = {};
-
-  const pitcherFetches = [];
-  const teamFetches = new Set();
-
-  for (const g of games) {
-    if (g.homePitcher.id) pitcherFetches.push(fetchPitcherDetailedStats(g.homePitcher.id).then(s => { pitcherStatsCache[g.homePitcher.id] = s; }));
-    if (g.awayPitcher.id) pitcherFetches.push(fetchPitcherDetailedStats(g.awayPitcher.id).then(s => { pitcherStatsCache[g.awayPitcher.id] = s; }));
-    // Fetch batting stats for each team (pitcher faces opposing team's batters)
-    if (g.home.id && !teamFetches.has(g.home.id)) {
-      teamFetches.add(g.home.id);
-      pitcherFetches.push(fetchTeamBattingStats(g.home.id).then(s => { teamBattingCache[g.home.id] = s; }));
-    }
-    if (g.away.id && !teamFetches.has(g.away.id)) {
-      teamFetches.add(g.away.id);
-      pitcherFetches.push(fetchTeamBattingStats(g.away.id).then(s => { teamBattingCache[g.away.id] = s; }));
-    }
-  }
-
-  await Promise.all(pitcherFetches);
-  console.log(`[MLB K] Fetched stats for ${Object.keys(pitcherStatsCache).length} pitchers, ${Object.keys(teamBattingCache).length} teams`);
-
-  // Build data with real K/9, IP, WHIP, and opposing team K-rate
-  const gamesData = games.map(g => {
-    const hpStats = pitcherStatsCache[g.homePitcher.id];
-    const apStats = pitcherStatsCache[g.awayPitcher.id];
-    // Away pitcher faces home team's batting; home pitcher faces away team's batting
-    const homeTeamBatting = teamBattingCache[g.home.id];
-    const awayTeamBatting = teamBattingCache[g.away.id];
-
-    return {
-      espnGameId: g.espnGameId,
-      matchup: `${g.away.abbr} @ ${g.home.abbr}`,
-      awayTeam: g.away.team,
-      homeTeam: g.home.team,
-      awayPitcher: {
-        name: g.awayPitcher.name,
-        record: g.awayPitcher.record,
-        seasonERA: apStats?.ERA || g.awayPitcher.stats?.ERA || 'N/A',
-        seasonK9: apStats?.K9 || 'N/A',
-        seasonWHIP: apStats?.WHIP || 'N/A',
-        seasonIP: apStats?.IP || 'N/A',
-        seasonK: apStats?.K || 'N/A',
-        seasonBB: apStats?.BB || 'N/A',
-        seasonGS: apStats?.GS || 'N/A',
-        avgPitchesPerStart: apStats?.PperStart || 'N/A',
-        qualityStarts: apStats?.QS || 'N/A',
-      },
-      homePitcher: {
-        name: g.homePitcher.name,
-        record: g.homePitcher.record,
-        seasonERA: hpStats?.ERA || g.homePitcher.stats?.ERA || 'N/A',
-        seasonK9: hpStats?.K9 || 'N/A',
-        seasonWHIP: hpStats?.WHIP || 'N/A',
-        seasonIP: hpStats?.IP || 'N/A',
-        seasonK: hpStats?.K || 'N/A',
-        seasonBB: hpStats?.BB || 'N/A',
-        seasonGS: hpStats?.GS || 'N/A',
-        avgPitchesPerStart: hpStats?.PperStart || 'N/A',
-        qualityStarts: hpStats?.QS || 'N/A',
-      },
-      homeTeamBatting: homeTeamBatting ? {
-        teamKRate: homeTeamBatting.KRate,
-        teamKPerGame: homeTeamBatting.KPerGame,
-        teamSO: homeTeamBatting.SO,
-        teamAVG: homeTeamBatting.AVG,
-        teamOPS: homeTeamBatting.OPS,
-      } : 'N/A',
-      awayTeamBatting: awayTeamBatting ? {
-        teamKRate: awayTeamBatting.KRate,
-        teamKPerGame: awayTeamBatting.KPerGame,
-        teamSO: awayTeamBatting.SO,
-        teamAVG: awayTeamBatting.AVG,
-        teamOPS: awayTeamBatting.OPS,
-      } : 'N/A',
-      overUnder: g.odds.overUnder,
-      startTime: g.startTime,
-      gameNumber: g.gameNumber,
-    };
-  });
-
-  const prompt = `You are an elite MLB strikeout prop analyst. Your current record is ${record.hits}-${record.misses}.
-
-CRITICAL RULES:
-- You MUST produce a MIX of Over AND Under picks. Target roughly 40-60% Unders.
-- Do NOT default to Over. Many pitchers have low K/9 or face low-K teams — those are Unders.
-- Set your projected K line based on the pitcher's K/9 rate and expected innings:
-  • Expected K = (K/9 × expected IP) / 9
-  • If a pitcher has 7.0 K/9 and you expect 5.5 IP, projected Ks ≈ 4.3 → line should be ~4.5
-  • If a pitcher has 11.0 K/9 and you expect 6.0 IP, projected Ks ≈ 7.3 → line should be ~6.5
-- A pitcher with K/9 below 7.5 facing a team with K-rate below 23% is a STRONG Under candidate.
-- A pitcher with K/9 above 9.5 facing a team with K-rate above 25% is a STRONG Over candidate.
-- A pitcher averaging under 80 pitches/start likely won't last 5+ innings — lean Under.
-- Factor in the opposing team's K-rate heavily. High-contact teams (low K%) = fewer Ks for the pitcher.
-
-GUIDELINES FOR SETTING K LINES:
-- Lines should be realistic sportsbook-style half numbers (4.5, 5.5, 6.5, 7.5, etc.)
-- Average MLB starter: ~5.0-5.5 K per game. Only elite aces consistently hit 7+.
-- K/9 is per 9 innings. Most starters go 5-6 IP, so multiply K/9 by ~0.6 for expected Ks.
-- Low K/9 (< 7.5) pitcher vs low-K team = line 4.5 or lower, suggest Under
-- Moderate K/9 (7.5-9.0) = line 5.5, direction depends on matchup
-- High K/9 (> 9.5) vs high-K team = line 6.5+, lean Over
-- Factor expected pitch count: low pitches/start = fewer innings = fewer K opportunities
-
-Today's MLB slate with detailed stats:
-${JSON.stringify(gamesData, null, 2)}
-
-For each game, analyze BOTH starting pitchers. Return a JSON array with one object per pitcher (two per game):
-[
-  {
-    "espnGameId": "<ESPN game ID>",
-    "pitcher": "<pitcher name>",
-    "team": "<team abbreviation>",
-    "side": "home" or "away",
-    "line": <projected K line as X.5 number>,
-    "suggestion": "Over" or "Under",
-    "confidence": <number 50-99>,
-    "reasoning": "<1-2 sentence reasoning citing specific K/9, opposing K-rate, expected IP>",
-    "odds": null
-  }
-]
-
-Order by confidence (highest first). Return ONLY valid JSON array.`;
-
-  try {
-    const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.4,
-        max_tokens: 6000,
-      }),
-    });
-
-    const oaiData = await oaiRes.json();
-    if (oaiData.error) {
-      console.error('[MLB K] OpenAI error:', oaiData.error);
-      return;
-    }
-
-    const content = oaiData.choices?.[0]?.message?.content?.trim();
-    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const analyses = JSON.parse(jsonStr);
-
-    // Build DB entries — one per pitcher (two per game)
-    const entries = [];
-    for (const a of analyses) {
-      const game = games.find(g => g.espnGameId === a.espnGameId);
-      if (!game) continue;
-
-      const side = a.side || (a.team === game.home.abbr ? 'home' : 'away');
-      const pitcher = side === 'home' ? game.homePitcher : game.awayPitcher;
-
-      entries.push({
-        guild_id: guildId,
-        analysis_date: today,
-        market_type: 'strikeout',
-        espn_game_id: `${a.espnGameId}_${side}`,
-        home_team: game.home.team,
-        home_abbr: game.home.abbr,
-        away_team: game.away.team,
-        away_abbr: game.away.abbr,
-        game_number: game.gameNumber,
-        event_start_time: game.startTime,
-        home_pitcher: game.homePitcher.name,
-        home_pitcher_id: game.homePitcher.id,
-        home_pitcher_headshot: game.homePitcher.headshot,
-        home_pitcher_stats: game.homePitcher.stats,
-        away_pitcher: game.awayPitcher.name,
-        away_pitcher_id: game.awayPitcher.id,
-        away_pitcher_headshot: game.awayPitcher.headshot,
-        away_pitcher_stats: game.awayPitcher.stats,
-        suggestion: `${a.pitcher} ${a.suggestion} ${a.line} K`,
-        confidence: a.confidence,
-        reasoning: a.reasoning,
-        odds: a.odds || null,
-        line: a.line,
-      });
-    }
-
-    await mlbDb.createAnalysisEntries(entries);
-    console.log(`[MLB K] Generated ${entries.length} analyses for ${today}`);
-
-    await postAnalysisToDiscord(client, guildId, 'strikeout', today);
-  } catch (err) {
-    console.error('[MLB K] Generation error:', err);
-  }
-}
-
-// ══════════════════════════════════════════════════
-// Home Run Analysis
-// ══════════════════════════════════════════════════
-
-async function generateHomerunAnalysis(client, guildId) {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-
-  const existing = await mlbDb.hasAnalysisForToday('homerun', guildId, today);
-  if (existing) {
-    console.log('[MLB HR] Already have analysis for today, checking for unposted...');
-    const msg = await mlbDb.getMessage(today, 'homerun', guildId);
-    if (!msg) await postAnalysisToDiscord(client, guildId, 'homerun', today);
-    return;
-  }
-
-  const games = await fetchMLBScoreboardRaw();
-  if (games.length === 0) {
-    console.log('[MLB HR] No MLB games today.');
-    return;
-  }
-
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-  if (!OPENAI_API_KEY) return;
-
-  const record = await mlbDb.getRecord('homerun', guildId);
-
-  // Fetch weather, pitcher stats, team batting stats, and game leaders in parallel
-  console.log('[MLB HR] Fetching weather, pitcher stats, team batting, and game leaders...');
-  const weatherMap = {};
-  const pitcherStatsCache = {};
-  const teamBattingCache = {};
-  const gameLeadersMap = {};
-
-  const fetches = [];
-
-  // Weather for first 8 games
-  for (const game of games.slice(0, 8)) {
-    fetches.push(fetchGameWeather(game.espnGameId).then(w => { if (w) weatherMap[game.espnGameId] = w; }));
-  }
-
-  // Game leaders (HR leaders per team) for all games
-  for (const game of games) {
-    fetches.push(fetchGameLeaders(game.espnGameId).then(l => { if (l) gameLeadersMap[game.espnGameId] = l; }));
-  }
-
-  // Pitcher detailed stats
-  const teamFetches = new Set();
-  for (const g of games) {
-    if (g.homePitcher.id) fetches.push(fetchPitcherDetailedStats(g.homePitcher.id).then(s => { pitcherStatsCache[g.homePitcher.id] = s; }));
-    if (g.awayPitcher.id) fetches.push(fetchPitcherDetailedStats(g.awayPitcher.id).then(s => { pitcherStatsCache[g.awayPitcher.id] = s; }));
-    if (g.home.id && !teamFetches.has(g.home.id)) {
-      teamFetches.add(g.home.id);
-      fetches.push(fetchTeamBattingStats(g.home.id).then(s => { teamBattingCache[g.home.id] = s; }));
-    }
-    if (g.away.id && !teamFetches.has(g.away.id)) {
-      teamFetches.add(g.away.id);
-      fetches.push(fetchTeamBattingStats(g.away.id).then(s => { teamBattingCache[g.away.id] = s; }));
-    }
-  }
-
-  await Promise.all(fetches);
-  console.log(`[MLB HR] Fetched data: ${Object.keys(gameLeadersMap).length} game leaders, ${Object.keys(pitcherStatsCache).length} pitchers, ${Object.keys(teamBattingCache).length} teams`);
-
-  const gamesData = games.map(g => {
-    const hpStats = pitcherStatsCache[g.homePitcher.id];
-    const apStats = pitcherStatsCache[g.awayPitcher.id];
-    const homeTeamBatting = teamBattingCache[g.home.id];
-    const awayTeamBatting = teamBattingCache[g.away.id];
-    const leaders = gameLeadersMap[g.espnGameId];
-
-    return {
-      espnGameId: g.espnGameId,
-      matchup: `${g.away.abbr} @ ${g.home.abbr}`,
-      awayTeam: g.away.team,
-      homeTeam: g.home.team,
-      awayRecord: g.away.record,
-      homeRecord: g.home.record,
-      awayPitcher: {
-        name: g.awayPitcher.name,
-        ERA: apStats?.ERA || g.awayPitcher.stats?.ERA || 'N/A',
-        HR9: apStats?.HR9 || 'N/A',
-        HRAllowed: apStats?.HRAllowed || 'N/A',
-        IP: apStats?.IP || 'N/A',
-        WHIP: apStats?.WHIP || 'N/A',
-        FBRate: apStats?.FB || 'N/A',
-        GBtoFB: apStats?.GF || 'N/A',
-      },
-      homePitcher: {
-        name: g.homePitcher.name,
-        ERA: hpStats?.ERA || g.homePitcher.stats?.ERA || 'N/A',
-        HR9: hpStats?.HR9 || 'N/A',
-        HRAllowed: hpStats?.HRAllowed || 'N/A',
-        IP: hpStats?.IP || 'N/A',
-        WHIP: hpStats?.WHIP || 'N/A',
-        FBRate: hpStats?.FB || 'N/A',
-        GBtoFB: hpStats?.GF || 'N/A',
-      },
-      homeTeamBatting: homeTeamBatting ? {
-        teamHR: homeTeamBatting.HR,
-        teamHRPerGame: homeTeamBatting.HRPerGame,
-        teamSLG: homeTeamBatting.SLG,
-        teamOPS: homeTeamBatting.OPS,
-      } : 'N/A',
-      awayTeamBatting: awayTeamBatting ? {
-        teamHR: awayTeamBatting.HR,
-        teamHRPerGame: awayTeamBatting.HRPerGame,
-        teamSLG: awayTeamBatting.SLG,
-        teamOPS: awayTeamBatting.OPS,
-      } : 'N/A',
-      homeHRLeader: leaders?.home ? `${leaders.home.hrLeader} (${leaders.home.hrCount} HR)` : 'N/A',
-      awayHRLeader: leaders?.away ? `${leaders.away.hrLeader} (${leaders.away.hrCount} HR)` : 'N/A',
-      overUnder: g.odds.overUnder,
-      startTime: g.startTime,
-      gameNumber: g.gameNumber,
-      weather: weatherMap[g.espnGameId] ? {
-        temp: weatherMap[g.espnGameId].temperature,
-        wind: weatherMap[g.espnGameId].gust,
-      } : null,
-    };
-  });
-
-  const prompt = `You are an elite MLB home run prop analyst. Your current record is ${record.hits}-${record.misses}.
-
-CRITICAL RULES:
-- For topHRCandidate, you MUST ONLY use player names from the data provided below (homeHRLeader, awayHRLeader fields). Do NOT use players from your training data — rosters change every season.
-- If a leader field says "N/A", use null for topHRCandidate.
-- Factor in pitcher HR/9 rate and fly ball tendency heavily. High HR/9 + high fly ball rate = HR-friendly pitcher.
-- A pitcher with HR/9 > 1.50 is very HR-prone. HR/9 < 0.80 is HR-resistant.
-- Ground ball pitchers (G/F > 1.2) suppress HRs. Fly ball pitchers (G/F < 0.9) allow more HRs.
-- Team SLG > .420 and OPS > .750 indicates a power-hitting lineup.
-- Weather: games 75°F+ with wind blowing out favor HRs. Dome/cold games suppress them.
-
-Today's MLB slate with real current-season stats:
-${JSON.stringify(gamesData, null, 2)}
-
-For each game, analyze HR potential. Return a JSON array:
-[
-  {
-    "espnGameId": "<ESPN game ID>",
-    "suggestion": "HR Likely" or "Low HR Game",
-    "hrOverUnder": <suggested total HRs line, e.g. 1.5 or 2.5>,
-    "overUnderPick": "Over" or "Under",
-    "confidence": <number 50-99>,
-    "reasoning": "<1-2 sentence analysis citing pitcher HR/9, team HR stats, and ballpark/weather>",
-    "topHRCandidate": "<ONLY a player name from the homeHRLeader or awayHRLeader data provided, or null>",
-    "topCandidateTeam": "<team abbreviation of top HR candidate>",
-    "odds": null
-  }
-]
-
-Order by confidence (highest first). Return ONLY valid JSON array.`;
-
-  try {
-    const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.4,
-        max_tokens: 5000,
-      }),
-    });
-
-    const oaiData = await oaiRes.json();
-    if (oaiData.error) {
-      console.error('[MLB HR] OpenAI error:', oaiData.error);
-      return;
-    }
-
-    const content = oaiData.choices?.[0]?.message?.content?.trim();
-    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const analyses = JSON.parse(jsonStr);
-
-    const entries = analyses.map(a => {
-      const game = games.find(g => g.espnGameId === a.espnGameId);
-      if (!game) return null;
-      return {
-        guild_id: guildId,
-        analysis_date: today,
-        market_type: 'homerun',
-        espn_game_id: a.espnGameId,
-        home_team: game.home.team,
-        home_abbr: game.home.abbr,
-        away_team: game.away.team,
-        away_abbr: game.away.abbr,
-        game_number: game.gameNumber,
-        event_start_time: game.startTime,
-        home_pitcher: game.homePitcher.name,
-        home_pitcher_id: game.homePitcher.id,
-        home_pitcher_headshot: game.homePitcher.headshot,
-        home_pitcher_stats: game.homePitcher.stats,
-        away_pitcher: game.awayPitcher.name,
-        away_pitcher_id: game.awayPitcher.id,
-        away_pitcher_headshot: game.awayPitcher.headshot,
-        away_pitcher_stats: game.awayPitcher.stats,
-        suggestion: a.suggestion,
-        confidence: a.confidence,
-        reasoning: a.reasoning + (a.topHRCandidate ? ` 🎯 HR Watch: ${a.topHRCandidate} (${a.topCandidateTeam})` : ''),
-        odds: a.odds || null,
-        line: a.hrOverUnder || null,
-        temperature: weatherMap[a.espnGameId]?.temperature || null,
-        weather_condition: weatherMap[a.espnGameId]?.conditionId || null,
-        wind_speed: weatherMap[a.espnGameId]?.gust || null,
-      };
-    }).filter(Boolean);
-
-    // Fill in any games GPT missed with a default entry
-    const coveredGameIds = new Set(entries.map(e => e.espn_game_id));
-    for (const game of games) {
-      if (coveredGameIds.has(game.espnGameId)) continue;
-      console.log(`[MLB HR] GPT missed game ${game.espnGameId} (${game.away.abbr}@${game.home.abbr}), adding default`);
-      entries.push({
-        guild_id: guildId,
-        analysis_date: today,
-        market_type: 'homerun',
-        espn_game_id: game.espnGameId,
-        home_team: game.home.team,
-        home_abbr: game.home.abbr,
-        away_team: game.away.team,
-        away_abbr: game.away.abbr,
-        game_number: game.gameNumber,
-        event_start_time: game.startTime,
-        home_pitcher: game.homePitcher.name,
-        home_pitcher_id: game.homePitcher.id,
-        home_pitcher_headshot: game.homePitcher.headshot,
-        home_pitcher_stats: game.homePitcher.stats,
-        away_pitcher: game.awayPitcher.name,
-        away_pitcher_id: game.awayPitcher.id,
-        away_pitcher_headshot: game.awayPitcher.headshot,
-        away_pitcher_stats: game.awayPitcher.stats,
-        suggestion: 'HR Likely',
-        confidence: 55,
-        reasoning: 'Analysis unavailable — default pick based on league averages.',
-        odds: null,
-        line: 1.5,
-        temperature: weatherMap[game.espnGameId]?.temperature || null,
-        weather_condition: weatherMap[game.espnGameId]?.conditionId || null,
-        wind_speed: weatherMap[game.espnGameId]?.gust || null,
-      });
-    }
-
-    await mlbDb.createAnalysisEntries(entries);
-    console.log(`[MLB HR] Generated ${entries.length} analyses for ${today}`);
-
-    await postAnalysisToDiscord(client, guildId, 'homerun', today);
-  } catch (err) {
-    console.error('[MLB HR] Generation error:', err);
-  }
-}
 
 // ══════════════════════════════════════════════════
 // Discord Posting
@@ -979,10 +509,10 @@ async function postAnalysisToDiscord(client, guildId, marketType, date) {
     let imgBuffer;
     if (marketType === 'nrfi') {
       imgBuffer = await generateNrfiCardImage(entries, record, streak);
-    } else if (marketType === 'strikeout') {
-      imgBuffer = await generateStrikeoutCardImage(entries, record, streak);
+    } else if (marketType === 'f5ml') {
+      imgBuffer = await generateF5CardImage(entries, record, streak);
     } else {
-      imgBuffer = await generateHomerunCardImage(entries, record, streak);
+      imgBuffer = await generateTeamTotalCardImage(entries, record, streak);
     }
 
     const attachment = new AttachmentBuilder(imgBuffer, { name: `mlb-${marketType}.png` });
@@ -990,14 +520,14 @@ async function postAnalysisToDiscord(client, guildId, marketType, date) {
     // Role ping — auto-create role if missing
     const guild = client.guilds.cache.get(guildId);
     let rolePing = '';
-    const roleNames = { nrfi: 'NRFI Alerts', strikeout: 'Strikeout Alerts', homerun: 'HR Alerts' };
+    const roleNames = { nrfi: 'NRFI Alerts', f5ml: 'F5 Alerts', teamtotal: 'Team Total Alerts' };
     if (guild) {
       let role = guild.roles.cache.find(r => r.name === roleNames[marketType]);
       if (!role) {
         try {
           role = await guild.roles.create({
             name: roleNames[marketType],
-            color: marketType === 'nrfi' ? 0x3fb950 : marketType === 'strikeout' ? 0xf85149 : 0x9b59b6,
+            color: marketType === 'nrfi' ? 0x3fb950 : marketType === 'f5ml' ? 0x58a6ff : 0xf0a500,
             mentionable: true,
             reason: `Auto-created for MLB ${marketType} notifications`,
           });
@@ -1014,12 +544,11 @@ async function postAnalysisToDiscord(client, guildId, marketType, date) {
     let summary = '';
     if (marketType === 'nrfi') {
       summary = `\n📊 ${nrfiCount} NRFI | ${yrfiCount} YRFI | ${entries.length} games`;
-    } else if (marketType === 'strikeout') {
-      const overCount = entries.filter(e => e.suggestion.includes('Over')).length;
-      summary = `\n📊 ${overCount} Overs | ${entries.length - overCount} Unders | ${entries.length} matchups`;
+    } else if (marketType === 'f5ml') {
+      summary = `\n📊 ${entries.length} F5 ML picks | Starter-driven edges`;
     } else {
-      const likelyCount = entries.filter(e => e.suggestion === 'HR Likely').length;
-      summary = `\n📊 ${likelyCount} HR Likely | ${entries.length - likelyCount} Low HR | ${entries.length} games`;
+      const overCount = entries.filter(e => e.suggestion.includes('Over')).length;
+      summary = `\n📊 ${overCount} Overs | ${entries.length - overCount} Unders | ${entries.length} team totals`;
     }
 
     const existingMsg = await mlbDb.getMessage(date, marketType, guildId);
@@ -1045,6 +574,271 @@ async function postAnalysisToDiscord(client, guildId, marketType, date) {
     console.log(`[MLB ${marketType}] Posted analysis to Discord (${entries.length} games)`);
   } catch (err) {
     console.error(`[MLB ${marketType}] Discord post error:`, err);
+  }
+}
+
+// ══════════════════════════════════════════════════
+// First 5 Innings Moneyline Analysis
+// ══════════════════════════════════════════════════
+
+async function generateF5Analysis(client, guildId) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+  const existing = await mlbDb.hasAnalysisForToday('f5ml', guildId, today);
+  if (existing) {
+    console.log('[MLB F5] Already have analysis for today, checking for unposted...');
+    const msg = await mlbDb.getMessage(today, 'f5ml', guildId);
+    if (!msg) await postAnalysisToDiscord(client, guildId, 'f5ml', today);
+    return;
+  }
+
+  const games = await fetchMLBScoreboardRaw();
+  if (games.length === 0) { console.log('[MLB F5] No MLB games today.'); return; }
+
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  if (!OPENAI_API_KEY) return;
+
+  const record = await mlbDb.getRecord('f5ml', guildId);
+
+  console.log('[MLB F5] Fetching pitcher stats...');
+  const pitcherStatsCache = {};
+  const fetches = [];
+  for (const g of games) {
+    if (g.homePitcher.id) fetches.push(fetchPitcherDetailedStats(g.homePitcher.id).then(s => { pitcherStatsCache[g.homePitcher.id] = s; }));
+    if (g.awayPitcher.id) fetches.push(fetchPitcherDetailedStats(g.awayPitcher.id).then(s => { pitcherStatsCache[g.awayPitcher.id] = s; }));
+  }
+  await Promise.all(fetches);
+
+  const gamesData = games.map(g => {
+    const hpStats = pitcherStatsCache[g.homePitcher.id];
+    const apStats = pitcherStatsCache[g.awayPitcher.id];
+    return {
+      espnGameId: g.espnGameId,
+      matchup: `${g.away.abbr} @ ${g.home.abbr}`,
+      awayTeam: g.away.team, homeTeam: g.home.team,
+      awayRecord: g.away.record, homeRecord: g.home.record,
+      awayPitcher: {
+        name: g.awayPitcher.name, record: g.awayPitcher.record,
+        ERA: apStats?.ERA || g.awayPitcher.stats?.ERA || 'N/A',
+        WHIP: apStats?.WHIP || 'N/A', IP: apStats?.IP || 'N/A',
+        QS: apStats?.QS || 'N/A', K9: apStats?.K9 || 'N/A',
+        PperStart: apStats?.PperStart || 'N/A',
+      },
+      homePitcher: {
+        name: g.homePitcher.name, record: g.homePitcher.record,
+        ERA: hpStats?.ERA || g.homePitcher.stats?.ERA || 'N/A',
+        WHIP: hpStats?.WHIP || 'N/A', IP: hpStats?.IP || 'N/A',
+        QS: hpStats?.QS || 'N/A', K9: hpStats?.K9 || 'N/A',
+        PperStart: hpStats?.PperStart || 'N/A',
+      },
+      odds: { homeML: g.odds.homeML, awayML: g.odds.awayML, overUnder: g.odds.overUnder, spread: g.odds.spread },
+      startTime: g.startTime, gameNumber: g.gameNumber,
+    };
+  });
+
+  const prompt = `You are an elite MLB First 5 Innings (F5) moneyline analyst. Your current F5 record is ${record.hits}-${record.misses}.
+
+The F5 moneyline bet ends after 5 full innings. Pick the team that will be LEADING after 5 innings. Key factors:
+1. Starting pitcher quality is EVERYTHING — ERA, WHIP, IP (innings pitched), quality starts.
+2. A starter averaging < 80 pitches/start may not reach inning 5 — HIGH RISK.
+3. Bullpen is irrelevant — this is 100% about the starter.
+4. Large moneyline favorites (< -150) usually have the dominant starter — lean with them.
+5. Look for VALUE: a team at +120 F5 whose starter is equal or better than the opponent.
+6. Skip games where both starters are TBD.
+
+Today's MLB slate:
+${JSON.stringify(gamesData, null, 2)}
+
+For each game, pick the F5 ML winner. Return a JSON array:
+[
+  {
+    "espnGameId": "<ESPN game ID>",
+    "pick": "home" or "away",
+    "pickTeam": "<team abbreviation>",
+    "pickedOdds": <moneyline number e.g. -140 or 110>,
+    "confidence": <number 55-95>,
+    "reasoning": "<1-2 sentences citing starter ERA, WHIP, matchup edge>"
+  }
+]
+
+Skip games where BOTH starters are TBD. Order by confidence (highest first). Return ONLY valid JSON array.`;
+
+  try {
+    const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+      body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: prompt }], temperature: 0.4, max_tokens: 5000 }),
+    });
+    const oaiData = await oaiRes.json();
+    if (oaiData.error) { console.error('[MLB F5] OpenAI error:', oaiData.error); return; }
+
+    const content = oaiData.choices?.[0]?.message?.content?.trim();
+    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').replace(/:\s*\+(\d)/g, ': $1').trim();
+    const analyses = JSON.parse(jsonStr);
+
+    const entries = analyses.map(a => {
+      const game = games.find(g => g.espnGameId === a.espnGameId);
+      if (!game) return null;
+      const oddsStr = a.pickedOdds != null ? (a.pickedOdds > 0 ? `+${a.pickedOdds}` : String(a.pickedOdds)) : null;
+      return {
+        guild_id: guildId,
+        analysis_date: today,
+        market_type: 'f5ml',
+        espn_game_id: a.espnGameId,
+        home_team: game.home.team, home_abbr: game.home.abbr,
+        away_team: game.away.team, away_abbr: game.away.abbr,
+        game_number: game.gameNumber, event_start_time: game.startTime,
+        home_pitcher: game.homePitcher.name, home_pitcher_id: game.homePitcher.id,
+        home_pitcher_headshot: game.homePitcher.headshot, home_pitcher_stats: game.homePitcher.stats,
+        away_pitcher: game.awayPitcher.name, away_pitcher_id: game.awayPitcher.id,
+        away_pitcher_headshot: game.awayPitcher.headshot, away_pitcher_stats: game.awayPitcher.stats,
+        suggestion: `${a.pickTeam} F5 ML${oddsStr ? ' ' + oddsStr : ''}`,
+        confidence: a.confidence,
+        reasoning: a.reasoning,
+        odds: oddsStr,
+        line: a.pick, // 'home' or 'away' — used for resolution
+      };
+    }).filter(Boolean);
+
+    await mlbDb.createAnalysisEntries(entries);
+    console.log(`[MLB F5] Generated ${entries.length} analyses for ${today}`);
+    await postAnalysisToDiscord(client, guildId, 'f5ml', today);
+  } catch (err) {
+    console.error('[MLB F5] Generation error:', err);
+  }
+}
+
+// ══════════════════════════════════════════════════
+// Team Totals Analysis
+// ══════════════════════════════════════════════════
+
+async function generateTeamTotalAnalysis(client, guildId) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+  const existing = await mlbDb.hasAnalysisForToday('teamtotal', guildId, today);
+  if (existing) {
+    console.log('[MLB TT] Already have analysis for today, checking for unposted...');
+    const msg = await mlbDb.getMessage(today, 'teamtotal', guildId);
+    if (!msg) await postAnalysisToDiscord(client, guildId, 'teamtotal', today);
+    return;
+  }
+
+  const games = await fetchMLBScoreboardRaw();
+  if (games.length === 0) { console.log('[MLB TT] No MLB games today.'); return; }
+
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  if (!OPENAI_API_KEY) return;
+
+  const record = await mlbDb.getRecord('teamtotal', guildId);
+
+  console.log('[MLB TT] Fetching pitcher + batting stats...');
+  const pitcherStatsCache = {};
+  const teamBattingCache = {};
+  const fetches = [];
+  const teamFetches = new Set();
+  for (const g of games) {
+    if (g.homePitcher.id) fetches.push(fetchPitcherDetailedStats(g.homePitcher.id).then(s => { pitcherStatsCache[g.homePitcher.id] = s; }));
+    if (g.awayPitcher.id) fetches.push(fetchPitcherDetailedStats(g.awayPitcher.id).then(s => { pitcherStatsCache[g.awayPitcher.id] = s; }));
+    if (g.home.id && !teamFetches.has(g.home.id)) {
+      teamFetches.add(g.home.id);
+      fetches.push(fetchTeamBattingStats(g.home.id).then(s => { teamBattingCache[g.home.id] = s; }));
+    }
+    if (g.away.id && !teamFetches.has(g.away.id)) {
+      teamFetches.add(g.away.id);
+      fetches.push(fetchTeamBattingStats(g.away.id).then(s => { teamBattingCache[g.away.id] = s; }));
+    }
+  }
+  await Promise.all(fetches);
+
+  const gamesData = games.map(g => {
+    const hpStats = pitcherStatsCache[g.homePitcher.id];
+    const apStats = pitcherStatsCache[g.awayPitcher.id];
+    const homeBatting = teamBattingCache[g.home.id];
+    const awayBatting = teamBattingCache[g.away.id];
+    return {
+      espnGameId: g.espnGameId,
+      matchup: `${g.away.abbr} @ ${g.home.abbr}`,
+      awayTeam: { abbr: g.away.abbr, team: g.away.team, record: g.away.record },
+      homeTeam: { abbr: g.home.abbr, team: g.home.team, record: g.home.record },
+      // Away team bats against home pitcher; home team bats against away pitcher
+      awayVsPitcher: { name: g.homePitcher.name, ERA: hpStats?.ERA || 'N/A', WHIP: hpStats?.WHIP || 'N/A', IP: hpStats?.IP || 'N/A' },
+      homeVsPitcher: { name: g.awayPitcher.name, ERA: apStats?.ERA || 'N/A', WHIP: apStats?.WHIP || 'N/A', IP: apStats?.IP || 'N/A' },
+      awayBatting: awayBatting ? { AVG: awayBatting.AVG, OBP: awayBatting.OBP, OPS: awayBatting.OPS, KRate: awayBatting.KRate } : null,
+      homeBatting: homeBatting ? { AVG: homeBatting.AVG, OBP: homeBatting.OBP, OPS: homeBatting.OPS, KRate: homeBatting.KRate } : null,
+      gameTotal: g.odds.overUnder,
+      startTime: g.startTime, gameNumber: g.gameNumber,
+    };
+  });
+
+  const prompt = `You are an elite MLB team total analyst. Your record is ${record.hits}-${record.misses}.
+
+A team total bet is Over/Under on ONE team's full-game run total. Key factors:
+1. The OPPOSING pitcher's ERA/WHIP is the #1 factor — team total is a bet against that pitcher.
+2. Team batting OPS and AVG: high-OPS offenses vs weak pitchers = Over.
+3. Over is attractive: opposing pitcher ERA > 4.50 + team OPS > .750.
+4. Under is attractive: opposing pitcher ERA < 3.00 + team K-rate > 24%.
+5. Typical lines: 3.5 to 5.5 runs. Use half-number lines.
+6. Pick ONE team per game (the clearest edge side). Do NOT pick both teams from the same game.
+
+Today's slate:
+${JSON.stringify(gamesData, null, 2)}
+
+Return a JSON array — one pick per game:
+[
+  {
+    "espnGameId": "<ESPN game ID>",
+    "team": "home" or "away",
+    "teamAbbr": "<team abbreviation>",
+    "line": <half-number e.g. 4.5>,
+    "suggestion": "Over" or "Under",
+    "confidence": <number 55-95>,
+    "reasoning": "<1-2 sentences citing opposing pitcher ERA/WHIP and team batting>"
+  }
+]
+
+Order by confidence (highest first). Return ONLY valid JSON array.`;
+
+  try {
+    const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+      body: JSON.stringify({ model: 'gpt-4o', messages: [{ role: 'user', content: prompt }], temperature: 0.4, max_tokens: 5000 }),
+    });
+    const oaiData = await oaiRes.json();
+    if (oaiData.error) { console.error('[MLB TT] OpenAI error:', oaiData.error); return; }
+
+    const content = oaiData.choices?.[0]?.message?.content?.trim();
+    const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const analyses = JSON.parse(jsonStr);
+
+    const entries = analyses.map(a => {
+      const game = games.find(g => g.espnGameId === a.espnGameId);
+      if (!game) return null;
+      return {
+        guild_id: guildId,
+        analysis_date: today,
+        market_type: 'teamtotal',
+        espn_game_id: `${a.espnGameId}_${a.team}`,
+        home_team: game.home.team, home_abbr: game.home.abbr,
+        away_team: game.away.team, away_abbr: game.away.abbr,
+        game_number: game.gameNumber, event_start_time: game.startTime,
+        home_pitcher: game.homePitcher.name, home_pitcher_id: game.homePitcher.id,
+        home_pitcher_headshot: game.homePitcher.headshot, home_pitcher_stats: game.homePitcher.stats,
+        away_pitcher: game.awayPitcher.name, away_pitcher_id: game.awayPitcher.id,
+        away_pitcher_headshot: game.awayPitcher.headshot, away_pitcher_stats: game.awayPitcher.stats,
+        suggestion: `${a.teamAbbr} ${a.suggestion} ${a.line}`,
+        confidence: a.confidence,
+        reasoning: a.reasoning,
+        odds: null,
+        line: a.line,
+      };
+    }).filter(Boolean);
+
+    await mlbDb.createAnalysisEntries(entries);
+    console.log(`[MLB TT] Generated ${entries.length} analyses for ${today}`);
+    await postAnalysisToDiscord(client, guildId, 'teamtotal', today);
+  } catch (err) {
+    console.error('[MLB TT] Generation error:', err);
   }
 }
 
@@ -1147,126 +941,110 @@ async function autoResolveNrfi(client) {
   for (const d of nrfiDates) await refreshAnalysisCards(client, 'nrfi', d);
 }
 
-async function autoResolveStrikeouts(client) {
-  const pending = await mlbDb.getPendingAnalysis('strikeout');
+async function autoResolveF5(client) {
+  const pending = await mlbDb.getPendingAnalysis('f5ml');
   if (pending.length === 0) return;
 
   for (const entry of pending) {
     try {
-      // espn_game_id may have _away or _home suffix for per-pitcher entries
-      const realGameId = entry.espn_game_id.replace(/_(away|home)$/, '');
+      const realGameId = entry.espn_game_id; // no suffix for F5
+      const dateStr = entry.analysis_date.replace(/-/g, '');
+      const games = await getTodaysGames('mlb', dateStr);
+      const game = games.find(g => g.id === realGameId);
+      // Only resolve when inning 5 has been completed (period >= 5) or game is over
+      if (!game || (!game.completed && (game.period || 0) < 5)) continue;
+
+      // Fetch linescore for inning-by-inning runs
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${realGameId}`);
+      const json = await res.json();
+
+      const linescore = json.header?.competitions?.[0]?.competitors;
+      if (!linescore || linescore.length < 2) continue;
+
+      // ESPN returns competitors array: [home, away] (homeAtIndex depends on homeAway field)
+      const homeComp = linescore.find(c => c.homeAway === 'home');
+      const awayComp = linescore.find(c => c.homeAway === 'away');
+      if (!homeComp || !awayComp) continue;
+
+      // Sum innings 1-5 from linescores
+      const homeInnings = homeComp.linescores || [];
+      const awayInnings = awayComp.linescores || [];
+      const sumFirst5 = arr => arr.slice(0, 5).reduce((sum, inn) => sum + (inn.value || 0), 0);
+
+      if (homeInnings.length < 5 && !game.completed) continue; // haven't played 5 yet
+
+      const homeF5Runs = sumFirst5(homeInnings);
+      const awayF5Runs = sumFirst5(awayInnings);
+
+      const pickedSide = entry.line; // 'home' or 'away'
+      let status;
+      if (pickedSide === 'home') {
+        status = homeF5Runs > awayF5Runs ? 'hit' : homeF5Runs < awayF5Runs ? 'miss' : 'push';
+      } else {
+        status = awayF5Runs > homeF5Runs ? 'hit' : awayF5Runs < homeF5Runs ? 'miss' : 'push';
+      }
+
+      const icon = status === 'hit' ? '✅' : status === 'push' ? '🟡' : '❌';
+      const result = `F5: ${entry.away_abbr} ${awayF5Runs} - ${homeF5Runs} ${entry.home_abbr} ${icon}`;
+      await mlbDb.closeAnalysisEntry(entry.id, status, result);
+      console.log(`[MLB F5] Resolved ${entry.away_abbr}@${entry.home_abbr}: ${status} (${result})`);
+    } catch (err) {
+      console.error(`[MLB F5] Resolve error for ${entry.id}:`, err.message);
+    }
+  }
+
+  const f5Dates = [...new Set(pending.map(e => e.analysis_date))];
+  for (const d of f5Dates) await refreshAnalysisCards(client, 'f5ml', d);
+}
+
+async function autoResolveTeamTotals(client) {
+  const pending = await mlbDb.getPendingAnalysis('teamtotal');
+  if (pending.length === 0) return;
+
+  for (const entry of pending) {
+    try {
+      const side = entry.espn_game_id.endsWith('_home') ? 'home' : 'away';
+      const realGameId = entry.espn_game_id.replace(/_(home|away)$/, '');
       const dateStr = entry.analysis_date.replace(/-/g, '');
       const games = await getTodaysGames('mlb', dateStr);
       const game = games.find(g => g.id === realGameId);
       if (!game || !game.completed) continue;
 
-      // Fetch box score for pitcher K stats
+      // Parse direction and line from suggestion: e.g. "NYY Over 4.5"
+      const suggMatch = entry.suggestion.match(/\b(Over|Under)\s+([\d.]+)/i);
+      if (!suggMatch) continue;
+      const direction = suggMatch[1].toLowerCase(); // 'over' or 'under'
+      const line = entry.line != null ? parseFloat(entry.line) : parseFloat(suggMatch[2]);
+
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${realGameId}`);
       const json = await res.json();
 
-      const boxPlayers = json.boxscore?.players || [];
-      let bestPitcherK = null;
-      let bestPitcherName = null;
+      const competitors = json.header?.competitions?.[0]?.competitors;
+      if (!competitors || competitors.length < 2) continue;
 
-      // The suggestion contains the pitcher name, find their K count
-      // Format: "Pitcher Name Over/Under X.5 K"
-      const suggestionMatch = entry.suggestion.match(/^(.+?)\s+(Over|Under)\s+([\d.]+)\s+K$/i);
-      if (!suggestionMatch) continue;
+      const comp = competitors.find(c => c.homeAway === side);
+      if (!comp) continue;
 
-      const targetPitcher = suggestionMatch[1].trim();
-      const direction = suggestionMatch[2].toLowerCase();
-      const kLine = parseFloat(suggestionMatch[3]);
-
-      // Find pitcher in box score (ESPN uses statGroup.type, not .name)
-      for (const teamStats of boxPlayers) {
-        for (const statGroup of (teamStats.statistics || [])) {
-          if ((statGroup.type || statGroup.name) !== 'pitching') continue;
-          const kIdx = (statGroup.labels || []).findIndex(l => l === 'K');
-          if (kIdx === -1) continue;
-          for (const athlete of (statGroup.athletes || [])) {
-            const name = athlete.athlete?.displayName || '';
-            if (name.toLowerCase().includes(targetPitcher.toLowerCase().split(' ').pop()) ||
-                targetPitcher.toLowerCase().includes(name.toLowerCase().split(' ').pop())) {
-              const kCount = parseInt(athlete.stats?.[kIdx] || 0);
-              if (athlete.starter || bestPitcherK === null) {
-                bestPitcherK = kCount;
-                bestPitcherName = name;
-              }
-            }
-          }
-        }
-      }
-
-      if (bestPitcherK === null) continue;
-
+      const teamRuns = parseInt(comp.score || 0);
       let status;
       if (direction === 'over') {
-        status = bestPitcherK > kLine ? 'hit' : bestPitcherK === kLine ? 'push' : 'miss';
+        status = teamRuns > line ? 'hit' : teamRuns < line ? 'miss' : 'push';
       } else {
-        status = bestPitcherK < kLine ? 'hit' : bestPitcherK === kLine ? 'push' : 'miss';
+        status = teamRuns < line ? 'hit' : teamRuns > line ? 'miss' : 'push';
       }
 
-      const result = `${bestPitcherName}: ${bestPitcherK} K (${direction} ${kLine}) ${status === 'hit' ? '✅' : status === 'push' ? '🟡' : '❌'}`;
+      const teamAbbr = side === 'home' ? entry.home_abbr : entry.away_abbr;
+      const icon = status === 'hit' ? '✅' : status === 'push' ? '🟡' : '❌';
+      const result = `${teamAbbr}: ${teamRuns} runs (${direction} ${line}) ${icon}`;
       await mlbDb.closeAnalysisEntry(entry.id, status, result);
-      console.log(`[MLB K] Resolved ${entry.away_abbr}@${entry.home_abbr}: ${status} (${result})`);
+      console.log(`[MLB TT] Resolved ${entry.away_abbr}@${entry.home_abbr} ${teamAbbr}: ${status} (${result})`);
     } catch (err) {
-      console.error(`[MLB K] Resolve error for ${entry.id}:`, err.message);
+      console.error(`[MLB TT] Resolve error for ${entry.id}:`, err.message);
     }
   }
 
-  const kDates = [...new Set(pending.map(e => e.analysis_date))];
-  for (const d of kDates) await refreshAnalysisCards(client, 'strikeout', d);
-}
-
-async function autoResolveHomeruns(client) {
-  const pending = await mlbDb.getPendingAnalysis('homerun');
-  if (pending.length === 0) return;
-
-  for (const entry of pending) {
-    try {
-      const dateStr = entry.analysis_date.replace(/-/g, '');
-      const games = await getTodaysGames('mlb', dateStr);
-      const game = games.find(g => g.id === entry.espn_game_id);
-      if (!game || !game.completed) continue;
-
-      // Fetch box score for HR data
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${entry.espn_game_id}`);
-      const json = await res.json();
-
-      // Count total HRs from box score hitting stats (ESPN uses statGroup.type, not .name)
-      let totalHR = 0;
-      const hrHitters = [];
-      const boxPlayers = json.boxscore?.players || [];
-      for (const teamStats of boxPlayers) {
-        for (const statGroup of (teamStats.statistics || [])) {
-          if ((statGroup.type || statGroup.name) !== 'batting') continue;
-          const hrIdx = (statGroup.labels || []).findIndex(l => l === 'HR');
-          if (hrIdx === -1) continue;
-          for (const athlete of (statGroup.athletes || [])) {
-            const hr = parseInt(athlete.stats?.[hrIdx] || 0);
-            if (hr > 0) {
-              totalHR += hr;
-              hrHitters.push(athlete.athlete?.displayName || '?');
-            }
-          }
-        }
-      }
-
-      const isHRLikely = entry.suggestion === 'HR Likely';
-      const hadHR = totalHR > 0;
-      const status = (isHRLikely === hadHR) ? 'hit' : 'miss';
-      const hitterStr = hrHitters.length > 0 ? ` (${hrHitters.join(', ')})` : '';
-      const result = `${totalHR} HR${totalHR !== 1 ? 's' : ''}${hitterStr} ${status === 'hit' ? '✅' : '❌'}`;
-
-      await mlbDb.closeAnalysisEntry(entry.id, status, result);
-      console.log(`[MLB HR] Resolved ${entry.away_abbr}@${entry.home_abbr}: ${status} (${result})`);
-    } catch (err) {
-      console.error(`[MLB HR] Resolve error for ${entry.id}:`, err.message);
-    }
-  }
-
-  const hrDates = [...new Set(pending.map(e => e.analysis_date))];
-  for (const d of hrDates) await refreshAnalysisCards(client, 'homerun', d);
+  const ttDates = [...new Set(pending.map(e => e.analysis_date))];
+  for (const d of ttDates) await refreshAnalysisCards(client, 'teamtotal', d);
 }
 
 /**
@@ -1293,10 +1071,10 @@ async function refreshAnalysisCards(client, marketType, analysisDate) {
     let imgBuffer;
     if (marketType === 'nrfi') {
       imgBuffer = await generateNrfiCardImage(entries, record, streak);
-    } else if (marketType === 'strikeout') {
-      imgBuffer = await generateStrikeoutCardImage(entries, record, streak);
+    } else if (marketType === 'f5ml') {
+      imgBuffer = await generateF5CardImage(entries, record, streak);
     } else {
-      imgBuffer = await generateHomerunCardImage(entries, record, streak);
+      imgBuffer = await generateTeamTotalCardImage(entries, record, streak);
     }
 
     const { AttachmentBuilder } = require('discord.js');
@@ -1317,9 +1095,9 @@ async function generateAllDailyAnalysis(client, guildId) {
   await generateNrfiAnalysis(client, guildId);
   // Stagger to avoid rate limits
   await new Promise(r => setTimeout(r, 5000));
-  await generateStrikeoutAnalysis(client, guildId);
+  await generateF5Analysis(client, guildId);
   await new Promise(r => setTimeout(r, 5000));
-  await generateHomerunAnalysis(client, guildId);
+  await generateTeamTotalAnalysis(client, guildId);
   console.log('[MLB] Daily MLB analysis complete.');
 }
 
@@ -1328,8 +1106,8 @@ async function generateAllDailyAnalysis(client, guildId) {
  */
 async function autoResolveAll(client) {
   await autoResolveNrfi(client);
-  await autoResolveStrikeouts(client);
-  await autoResolveHomeruns(client);
+  await autoResolveF5(client);
+  await autoResolveTeamTotals(client);
 }
 
 /**
@@ -1340,23 +1118,23 @@ async function regenerateMarket(client, guildId, marketType) {
   console.log(`[MLB] Regenerating ${marketType} for ${today}...`);
   await mlbDb.deleteAnalysisForToday(marketType, guildId, today);
   if (marketType === 'nrfi') await generateNrfiAnalysis(client, guildId);
-  else if (marketType === 'strikeout') await generateStrikeoutAnalysis(client, guildId);
-  else if (marketType === 'homerun') await generateHomerunAnalysis(client, guildId);
+  else if (marketType === 'f5ml') await generateF5Analysis(client, guildId);
+  else if (marketType === 'teamtotal') await generateTeamTotalAnalysis(client, guildId);
   console.log(`[MLB] ${marketType} regeneration complete.`);
 }
 
 module.exports = {
   NRFI_CHANNEL_ID,
-  STRIKEOUT_CHANNEL_ID,
-  HOMERUN_CHANNEL_ID,
+  F5ML_CHANNEL_ID,
+  TEAMTOTAL_CHANNEL_ID,
   generateNrfiAnalysis,
-  generateStrikeoutAnalysis,
-  generateHomerunAnalysis,
+  generateF5Analysis,
+  generateTeamTotalAnalysis,
   generateAllDailyAnalysis,
   autoResolveAll,
   autoResolveNrfi,
-  autoResolveStrikeouts,
-  autoResolveHomeruns,
+  autoResolveF5,
+  autoResolveTeamTotals,
   refreshAnalysisCards,
   regenerateMarket,
 };

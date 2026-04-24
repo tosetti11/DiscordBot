@@ -1230,7 +1230,7 @@ client.once(Events.ClientReady, (c) => {
       }
     }, 5 * 60_000);
 
-    console.log('   ⚾ MLB Daily Analysis scheduler started (NRFI/K/HR)');
+    console.log('   ⚾ MLB Daily Analysis scheduler started (NRFI/F5/TT)');
 
     // Fire MLB analysis on startup if none exists yet (only after 9 AM ET, April-October)
     setTimeout(async () => {
