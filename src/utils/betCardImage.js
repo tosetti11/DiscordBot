@@ -2,7 +2,7 @@ const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 const { SPORT_NAMES, WAGER_TYPES, PERIODS, FIGHT_METHODS } = require('../config/constants');
 const { formatOdds, calculatePayout } = require('./odds');
-const { getGameSummary, getGolfPlayerRound, parsePropDescription, findPlayer, MLB_API_STATS, findMlbGamePk, getMlbPlayerStats, COMPUTED_STATS } = require('../services/espn');
+const { getGameSummary, getGolfPlayerRound, getGolf2BallLive, parsePropDescription, findPlayer, MLB_API_STATS, findMlbGamePk, getMlbPlayerStats, COMPUTED_STATS } = require('../services/espn');
 
 // ── Parse event start time to YYYY-MM-DD date string ────────
 const MONTH_MAP = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' };
@@ -312,15 +312,30 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   let legLiveScores = [];
   let golfData = null;
   let legGolfData = [];
+  let matchPlayData = null;
 
   const isGolf = bet.sport?.startsWith('golf');
+  const is2Ball = isGolf && (bet.wager_type === '2ball' || bet.wager_type === '3ball') && bet.match_player_a && bet.match_player_b;
 
   if (!isParlay && bet.espn_game_id) {
-    if (isGolf && bet.player_name) {
+    if (is2Ball) {
+      matchPlayData = await getGolf2BallLive({
+        playerA: bet.match_player_a, playerA2: bet.match_player_a2,
+        playerB: bet.match_player_b, playerB2: bet.match_player_b2,
+        playerC: bet.match_player_c, roundNum: bet.golf_round || null
+      });
+    } else if (isGolf && bet.player_name) {
       golfData = bet._golfData || await getGolfPlayerRound(bet.player_name, bet.golf_round || null);
     } else {
       singleLiveScore = bet._liveScore || await fetchLiveScore(bet.sport, bet.espn_game_id, bet.wager_type);
     }
+  } else if (!isParlay && is2Ball) {
+    // No espn_game_id yet for 2ball — still try to fetch live data
+    matchPlayData = await getGolf2BallLive({
+      playerA: bet.match_player_a, playerA2: bet.match_player_a2,
+      playerB: bet.match_player_b, playerB2: bet.match_player_b2,
+      playerC: bet.match_player_c, roundNum: bet.golf_round || null
+    }).catch(() => null);
   }
   if (isParlay && bet.parlay_legs?.length) {
     legLiveScores = await Promise.all(
@@ -416,6 +431,7 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (bet.event_start_time) y += 18;
     if (bet.espn_game_id) y += 16;
     if (golfData && golfData.roundStatus !== 'pre') y += 52; // golf tracker
+    else if (matchPlayData && matchPlayData.overallStatus !== 'pre') y += 80; // 2ball/3ball tracker
     else if (singleLiveScore && singleLiveScore.state !== 'pre') y += 30;
     if (singlePropStat) y += 24; // prop stat progress
     if (singleBattingLine) y += 16; // batting line
@@ -581,7 +597,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
   // Status badge (right side)
   const singleIsLive = !isParlay && singleLiveScore && singleLiveScore.state === 'in' && status === 'open';
   const golfIsLive = !isParlay && golfData && golfData.roundStatus === 'in' && status === 'open';
-  const betIsLive = singleIsLive || golfIsLive;
+  const matchPlayIsLive = !isParlay && matchPlayData && matchPlayData.overallStatus === 'in' && status === 'open';
+  const betIsLive = singleIsLive || golfIsLive || matchPlayIsLive;
   const badgeText = betIsLive ? '● LIVE' : statusLabel;
   ctx.font = '800 11px ' + FF;
   const badgeW = ctx.measureText(badgeText).width + 20;
@@ -800,6 +817,64 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       ctx.fillText(gBarText, barX + (barW - gbtW) / 2, barY + 9);
 
       curY += 52;
+    } else if (matchPlayData && matchPlayData.overallStatus !== 'pre') {
+      // ── 2-Ball / 3-Ball match play tracker ──
+      const mpIsLive = matchPlayData.overallStatus === 'in';
+      const mpBg = mpIsLive ? 'rgba(67, 181, 129, 0.08)' : 'rgba(128, 128, 128, 0.06)';
+      const mpBorderColor = mpIsLive ? 'rgba(67, 181, 129, 0.25)' : 'rgba(128, 128, 128, 0.15)';
+      roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 76, 6);
+      ctx.fillStyle = mpBg; ctx.fill();
+      ctx.strokeStyle = mpBorderColor; ctx.lineWidth = 1;
+      roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 76, 6); ctx.stroke();
+
+      const fmtScore = (s) => { if (s == null) return '-'; const n = parseInt(s); if (isNaN(n)) return '-'; if (n === 0) return 'E'; return n > 0 ? `+${n}` : `${n}`; };
+      const mpX = LEFT_BAR + PAD + 6;
+      const mp = matchPlayData;
+
+      // Group A row
+      ctx.font = '600 11px ' + FF;
+      ctx.fillStyle = C.textSecondary;
+      ctx.fillText(mp.groupA?.displayName || '—', mpX, curY + 16);
+      ctx.font = '700 11px ' + FF;
+      ctx.fillStyle = mpIsLive ? '#4ade80' : C.textSecondary;
+      const gAScore = fmtScore(mp.groupA?.roundScore) + (mp.groupA?.holesCompleted != null ? ` thru ${mp.groupA.holesCompleted}` : '');
+      const gAW = ctx.measureText(gAScore).width;
+      ctx.fillText(gAScore, W - PAD - gAW - 4, curY + 16);
+
+      // Match status badge (center)
+      if (mp.matchStatus) {
+        const badge = mp.matchStatus.label;
+        ctx.font = '800 13px ' + FF;
+        const isBadgeAhead = mp.matchStatus.ahead;
+        ctx.fillStyle = badge === 'AS' ? C.textMuted : (isBadgeAhead ? '#4ade80' : '#f87171');
+        const bw = ctx.measureText(badge).width;
+        ctx.fillText(badge, LEFT_BAR + PAD + INNER / 2 - bw / 2, curY + 16);
+      }
+
+      // Group B row
+      ctx.font = '600 11px ' + FF;
+      ctx.fillStyle = C.textSecondary;
+      ctx.fillText(mp.groupB?.displayName || '—', mpX, curY + 34);
+      ctx.font = '700 11px ' + FF;
+      ctx.fillStyle = C.textSecondary;
+      const gBScore = fmtScore(mp.groupB?.roundScore) + (mp.groupB?.holesCompleted != null ? ` thru ${mp.groupB.holesCompleted}` : '');
+      const gBW = ctx.measureText(gBScore).width;
+      ctx.fillText(gBScore, W - PAD - gBW - 4, curY + 34);
+
+      // Tournament + round
+      ctx.font = '10px ' + FF;
+      ctx.fillStyle = C.textMuted;
+      const mpTournLabel = `⛳ ${mp.tournamentName || 'Golf'} — R${mp.roundNum || ''}${mpIsLive ? ' LIVE' : (matchPlayData.overallStatus === 'post' ? ' FINAL' : '')}`;
+      ctx.fillText(mpTournLabel, mpX, curY + 52);
+
+      // Group C (3-ball)
+      if (mp.groupC) {
+        ctx.font = '600 10px ' + FF; ctx.fillStyle = C.textMuted;
+        const gcLabel = `C: ${mp.groupC.displayName} ${fmtScore(mp.groupC.roundScore)}`;
+        ctx.fillText(gcLabel, mpX, curY + 66);
+      }
+
+      curY += 80;
     } else if (singleLiveScore && singleLiveScore.state !== 'pre') {
       const isLive = singleLiveScore.state === 'in';
       const scBg = isLive ? 'rgba(67, 181, 129, 0.10)' : 'rgba(128, 128, 128, 0.08)';

@@ -1679,6 +1679,180 @@ async function findGameById(sport, gameId, preferredDateStr) {
   return null;
 }
 
+/**
+ * Get live 2-ball or 3-ball golf match-play data.
+ *
+ * Fetches round scores for all players and calculates match-play
+ * status (X Up / All Square / X Dn) relative to Group A.
+ *
+ * For team format (Zurich Classic): pass two players per side; their
+ * round scores are combined (summed stroke total for the day).
+ *
+ * @param {Object} params
+ * @param {string}  params.playerA  - Group A player 1 name
+ * @param {string}  [params.playerA2] - Group A player 2 (team format)
+ * @param {string}  params.playerB  - Group B / opponent player 1
+ * @param {string}  [params.playerB2] - Group B player 2 (team format)
+ * @param {string}  [params.playerC]  - 3rd player (3-ball only)
+ * @param {number}  [params.roundNum] - Tournament round (1-4)
+ * @returns {Object|null} match-play data structure
+ */
+async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC, roundNum } = {}) {
+  if (!playerA || !playerB) return null;
+
+  const espnPath = ESPN_PATHS.golf_pga;
+  if (!espnPath) return null;
+
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${today}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const event = json.events?.[0];
+    if (!event) return null;
+
+    const competitors = event.competitions?.[0]?.competitors || [];
+    const tournamentName = event.name || 'Tournament';
+
+    // Fuzzy player finder
+    function findComp(name) {
+      if (!name) return null;
+      const norm = name.toLowerCase().replace(/[^a-z ]/g, '').trim();
+      return competitors.find(c => {
+        const dn = (c.athlete?.displayName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+        const fn = (c.athlete?.fullName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+        return dn === norm || fn === norm || dn.includes(norm) || norm.includes(dn) ||
+               norm.includes(dn.split(' ').pop()); // last name match
+      });
+    }
+
+    // Extract per-player round info
+    function extractPlayer(comp, rNum) {
+      if (!comp) return { name: null, found: false, roundScore: null, holesCompleted: 0, roundStatus: 'pre', overallScore: 'E' };
+
+      const rounds = comp.linescores || [];
+      const currentRound = event.competitions?.[0]?.status?.period || rounds.length || 1;
+      const rIdx = rNum ? rNum - 1 : currentRound - 1;
+      const round = rounds[rIdx];
+
+      let holesCompleted = 0;
+      let runningScore = 0;
+
+      if (round?.linescores?.length) {
+        holesCompleted = round.linescores.length;
+        for (const hole of round.linescores) runningScore += hole.value || 0;
+      }
+
+      let roundStatus = 'pre';
+      if (round?.linescores?.length === 18) roundStatus = 'post';
+      else if (round?.linescores?.length > 0) roundStatus = 'in';
+      else if (rIdx < currentRound - 1) roundStatus = 'post';
+
+      // Round score: use ESPN value if available, else running hole score
+      const roundScore = round?.value ?? (roundStatus !== 'pre' ? runningScore : null);
+
+      return {
+        name: comp.athlete?.displayName || null,
+        found: true,
+        roundScore,
+        holesCompleted,
+        roundStatus,
+        overallScore: comp.score || 'E',
+        position: comp.order || null,
+      };
+    }
+
+    const compA  = findComp(playerA);
+    const compA2 = playerA2 ? findComp(playerA2) : null;
+    const compB  = findComp(playerB);
+    const compB2 = playerB2 ? findComp(playerB2) : null;
+    const compC  = playerC  ? findComp(playerC)  : null;
+
+    const pA  = extractPlayer(compA,  roundNum);
+    const pA2 = extractPlayer(compA2, roundNum);
+    const pB  = extractPlayer(compB,  roundNum);
+    const pB2 = extractPlayer(compB2, roundNum);
+    const pC  = extractPlayer(compC,  roundNum);
+
+    // Determine max holes completed across all players for context
+    const allPlayers = [pA, pA2, pB, pB2, pC].filter(p => p.found);
+    const maxHoles = Math.max(0, ...allPlayers.map(p => p.holesCompleted));
+    const isTeamFormat = !!(playerA2 || playerB2);
+    const is3Ball = !!playerC;
+
+    // Calculate group round scores (sum for team format)
+    // Round score for the day: ESPN linescores.value is already relative to par per round
+    const groupAScore = pA.roundScore != null
+      ? pA.roundScore + (isTeamFormat && pA2.roundScore != null ? pA2.roundScore : 0)
+      : null;
+    const groupBScore = pB.roundScore != null
+      ? pB.roundScore + (isTeamFormat && pB2.roundScore != null ? pB2.roundScore : 0)
+      : null;
+    const groupCScore = is3Ball ? pC.roundScore : null;
+
+    // Match play status relative to group A
+    // Positive = A is ahead (up), negative = A is behind (down)
+    function matchStatus(scoreA, scoreB, holes) {
+      if (scoreA == null || scoreB == null) return null;
+      // In golf: lower score is better, so A is "up" when A's score < B's score
+      const diff = scoreB - scoreA; // positive = A is winning
+      if (diff > 0) return { up: diff, label: `${diff} Up`, ahead: true };
+      if (diff < 0) return { down: Math.abs(diff), label: `${Math.abs(diff)} Dn`, ahead: false };
+      return { label: 'AS', ahead: null }; // All Square
+    }
+
+    const statusVsB = matchStatus(groupAScore, groupBScore, maxHoles);
+    const statusVsC = is3Ball ? matchStatus(groupAScore, groupCScore, maxHoles) : null;
+
+    // Determine overall round status
+    const statuses = allPlayers.map(p => p.roundStatus);
+    let overallStatus = 'pre';
+    if (statuses.every(s => s === 'post')) overallStatus = 'post';
+    else if (statuses.some(s => s === 'in' || s === 'post')) overallStatus = 'in';
+
+    return {
+      tournamentName,
+      roundNum: roundNum || (event.competitions?.[0]?.status?.period || 1),
+      overallStatus,
+      isTeamFormat,
+      is3Ball,
+      maxHoles,
+      groupA: {
+        displayName: isTeamFormat
+          ? `${pA.name || playerA} / ${pA2.name || playerA2}`
+          : (pA.name || playerA),
+        player1: pA,
+        player2: isTeamFormat ? pA2 : null,
+        roundScore: groupAScore,
+        holesCompleted: Math.max(pA.holesCompleted, isTeamFormat ? pA2.holesCompleted : 0),
+      },
+      groupB: {
+        displayName: isTeamFormat
+          ? `${pB.name || playerB} / ${pB2.name || playerB2}`
+          : (pB.name || playerB),
+        player1: pB,
+        player2: isTeamFormat ? pB2 : null,
+        roundScore: groupBScore,
+        holesCompleted: Math.max(pB.holesCompleted, isTeamFormat ? pB2.holesCompleted : 0),
+      },
+      groupC: is3Ball ? {
+        displayName: pC.name || playerC,
+        player1: pC,
+        player2: null,
+        roundScore: groupCScore,
+        holesCompleted: pC.holesCompleted,
+      } : null,
+      matchStatus: statusVsB,       // A vs B
+      matchStatusVsC: statusVsC,    // A vs C (3-ball only)
+    };
+  } catch (err) {
+    console.error('[ESPN] Golf 2-ball live error:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   ESPN_PATHS,
   getTodaysGames,
@@ -1694,6 +1868,7 @@ module.exports = {
   getGolfEventStatus,
   getPeriodScores,
   getGolfPlayerRound,
+  getGolf2BallLive,
   findMlbGamePk,
   getMlbPlayerStats,
   getMlbPlayByPlay,

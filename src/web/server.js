@@ -1910,6 +1910,12 @@ function createWebServer() {
             fields.pick = `Double Chance: ${mergedBet.team_a || ''} or Draw`;
           } else if (wt === 'draw_no_bet') {
             fields.pick = `Draw No Bet: ${mergedBet.team_a || ''}`;
+          } else if (wt === '2ball') {
+            const rdTag = mergedBet.golf_round ? ` R${mergedBet.golf_round}` : '';
+            fields.pick = `2-Ball${rdTag}: ${mergedBet.team_a || ''} to beat ${mergedBet.team_b || ''}`.trim();
+          } else if (wt === '3ball') {
+            const rdTag = mergedBet.golf_round ? ` R${mergedBet.golf_round}` : '';
+            fields.pick = `3-Ball${rdTag}: ${mergedBet.team_a || ''} to win group`.trim();
           }
         } else if (cat === 'player_prop') {
           fields.pick = mergedBet.prop_description || mergedBet.pick || bet.pick;
@@ -2233,7 +2239,7 @@ For a SINGLE bet:
   "betType": "single",
   "sport": "<one of: ${validSports.join(', ')}>",
   "betCategory": "<one of: team_game, player_prop, futures, mlb_live>",
-  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet, mlb_live>",
+  "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet, mlb_live, 2ball, 3ball>",
   "teamA": "<your pick team or null>",
   "teamB": "<opponent team or null>",
   "spreadValue": "<spread or total line value like -1.5, 220.5, or null>",
@@ -2250,6 +2256,11 @@ For a SINGLE bet:
   "fightMethod": "<one of: ko_tko, submission, decision, unanimous_decision, split_decision, dq, points — or null>",
   "golfRound": "<tournament round 1-4 for golf bets, or null>",
   "golfHole": "<hole number 1-18 for golf bets, or null>",
+  "matchPlayerA": "<for 2ball/3ball: the FIRST player/partner in the side you're betting ON, or null>",
+  "matchPlayerA2": "<for 2ball team format (e.g. Zurich): second player in the backed group, or null>",
+  "matchPlayerB": "<for 2ball/3ball: opponent player 1, or null>",
+  "matchPlayerB2": "<for 2ball team format: second player in the opponent group, or null>",
+  "matchPlayerC": "<for 3ball: the third player in the group, or null>",
   "mlbLiveType": "<one of: next_pitch, at_bat, inning, pitch — only for mlb_live bets, null otherwise>",
   "nextPitchOutcome": "<one of: Strike/Foul, Ball/HBP, In Play — for next_pitch bets, or null>",
   "batterName": "<batter name for next_pitch bets, or null>",
@@ -2283,7 +2294,7 @@ For a PARLAY (multiple legs):
     {
       "sport": "<sport value>",
       "betCategory": "<team_game, player_prop, futures, or mlb_live>",
-      "wagerType": "<moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet, or mlb_live>",
+      "wagerType": "<moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet, mlb_live, 2ball, or 3ball>",
       "teamA": "<pick team or null>",
       "teamB": "<opponent or null>",
       "spreadValue": "<spread/line or null>",
@@ -2298,6 +2309,11 @@ For a PARLAY (multiple legs):
       "fightMethod": "<method value or null>",
       "golfRound": "<round 1-4 or null>",
       "golfHole": "<hole 1-18 or null>",
+      "matchPlayerA": "<2ball/3ball: player in the backed side (member 1), or null>",
+      "matchPlayerA2": "<2ball team: second player in backed group, or null>",
+      "matchPlayerB": "<2ball/3ball: opponent player 1, or null>",
+      "matchPlayerB2": "<2ball team: second player in opponent group, or null>",
+      "matchPlayerC": "<3ball: third player, or null>",
       "mlbLiveType": "<next_pitch, at_bat, inning, or pitch — only for mlb_live legs, null otherwise>",
       "nextPitchOutcome": "<Strike/Foul, Ball/HBP, or In Play — or null>",
       "batterName": "<batter name for next_pitch bets, or null>",
@@ -2353,6 +2369,9 @@ Rules:
 - PERIOD DETECTION: If the bet is for a specific half, quarter, period, or inning (e.g. "1st Half Over 110.5", "3rd Period ML", "1Q Spread -2.5", "First 5 Innings Over 4.5", "1st Inning Under 0.5"), set the period field accordingly. Look for indicators like "1H", "2H", "1st Half", "2nd Half", "1Q", "2Q", "3Q", "4Q", "1st Quarter", "1st Period", "2P", "3P", "1st Set", "F5", "First 5", "1st Inning", "2nd Inning", etc. Default to "full_game" if no period is specified.
 - FIGHT BETS (UFC/Boxing): If the bet mentions a specific round (e.g. "Round 3", "Rd 1-2", "goes the distance"), extract fightRound as the round number. If a method of victory is specified (e.g. "by KO/TKO", "by Submission", "by Decision", "by Points"), set fightMethod to the matching value (ko_tko, submission, decision, unanimous_decision, split_decision, dq, points).
 - GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds.
+- GOLF 2-BALL BETS (head-to-head matchup): If the bet is a "2 Ball", "2-Ball", "Golf H2H", "Tournament Matchup", or "Player vs Player" bet in golf, use betCategory "team_game" and wagerType "2ball". Set teamA to the name of the player/group you are betting ON (your pick), teamB to the opponent player/group name. CRITICALLY: also extract the individual player names — set matchPlayerA to the first player on your picked side, matchPlayerA2 to their partner (only for team formats like Zurich Classic where each "side" has 2 players), matchPlayerB to the first opponent player, matchPlayerB2 to the opponent's partner (team format). For standard singles 2-ball (Player A vs Player B), matchPlayerA = teamA and matchPlayerB = teamB, with matchPlayerA2 and matchPlayerB2 null. Set golfRound to the tournament round if specified.
+- GOLF 3-BALL BETS: If the bet is a "3 Ball", "3-Ball", or "3-Way" golf matchup (three players in a group), use betCategory "team_game" and wagerType "3ball". Set teamA to the player you are betting to win, teamB to the second player. Extract matchPlayerA (your pick), matchPlayerB (opponent 2), matchPlayerC (opponent 3). Set golfRound if specified.
+- ZURICH CLASSIC TEAM FORMAT: The Zurich Classic is played as 2-player teams. A 2-ball bet here means Team A (Player1 + Player2) vs Team B (Player3 + Player4). Identify all four player names from the slip. teamA = "Player1 / Player2" (the team you're backing), teamB = "Player3 / Player4". Set matchPlayerA = Player1, matchPlayerA2 = Player2, matchPlayerB = Player3, matchPlayerB2 = Player4.
 - MLB LIVE / AT BAT BETS: These are live in-game MLB bets on specific at-bats, innings, or pitches. Use betCategory "mlb_live" and wagerType "mlb_live" for ALL of these. Set sport to "mlb". There are 4 sub-types:
   1. NEXT PITCH (mlbLiveType "next_pitch"): Bets on the outcome of the very next pitch. DraftKings slips show the specific at-bat and pitch number (e.g. "At Bat 3, Pitch 2 — Next Pitch Result: Strike"). Set pitcherName, batterName, nextPitchOutcome to one of: "Strike/Foul", "Ball/HBP", "In Play". CRITICALLY: also extract npAbNumber (which at-bat number this pitch is in, e.g. 3) and npPitchNumber (which pitch within that AB, e.g. 2). These are REQUIRED for tracking.
   2. AT BAT BETS (mlbLiveType "at_bat"): Bets on a specific player's Nth at-bat in a game. Examples: "Ohtani 2nd AB Over 4.5 Pitches", "Judge 1st AB - Strikeout", "Soto 3rd AB to reach base". Set abNumber (1-10), mlbPlayerName to the batter, and:
@@ -3666,6 +3685,8 @@ IMPORTANT RULES:
         eventStartTime, isWhale, overUnder,
         period, fightRound, fightMethod, golfHole, golfRound,
         onBehalfOf, // admin placing bet for another user
+        // 2-ball / 3-ball match play fields
+        matchPlayerA, matchPlayerA2, matchPlayerB, matchPlayerB2, matchPlayerC,
         // MLB Live fields
         mlbLiveType, abNumber, abMarket, abDirection, abLine, pitchCountExact, exactOutcome, onBase,
         inningNumber, inningMarket, inningDirection, inningLine, inningHomeRun,
@@ -3811,6 +3832,12 @@ IMPORTANT RULES:
               legPick = `Double Chance: ${truncate(leg.teamA, 200)} or Draw`;
             } else if (leg.wagerType === 'draw_no_bet') {
               legPick = `Draw No Bet: ${truncate(leg.teamA, 200)}`;
+            } else if (leg.wagerType === '2ball') {
+              const rdTag = leg.golfRound ? ` R${leg.golfRound}` : '';
+              legPick = `2-Ball${rdTag}: ${truncate(leg.teamA, 200)} to beat ${truncate(leg.teamB, 200)}`;
+            } else if (leg.wagerType === '3ball') {
+              const rdTag = leg.golfRound ? ` R${leg.golfRound}` : '';
+              legPick = `3-Ball${rdTag}: ${truncate(leg.teamA, 200)} to win group`;
             }
           } else if (leg.betCategory === 'mlb_live') {
             if (leg.mlbLiveType === 'next_pitch') {
@@ -3866,6 +3893,11 @@ IMPORTANT RULES:
             fight_method: leg.fightMethod || null,
             golf_hole: leg.golfHole ? parseInt(leg.golfHole) : null,
             golf_round: leg.golfRound ? parseInt(leg.golfRound) : null,
+            match_player_a:  leg.matchPlayerA  ? truncate(leg.matchPlayerA,  200) : null,
+            match_player_a2: leg.matchPlayerA2 ? truncate(leg.matchPlayerA2, 200) : null,
+            match_player_b:  leg.matchPlayerB  ? truncate(leg.matchPlayerB,  200) : null,
+            match_player_b2: leg.matchPlayerB2 ? truncate(leg.matchPlayerB2, 200) : null,
+            match_player_c:  leg.matchPlayerC  ? truncate(leg.matchPlayerC,  200) : null,
           };
         });
 
@@ -3989,6 +4021,12 @@ IMPORTANT RULES:
             finalPick = `Double Chance: ${safeTeamA} or Draw`;
           } else if (wagerType === 'draw_no_bet') {
             finalPick = `Draw No Bet: ${safeTeamA}`;
+          } else if (wagerType === '2ball') {
+            const rdTag = golfRound ? ` R${golfRound}` : '';
+            finalPick = `2-Ball${rdTag}: ${safeTeamA} to beat ${safeTeamB}`;
+          } else if (wagerType === '3ball') {
+            const rdTag = golfRound ? ` R${golfRound}` : '';
+            finalPick = `3-Ball${rdTag}: ${safeTeamA} to win group`;
           }
         } else {
           finalPick = safePropDesc || safePick;
@@ -4077,6 +4115,11 @@ IMPORTANT RULES:
           fight_method: fightMethod || null,
           golf_hole: golfHole ? parseInt(golfHole) : null,
           golf_round: golfRound ? parseInt(golfRound) : null,
+          match_player_a:  matchPlayerA  ? truncate(matchPlayerA,  200) : null,
+          match_player_a2: matchPlayerA2 ? truncate(matchPlayerA2, 200) : null,
+          match_player_b:  matchPlayerB  ? truncate(matchPlayerB,  200) : null,
+          match_player_b2: matchPlayerB2 ? truncate(matchPlayerB2, 200) : null,
+          match_player_c:  matchPlayerC  ? truncate(matchPlayerC,  200) : null,
         };
 
         // Correct sport if GPT returned 'other' but team names match a known sport
@@ -4603,6 +4646,24 @@ IMPORTANT RULES:
       if (!bet) return res.status(404).json({ error: 'Bet not found' });
 
       const results = {};
+
+      // ── 2-ball / 3-ball golf matchup live tracking ──
+      if (['2ball', '3ball'].includes(bet.wager_type) && bet.match_player_a && bet.match_player_b) {
+        try {
+          const matchData = await espn.getGolf2BallLive({
+            playerA:  bet.match_player_a,
+            playerA2: bet.match_player_a2 || null,
+            playerB:  bet.match_player_b,
+            playerB2: bet.match_player_b2 || null,
+            playerC:  bet.match_player_c  || null,
+            roundNum: bet.golf_round || null,
+          });
+          if (matchData) results.matchPlay = matchData;
+        } catch (e) {
+          console.error('[LiveTracker] 2-ball fetch error:', e.message);
+        }
+        return res.json(results);
+      }
 
       // For single bets
       if (bet.espn_game_id && bet.sport) {

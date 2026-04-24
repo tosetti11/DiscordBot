@@ -2106,6 +2106,82 @@ textarea {
   color: var(--text-muted);
 }
 
+/* Match play (2-ball / 3-ball) tracker */
+.matchplay-scorecard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.matchplay-group-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+}
+
+.matchplay-group-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.matchplay-group-score {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green, #4ade80);
+  letter-spacing: 0.5px;
+}
+
+.matchplay-status-badge {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 900;
+  padding: 6px 10px;
+  border-radius: 8px;
+  letter-spacing: 1px;
+  margin: 2px 0;
+}
+
+.matchplay-badge-up {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.matchplay-badge-as {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-secondary);
+}
+
+.matchplay-badge-dn {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.matchplay-vs-c-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  padding: 2px 4px;
+}
+
+/* Match play form fields */
+#matchplay-fields .matchplay-group-label,
+.leg-matchplay-fields-1 .matchplay-group-label,
+.leg-matchplay-fields-2 .matchplay-group-label,
+.leg-matchplay-fields-3 .matchplay-group-label,
+.leg-matchplay-fields-4 .matchplay-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--green, #4ade80);
+  padding: 8px 0 4px;
+}
+
 .tracker-score {
   font-size: 16px;
   font-weight: 700;

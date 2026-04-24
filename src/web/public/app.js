@@ -575,6 +575,7 @@ function updateCategoryFields(category) {
   document.getElementById('prop-fields').classList.add('hidden');
   document.getElementById('futures-fields').classList.add('hidden');
   document.getElementById('mlb-live-fields').classList.add('hidden');
+  document.getElementById('matchplay-fields')?.classList.add('hidden');
 
   const wagerGroup = document.getElementById('wager-type-group');
 
@@ -664,11 +665,28 @@ function updateWagerFields(wager) {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
     periodRow.classList.add('hidden');
+  } else if (wager === '2ball' || wager === '3ball') {
+    spreadRow.classList.add('hidden');
+    ouRow.classList.add('hidden');
+    periodRow.classList.add('hidden');
+    // Show matchplay fields, hide team fields (we build teamA/teamB from player names)
+    const matchplayFields = document.getElementById('matchplay-fields');
+    if (matchplayFields) matchplayFields.classList.remove('hidden');
+    document.getElementById('team-fields')?.classList.add('hidden');
+    // Update label and player C visibility
+    const label = document.getElementById('matchplay-type-label');
+    if (label) label.textContent = wager === '3ball' ? '⛳ 3-Ball Match Details' : '⛳ 2-Ball Match Details';
+    const playerCRow = document.getElementById('matchplay-playerc-row');
+    if (playerCRow) playerCRow.style.display = wager === '3ball' ? '' : 'none';
+    return;
   } else {
     spreadRow.classList.add('hidden');
     ouRow.classList.add('hidden');
     periodRow.classList.add('hidden');
   }
+  // Hide matchplay fields when switching away from 2ball/3ball
+  const matchplayFields = document.getElementById('matchplay-fields');
+  if (matchplayFields) matchplayFields.classList.add('hidden');
 }
 
 // ── Sport-specific field visibility (single bet) ──
@@ -736,6 +754,8 @@ function buildParlayLegs() {
             <option value="homerun">💣 Home Run</option>
             <option value="double_chance">⚽ Double Chance</option>
             <option value="draw_no_bet">⚽ Draw No Bet</option>
+            <option value="2ball">⛳ 2-Ball (Golf H2H)</option>
+            <option value="3ball">⛳ 3-Ball (Golf Group)</option>
           </select>
         </div>
       </div>
@@ -796,6 +816,52 @@ function buildParlayLegs() {
           <div class="form-group">
             <label class="leg-spread-label-${i}">Spread</label>
             <input type="text" class="leg-spread-value" data-leg="${i}" placeholder="e.g. -1.5" maxlength="10">
+          </div>
+        </div>
+      </div>
+
+      <!-- Match play fields (2ball/3ball) -->
+      <div class="leg-matchplay-fields-${i} hidden">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="leg-matchplay-type-label-${i}">⛳ 2-Ball Match Details</label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Round</label>
+            <select class="leg-matchplay-round" data-leg="${i}">
+              <option value="1">Round 1</option>
+              <option value="2">Round 2</option>
+              <option value="3">Round 3</option>
+              <option value="4">Round 4</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Group A – Player 1 (your pick)</label>
+            <input type="text" class="leg-match-player-a" data-leg="${i}" placeholder="e.g. Scheffler" maxlength="80">
+          </div>
+          <div class="form-group">
+            <label>Group A – Player 2 <span class="optional">(team format)</span></label>
+            <input type="text" class="leg-match-player-a2" data-leg="${i}" placeholder="e.g. McIlroy" maxlength="80">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Group B – Player 1 (opponent)</label>
+            <input type="text" class="leg-match-player-b" data-leg="${i}" placeholder="e.g. Thomas" maxlength="80">
+          </div>
+          <div class="form-group">
+            <label>Group B – Player 2 <span class="optional">(team format)</span></label>
+            <input type="text" class="leg-match-player-b2" data-leg="${i}" placeholder="e.g. Zalatoris" maxlength="80">
+          </div>
+        </div>
+        <div class="form-row leg-matchplay-playerc-row-${i}" style="display:none">
+          <div class="form-group">
+            <label>Player C <span class="optional">(3-ball only)</span></label>
+            <input type="text" class="leg-match-player-c" data-leg="${i}" placeholder="e.g. Rory McIlroy" maxlength="80">
           </div>
         </div>
       </div>
@@ -981,6 +1047,7 @@ function buildParlayLegs() {
       document.querySelector(`.leg-ou-row-${leg}`).classList.add('hidden');
       document.querySelector(`.leg-spread-row-${leg}`).classList.add('hidden');
       document.querySelector(`.leg-period-row-${leg}`).classList.add('hidden');
+      document.querySelector(`.leg-matchplay-fields-${leg}`)?.classList.add('hidden');
 
       // Sport-specific
       document.querySelector(`.leg-fight-fields-${leg}`).classList.toggle('hidden', !['ufc', 'boxing'].includes(sport));
@@ -1035,10 +1102,26 @@ function buildParlayLegs() {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
         periodRow.classList.add('hidden');
+        document.querySelector(`.leg-matchplay-fields-${leg}`)?.classList.add('hidden');
+        document.querySelector(`.leg-team-fields-${leg}`)?.classList.remove('hidden');
+      } else if (wager === '2ball' || wager === '3ball') {
+        spreadRow.classList.add('hidden');
+        ouRow.classList.add('hidden');
+        periodRow.classList.add('hidden');
+        // Show matchplay fields, hide team fields
+        document.querySelector(`.leg-matchplay-fields-${leg}`)?.classList.remove('hidden');
+        document.querySelector(`.leg-team-fields-${leg}`)?.classList.add('hidden');
+        // Update label and player C row visibility
+        const label = document.querySelector(`.leg-matchplay-type-label-${leg}`);
+        if (label) label.textContent = wager === '3ball' ? '\u26f3 3-Ball Match Details' : '\u26f3 2-Ball Match Details';
+        const playerCRow = document.querySelector(`.leg-matchplay-playerc-row-${leg}`);
+        if (playerCRow) playerCRow.style.display = wager === '3ball' ? '' : 'none';
       } else {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
         periodRow.classList.add('hidden');
+        document.querySelector(`.leg-matchplay-fields-${leg}`)?.classList.add('hidden');
+        document.querySelector(`.leg-team-fields-${leg}`)?.classList.remove('hidden');
       }
     });
 
@@ -1144,9 +1227,28 @@ async function handleSubmit(e) {
         if (category === 'team_game') {
           const wager = document.querySelector(`.leg-wager-type[data-leg="${i}"]`).value;
           leg.wagerType = wager;
-          leg.teamA = document.querySelector(`.leg-team-a[data-leg="${i}"]`)?.value;
-          leg.teamB = document.querySelector(`.leg-team-b[data-leg="${i}"]`)?.value;
-          if (!leg.teamA || !leg.teamB) throw new Error(`Leg ${i}: Enter both teams`);
+
+          if (wager === '2ball' || wager === '3ball') {
+            const mpA = document.querySelector(`.leg-match-player-a[data-leg="${i}"]`)?.value?.trim();
+            const mpA2 = document.querySelector(`.leg-match-player-a2[data-leg="${i}"]`)?.value?.trim();
+            const mpB = document.querySelector(`.leg-match-player-b[data-leg="${i}"]`)?.value?.trim();
+            const mpB2 = document.querySelector(`.leg-match-player-b2[data-leg="${i}"]`)?.value?.trim();
+            const mpC = document.querySelector(`.leg-match-player-c[data-leg="${i}"]`)?.value?.trim();
+            const mpRound = document.querySelector(`.leg-matchplay-round[data-leg="${i}"]`)?.value;
+            if (!mpA || !mpB) throw new Error(`Leg ${i}: Enter Group A and Group B player names`);
+            leg.matchPlayerA = mpA;
+            if (mpA2) leg.matchPlayerA2 = mpA2;
+            leg.matchPlayerB = mpB;
+            if (mpB2) leg.matchPlayerB2 = mpB2;
+            if (mpC) leg.matchPlayerC = mpC;
+            if (mpRound) leg.golfRound = parseInt(mpRound);
+            leg.teamA = mpA2 ? `${mpA} / ${mpA2}` : mpA;
+            leg.teamB = mpB2 ? `${mpB} / ${mpB2}` : mpB;
+          } else {
+            leg.teamA = document.querySelector(`.leg-team-a[data-leg="${i}"]`)?.value;
+            leg.teamB = document.querySelector(`.leg-team-b[data-leg="${i}"]`)?.value;
+            if (!leg.teamA || !leg.teamB) throw new Error(`Leg ${i}: Enter both teams`);
+          }
 
           if (wager === 'spread' || wager === 'total' || wager === 'team_total') {
             leg.spreadValue = document.querySelector(`.leg-spread-value[data-leg="${i}"]`)?.value;
@@ -1269,9 +1371,29 @@ async function handleSubmit(e) {
       if (category === 'team_game') {
         const wager = document.getElementById('wager-type').value;
         body.wagerType = wager;
-        body.teamA = document.getElementById('team-a').value;
-        body.teamB = document.getElementById('team-b').value;
-        if (!body.teamA || !body.teamB) throw new Error('Enter both teams');
+
+        if (wager === '2ball' || wager === '3ball') {
+          // Match play — build teamA/teamB from player name fields
+          const mpA = document.getElementById('match-player-a')?.value?.trim();
+          const mpA2 = document.getElementById('match-player-a2')?.value?.trim();
+          const mpB = document.getElementById('match-player-b')?.value?.trim();
+          const mpB2 = document.getElementById('match-player-b2')?.value?.trim();
+          const mpC = document.getElementById('match-player-c')?.value?.trim();
+          const mpRound = document.getElementById('matchplay-round')?.value;
+          if (!mpA || !mpB) throw new Error('Enter Group A and Group B player names');
+          body.matchPlayerA = mpA;
+          if (mpA2) body.matchPlayerA2 = mpA2;
+          body.matchPlayerB = mpB;
+          if (mpB2) body.matchPlayerB2 = mpB2;
+          if (mpC) body.matchPlayerC = mpC;
+          if (mpRound) body.golfRound = parseInt(mpRound);
+          body.teamA = mpA2 ? `${mpA} / ${mpA2}` : mpA;
+          body.teamB = mpB2 ? `${mpB} / ${mpB2}` : mpB;
+        } else {
+          body.teamA = document.getElementById('team-a').value;
+          body.teamB = document.getElementById('team-b').value;
+          if (!body.teamA || !body.teamB) throw new Error('Enter both teams');
+        }
 
         if (wager === 'spread' || wager === 'total' || wager === 'team_total') {
           body.spreadValue = document.getElementById('spread-value').value;
@@ -1430,6 +1552,11 @@ async function handleSubmit(e) {
             fightMethod: leg.fightMethod || null,
             golfRound: leg.golfRound || null,
             golfHole: leg.golfHole || null,
+            matchPlayerA: leg.matchPlayerA || null,
+            matchPlayerA2: leg.matchPlayerA2 || null,
+            matchPlayerB: leg.matchPlayerB || null,
+            matchPlayerB2: leg.matchPlayerB2 || null,
+            matchPlayerC: leg.matchPlayerC || null,
           };
           // Only include overUnder if it was set (total bets)
           if (leg.overUnder) legPatch.overUnder = leg.overUnder;
@@ -1458,6 +1585,12 @@ async function handleSubmit(e) {
         patchBody.fightMethod = body.fightMethod || null;
         patchBody.golfRound = body.golfRound || null;
         patchBody.golfHole = body.golfHole || null;
+        // 2ball/3ball match player columns
+        patchBody.matchPlayerA = body.matchPlayerA || null;
+        patchBody.matchPlayerA2 = body.matchPlayerA2 || null;
+        patchBody.matchPlayerB = body.matchPlayerB || null;
+        patchBody.matchPlayerB2 = body.matchPlayerB2 || null;
+        patchBody.matchPlayerC = body.matchPlayerC || null;
         // Reconstruct pick on the client for futures
         if (body.betCategory === 'futures' && body.futuresMarket && body.futuresSelection) {
           patchBody.pick = `${body.futuresMarket}: ${body.futuresSelection}`;
@@ -1932,6 +2065,16 @@ function applySingleData(data) {
     if (ghEl) ghEl.value = data.golfHole;
   }
 
+  // 2ball/3ball match player fields
+  if (data.matchPlayerA) { const el = document.getElementById('match-player-a'); if (el) el.value = data.matchPlayerA; }
+  if (data.matchPlayerA2) { const el = document.getElementById('match-player-a2'); if (el) el.value = data.matchPlayerA2; }
+  if (data.matchPlayerB) { const el = document.getElementById('match-player-b'); if (el) el.value = data.matchPlayerB; }
+  if (data.matchPlayerB2) { const el = document.getElementById('match-player-b2'); if (el) el.value = data.matchPlayerB2; }
+  if (data.matchPlayerC) { const el = document.getElementById('match-player-c'); if (el) el.value = data.matchPlayerC; }
+  if (data.golfRound && (data.wagerType === '2ball' || data.wagerType === '3ball')) {
+    const el = document.getElementById('matchplay-round'); if (el) el.value = data.golfRound;
+  }
+
   // MLB Live fields
   if (data.betCategory === 'mlb_live') {
     if (data.mlbLiveType) {
@@ -2149,6 +2292,16 @@ function applyParlayData(data) {
     if (leg.golfHole) {
       const el = document.querySelector(`.leg-golf-hole[data-leg="${i}"]`);
       if (el) el.value = leg.golfHole;
+    }
+
+    // 2ball/3ball match player fields
+    if (leg.matchPlayerA) { const el = document.querySelector(`.leg-match-player-a[data-leg="${i}"]`); if (el) el.value = leg.matchPlayerA; }
+    if (leg.matchPlayerA2) { const el = document.querySelector(`.leg-match-player-a2[data-leg="${i}"]`); if (el) el.value = leg.matchPlayerA2; }
+    if (leg.matchPlayerB) { const el = document.querySelector(`.leg-match-player-b[data-leg="${i}"]`); if (el) el.value = leg.matchPlayerB; }
+    if (leg.matchPlayerB2) { const el = document.querySelector(`.leg-match-player-b2[data-leg="${i}"]`); if (el) el.value = leg.matchPlayerB2; }
+    if (leg.matchPlayerC) { const el = document.querySelector(`.leg-match-player-c[data-leg="${i}"]`); if (el) el.value = leg.matchPlayerC; }
+    if (leg.golfRound && (leg.wagerType === '2ball' || leg.wagerType === '3ball')) {
+      const el = document.querySelector(`.leg-matchplay-round[data-leg="${i}"]`); if (el) el.value = leg.golfRound;
     }
 
     // Trigger sport-specific field visibility for each leg
@@ -3716,7 +3869,9 @@ async function fetchLiveTracker(betId) {
     const data = await res.json();
 
     // Render tracker for single bet
-    if (data.bet) {
+    if (data.matchPlay) {
+      renderMatchPlayTracker(el, data.matchPlay);
+    } else if (data.bet) {
       renderBetTracker(el, data.bet, false);
     } else if (data.legs && Object.keys(data.legs).length > 0) {
       // Parlay — render per-leg trackers
@@ -3747,6 +3902,8 @@ async function fetchLiveTracker(betId) {
 }
 
 function checkAllFinal(data) {
+  if (data.matchPlay && data.matchPlay.overallStatus !== 'post') return false;
+  if (data.matchPlay && data.matchPlay.overallStatus === 'post') return true;
   if (data.bet && data.bet.state !== 'post') return false;
   if (data.legs) {
     for (const leg of Object.values(data.legs)) {
@@ -3754,6 +3911,60 @@ function checkAllFinal(data) {
     }
   }
   return true;
+}
+
+function renderMatchPlayTracker(el, mp) {
+  if (!mp) { el.innerHTML = ''; return; }
+
+  const fmtScore = (s) => {
+    if (s == null || s === undefined) return '-';
+    const n = typeof s === 'string' ? parseInt(s) : s;
+    if (isNaN(n)) return '-';
+    if (n === 0) return 'E';
+    return n > 0 ? `+${n}` : `${n}`;
+  };
+
+  const isLive = mp.overallStatus === 'in';
+  const isFinal = mp.overallStatus === 'post';
+  const statusHtml = isLive
+    ? `<span class="tracker-status tracker-live">🔴 LIVE — R${mp.roundNum || ''}</span>`
+    : isFinal
+      ? `<span class="tracker-status tracker-final">🏁 FINAL — R${mp.roundNum || ''}</span>`
+      : `<span class="tracker-status">⏳ R${mp.roundNum || ''} — ${esc(mp.tournamentName || 'Golf')}</span>`;
+
+  const groupRow = (group) => {
+    if (!group) return '';
+    const holesStr = group.holesCompleted != null ? ` thru ${group.holesCompleted}` : '';
+    return `<div class="matchplay-group-row"><span class="matchplay-group-name">${esc(group.displayName)}</span><span class="matchplay-group-score">${fmtScore(group.roundScore)}${holesStr}</span></div>`;
+  };
+
+  let statusBadge = '';
+  if (mp.matchStatus) {
+    const { label } = mp.matchStatus;
+    const cls = label === 'AS' ? 'matchplay-badge-as' : mp.matchStatus.ahead ? 'matchplay-badge-up' : 'matchplay-badge-dn';
+    statusBadge = `<div class="matchplay-status-badge ${cls}">${esc(label)}</div>`;
+  }
+
+  let groupCHtml = '';
+  if (mp.groupC) {
+    groupCHtml = groupRow(mp.groupC);
+    if (mp.matchStatusVsC) {
+      const { label } = mp.matchStatusVsC;
+      const cls = label === 'AS' ? 'matchplay-badge-as' : mp.matchStatusVsC.ahead ? 'matchplay-badge-up' : 'matchplay-badge-dn';
+      groupCHtml += `<div class="matchplay-vs-c-label">vs C: <span class="matchplay-status-badge ${cls}" style="font-size:12px;padding:2px 6px">${esc(label)}</span></div>`;
+    }
+  }
+
+  el.innerHTML = `
+    <div class="tracker-content">
+      ${statusHtml}
+      <div class="matchplay-scorecard">
+        ${groupRow(mp.groupA)}
+        ${statusBadge}
+        ${groupRow(mp.groupB)}
+        ${groupCHtml}
+      </div>
+    </div>`;
 }
 
 function renderBetTracker(el, gameData, isLeg) {

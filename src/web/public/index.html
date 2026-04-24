@@ -250,6 +250,8 @@
                   <option value="homerun">💣 Home Run</option>
                   <option value="double_chance">⚽ Double Chance</option>
                   <option value="draw_no_bet">⚽ Draw No Bet</option>
+                  <option value="2ball">⛳ 2-Ball (Golf H2H)</option>
+                  <option value="3ball">⛳ 3-Ball (Golf Group)</option>
                 </select>
               </div>
             </div>
@@ -476,6 +478,62 @@
                     <option value="17">Hole 17</option>
                     <option value="18">Hole 18</option>
                   </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2-Ball / 3-Ball Match Play fields -->
+            <div id="matchplay-fields" class="dynamic-fields hidden">
+              <div class="matchplay-header">
+                <span id="matchplay-type-label">⛳ 2-Ball Match Details</span>
+                <span class="optional">Track live round scores &amp; match-play status</span>
+              </div>
+              <!-- Round selector -->
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="matchplay-round">Tournament Round</label>
+                  <select id="matchplay-round">
+                    <option value="">N/A</option>
+                    <option value="1">Round 1</option>
+                    <option value="2">Round 2</option>
+                    <option value="3">Round 3</option>
+                    <option value="4">Round 4</option>
+                  </select>
+                </div>
+              </div>
+              <!-- Group A (your pick) -->
+              <div class="matchplay-group-label" style="color:var(--green)">
+                🟢 Your Pick (Group A)
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="match-player-a">Player A <span class="optional">– your pick</span></label>
+                  <input type="text" id="match-player-a" placeholder="e.g. Scottie Scheffler" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="match-player-a2">Player A Partner <span class="optional">(team format – Zurich, etc)</span></label>
+                  <input type="text" id="match-player-a2" placeholder="e.g. Rory McIlroy" maxlength="100">
+                </div>
+              </div>
+              <!-- Group B (opponent) -->
+              <div class="matchplay-group-label" style="color:var(--text-muted)">
+                ⚪ Opponent (Group B)
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="match-player-b">Player B</label>
+                  <input type="text" id="match-player-b" placeholder="e.g. Jon Rahm" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="match-player-b2">Player B Partner <span class="optional">(team format)</span></label>
+                  <input type="text" id="match-player-b2" placeholder="e.g. Viktor Hovland" maxlength="100">
+                </div>
+              </div>
+              <!-- Player C (3-ball only) -->
+              <div class="form-row" id="matchplay-playerc-row" style="display:none">
+                <div class="form-group">
+                  <label for="match-player-c">Player C <span class="optional">(3rd player)</span></label>
+                  <input type="text" id="match-player-c" placeholder="e.g. Xander Schauffele" maxlength="100">
                 </div>
               </div>
             </div>
