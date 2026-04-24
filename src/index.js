@@ -391,7 +391,7 @@ client.once(Events.ClientReady, (c) => {
         .eq('status', 'open')
         .not('message_id', 'is', null)
         .eq('start_notified', true)
-        .or('espn_game_id.not.is.null,bet_type.eq.parlay');
+        .or('espn_game_id.not.is.null,bet_type.eq.parlay,match_player_a.not.is.null');
 
       if (!liveBets?.length) return;
 
@@ -409,10 +409,32 @@ client.once(Events.ClientReady, (c) => {
             const legs = bet.parlay_legs || [];
             const hashParts = [];
             for (const leg of legs) {
+              const legIsGolf = leg.sport === 'golf_pga' || leg.sport?.startsWith('golf');
+              const legIs2Ball = legIsGolf && ['2ball', '3ball'].includes(leg.wager_type) && leg.match_player_a && leg.match_player_b;
+
+              // 2ball/3ball parlay legs — get match-play data directly (no espn_game_id needed)
+              if (legIs2Ball) {
+                try {
+                  const mpData = await espn.getGolf2BallLive({
+                    playerA: leg.match_player_a, playerA2: leg.match_player_a2 || null,
+                    playerB: leg.match_player_b, playerB2: leg.match_player_b2 || null,
+                    playerC: leg.match_player_c || null, roundNum: leg.golf_round || null
+                  });
+                  if (mpData && (mpData.overallStatus === 'in' || mpData.overallStatus === 'post')) {
+                    if (mpData.overallStatus !== 'post') allGamesPost = false;
+                    else allGamesPost = allGamesPost && true;
+                    const hashPart = `2ball:${leg.id}:${mpData.maxHoles}:${mpData.groupA.roundScore}:${mpData.groupB.roundScore}:${mpData.matchStatus?.label}`;
+                    hashParts.push(hashPart);
+                    if (mpData.overallStatus === 'in') isLive = true;
+                  }
+                } catch {}
+                continue;
+              }
+
               if (!leg.espn_game_id) continue;
               const dateStr = eventDateStr(leg.event_start_time || bet.event_start_time, leg.created_at || bet.created_at);
               let game;
-              if (leg.sport === 'golf_pga' || leg.sport?.startsWith('golf')) {
+              if (legIsGolf) {
                 // Golf events are filtered out by getTodaysGames (no home/away) — fetch directly
                 game = await espn.getGolfEventStatus(leg.espn_game_id, dateStr);
               } else {
@@ -423,7 +445,7 @@ client.once(Events.ClientReady, (c) => {
                 if (game.state !== 'post') allGamesPost = false;
                 let hashPart = `${leg.espn_game_id}:${game.home?.score}:${game.away?.score}:${game.state}`;
                 // Golf parlay legs: use player round data for hash (game scores are dummy 0s)
-                if ((leg.sport === 'golf_pga' || leg.sport?.startsWith('golf')) && leg.player_name) {
+                if (legIsGolf && leg.player_name) {
                   try {
                     const golfData = await espn.getGolfPlayerRound(leg.player_name, leg.golf_round || null);
                     if (golfData) {
@@ -469,19 +491,40 @@ client.once(Events.ClientReady, (c) => {
               continue; // No legs have live/post data yet
             }
           } else if (isGolf) {
-            const golfData = await espn.getGolfPlayerRound(bet.player_name, bet.golf_round || null);
-            if (golfData && (golfData.roundStatus === 'in' || golfData.roundStatus === 'post')) {
-              if (golfData.roundStatus !== 'post') allGamesPost = false;
-              // Build a quick hash to avoid re-editing when nothing changed
-              const hash = `${golfData.holesCompleted}:${golfData.roundScore}:${golfData.position}`;
-              if (cardUpdateTracker.get(bet.id) === hash) {
-                if (allGamesPost) cardFinalRendered.add(bet.id);
-                console.log(`[CardUpdate] ${bet.slip_number} no change (${hash}), skipping`);
-                continue;
+            const is2Ball = ['2ball', '3ball'].includes(bet.wager_type) && bet.match_player_a && bet.match_player_b;
+            if (is2Ball) {
+              // 2ball/3ball matchup bets — use match-play live data
+              const mpData = await espn.getGolf2BallLive({
+                playerA: bet.match_player_a, playerA2: bet.match_player_a2 || null,
+                playerB: bet.match_player_b, playerB2: bet.match_player_b2 || null,
+                playerC: bet.match_player_c || null, roundNum: bet.golf_round || null
+              }).catch(() => null);
+              if (mpData && (mpData.overallStatus === 'in' || mpData.overallStatus === 'post')) {
+                if (mpData.overallStatus !== 'post') allGamesPost = false;
+                const hash = `mp:${mpData.maxHoles}:${mpData.groupA.roundScore}:${mpData.groupB.roundScore}:${mpData.matchStatus?.label}:${mpData.overallStatus}`;
+                if (cardUpdateTracker.get(bet.id) === hash) {
+                  if (allGamesPost) cardFinalRendered.add(bet.id);
+                  continue;
+                }
+                cardUpdateTracker.set(bet.id, hash);
+                isLive = true;
+                console.log(`[CardUpdate] ${bet.slip_number} 2ball update: thru ${mpData.maxHoles}, ${mpData.matchStatus?.label}`);
               }
-              cardUpdateTracker.set(bet.id, hash);
-              isLive = true;
-              console.log(`[CardUpdate] ${bet.slip_number} golf update: thru ${golfData.holesCompleted}, score ${golfData.roundScore}`);
+            } else {
+              const golfData = await espn.getGolfPlayerRound(bet.player_name, bet.golf_round || null);
+              if (golfData && (golfData.roundStatus === 'in' || golfData.roundStatus === 'post')) {
+                if (golfData.roundStatus !== 'post') allGamesPost = false;
+                // Build a quick hash to avoid re-editing when nothing changed
+                const hash = `${golfData.holesCompleted}:${golfData.roundScore}:${golfData.position}`;
+                if (cardUpdateTracker.get(bet.id) === hash) {
+                  if (allGamesPost) cardFinalRendered.add(bet.id);
+                  console.log(`[CardUpdate] ${bet.slip_number} no change (${hash}), skipping`);
+                  continue;
+                }
+                cardUpdateTracker.set(bet.id, hash);
+                isLive = true;
+                console.log(`[CardUpdate] ${bet.slip_number} golf update: thru ${golfData.holesCompleted}, score ${golfData.roundScore}`);
+              }
             }
           } else {
             const dateStr = eventDateStr(bet.event_start_time, bet.created_at);

@@ -1717,15 +1717,36 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
     const tournamentName = event.name || 'Tournament';
 
     // Fuzzy player finder
+    function normName(s) {
+      return (s || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+    }
+
+    function nameMatches(entryName, searchName) {
+      if (!entryName || !searchName) return false;
+      const dn = normName(entryName);
+      const norm = normName(searchName);
+      if (!dn || !norm) return false;
+      const lastName = norm.split(' ').pop();
+      return dn === norm || dn.includes(norm) || norm.includes(dn) || dn.includes(lastName);
+    }
+
+    function getCompName(c) {
+      return c.athlete?.displayName || c.team?.displayName || c.team?.name || c.athlete?.fullName || '';
+    }
+
+    // For TEAM format (playerA2 specified), try to find a single ESPN entry containing BOTH names.
+    // This handles Zurich Classic where pairs are stored as "LastA/LastB" team entries.
+    function findTeamComp(nameA, nameB) {
+      if (!nameA || !nameB) return null;
+      return competitors.find(c => {
+        const dn = normName(getCompName(c));
+        return nameMatches(dn, nameA) && nameMatches(dn, nameB);
+      });
+    }
+
     function findComp(name) {
       if (!name) return null;
-      const norm = name.toLowerCase().replace(/[^a-z ]/g, '').trim();
-      return competitors.find(c => {
-        const dn = (c.athlete?.displayName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
-        const fn = (c.athlete?.fullName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
-        return dn === norm || fn === norm || dn.includes(norm) || norm.includes(dn) ||
-               norm.includes(dn.split(' ').pop()); // last name match
-      });
+      return competitors.find(c => nameMatches(getCompName(c), name));
     }
 
     // Extract per-player round info
@@ -1738,23 +1759,41 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
       const round = rounds[rIdx];
 
       let holesCompleted = 0;
-      let runningScore = 0;
+      let toParScore = 0;
+      let hasToParData = false;
 
       if (round?.linescores?.length) {
         holesCompleted = round.linescores.length;
-        for (const hole of round.linescores) runningScore += hole.value || 0;
+        for (const hole of round.linescores) {
+          // Prefer scoreType.displayValue for to-par ('E'=0, '-1'=-1, '+1'=+1)
+          // hole.value is raw stroke count, NOT to-par
+          const tpStr = hole.scoreType?.displayValue ?? hole.t?.displayValue;
+          if (tpStr !== undefined && tpStr !== null) {
+            hasToParData = true;
+            toParScore += tpStr === 'E' ? 0 : (parseInt(tpStr) || 0);
+          }
+        }
       }
 
       let roundStatus = 'pre';
-      if (round?.linescores?.length === 18) roundStatus = 'post';
-      else if (round?.linescores?.length > 0) roundStatus = 'in';
+      if (holesCompleted === 18) roundStatus = 'post';
+      else if (holesCompleted > 0) roundStatus = 'in';
       else if (rIdx < currentRound - 1) roundStatus = 'post';
 
-      // Round score: use ESPN value if available, else running hole score
-      const roundScore = round?.value ?? (roundStatus !== 'pre' ? runningScore : null);
+      // Round score: use per-hole to-par sum (most reliable), or round.value only if it looks like to-par (small integer)
+      let roundScore = null;
+      if (holesCompleted > 0 && hasToParData) {
+        roundScore = toParScore;
+      } else if (holesCompleted > 0 && round?.value != null && Math.abs(round.value) <= 30) {
+        // round.value is to-par only if small; large values (e.g. 47) are raw stroke counts
+        roundScore = round.value;
+      }
+
+      // Name: athlete for individual events, team for team events (e.g. Zurich Classic)
+      const name = comp.athlete?.displayName || comp.team?.displayName || comp.team?.name || null;
 
       return {
-        name: comp.athlete?.displayName || null,
+        name,
         found: true,
         roundScore,
         holesCompleted,
@@ -1764,10 +1803,12 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
       };
     }
 
-    const compA  = findComp(playerA);
-    const compA2 = playerA2 ? findComp(playerA2) : null;
-    const compB  = findComp(playerB);
-    const compB2 = playerB2 ? findComp(playerB2) : null;
+    // For team format, try to find a SINGLE team entry containing BOTH players first;
+    // fall back to individual lookups if not found.
+    const compA  = (playerA2 ? findTeamComp(playerA, playerA2) : null) || findComp(playerA);
+    const compA2 = playerA2 ? ((compA && nameMatches(getCompName(compA), playerA2)) ? compA : findComp(playerA2)) : null;
+    const compB  = (playerB2 ? findTeamComp(playerB, playerB2) : null) || findComp(playerB);
+    const compB2 = playerB2 ? ((compB && nameMatches(getCompName(compB), playerB2)) ? compB : findComp(playerB2)) : null;
     const compC  = playerC  ? findComp(playerC)  : null;
 
     const pA  = extractPlayer(compA,  roundNum);
@@ -1782,29 +1823,38 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
     const isTeamFormat = !!(playerA2 || playerB2);
     const is3Ball = !!playerC;
 
-    // Calculate group round scores (sum for team format)
-    // Round score for the day: ESPN linescores.value is already relative to par per round
+    // For team-format events (e.g. Zurich Classic), ESPN stores each PAIR as a single competitor.
+    // If playerA and playerA2 both match the same competitor, don't double-count the score.
+    const teamAisSingleEntry = isTeamFormat && compA != null && compA === compA2;
+    const teamBisSingleEntry = isTeamFormat && compB != null && compB === compB2;
+
     const groupAScore = pA.roundScore != null
-      ? pA.roundScore + (isTeamFormat && pA2.roundScore != null ? pA2.roundScore : 0)
+      ? pA.roundScore + (!teamAisSingleEntry && isTeamFormat && pA2.roundScore != null ? pA2.roundScore : 0)
       : null;
     const groupBScore = pB.roundScore != null
-      ? pB.roundScore + (isTeamFormat && pB2.roundScore != null ? pB2.roundScore : 0)
+      ? pB.roundScore + (!teamBisSingleEntry && isTeamFormat && pB2.roundScore != null ? pB2.roundScore : 0)
       : null;
     const groupCScore = is3Ball ? pC.roundScore : null;
 
-    // Match play status relative to group A
-    // Positive = A is ahead (up), negative = A is behind (down)
-    function matchStatus(scoreA, scoreB, holes) {
+    // Display names: for team entries, use the ESPN team name directly; otherwise build from individual names
+    const groupADisplayName = isTeamFormat
+      ? (teamAisSingleEntry && pA.name ? pA.name : `${pA.name || playerA} / ${pA2.name || playerA2}`)
+      : (pA.name || playerA);
+    const groupBDisplayName = isTeamFormat
+      ? (teamBisSingleEntry && pB.name ? pB.name : `${pB.name || playerB} / ${pB2.name || playerB2}`)
+      : (pB.name || playerB);
+
+    // Match play status relative to group A (lower score = better in golf)
+    function matchStatus(scoreA, scoreB) {
       if (scoreA == null || scoreB == null) return null;
-      // In golf: lower score is better, so A is "up" when A's score < B's score
       const diff = scoreB - scoreA; // positive = A is winning
       if (diff > 0) return { up: diff, label: `${diff} Up`, ahead: true };
       if (diff < 0) return { down: Math.abs(diff), label: `${Math.abs(diff)} Dn`, ahead: false };
       return { label: 'AS', ahead: null }; // All Square
     }
 
-    const statusVsB = matchStatus(groupAScore, groupBScore, maxHoles);
-    const statusVsC = is3Ball ? matchStatus(groupAScore, groupCScore, maxHoles) : null;
+    const statusVsB = matchStatus(groupAScore, groupBScore);
+    const statusVsC = is3Ball ? matchStatus(groupAScore, groupCScore) : null;
 
     // Determine overall round status
     const statuses = allPlayers.map(p => p.roundStatus);
@@ -1820,22 +1870,18 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
       is3Ball,
       maxHoles,
       groupA: {
-        displayName: isTeamFormat
-          ? `${pA.name || playerA} / ${pA2.name || playerA2}`
-          : (pA.name || playerA),
+        displayName: groupADisplayName,
         player1: pA,
-        player2: isTeamFormat ? pA2 : null,
+        player2: isTeamFormat && !teamAisSingleEntry ? pA2 : null,
         roundScore: groupAScore,
-        holesCompleted: Math.max(pA.holesCompleted, isTeamFormat ? pA2.holesCompleted : 0),
+        holesCompleted: Math.max(pA.holesCompleted, isTeamFormat && !teamAisSingleEntry ? (pA2.holesCompleted || 0) : 0),
       },
       groupB: {
-        displayName: isTeamFormat
-          ? `${pB.name || playerB} / ${pB2.name || playerB2}`
-          : (pB.name || playerB),
+        displayName: groupBDisplayName,
         player1: pB,
-        player2: isTeamFormat ? pB2 : null,
+        player2: isTeamFormat && !teamBisSingleEntry ? pB2 : null,
         roundScore: groupBScore,
-        holesCompleted: Math.max(pB.holesCompleted, isTeamFormat ? pB2.holesCompleted : 0),
+        holesCompleted: Math.max(pB.holesCompleted, isTeamFormat && !teamBisSingleEntry ? (pB2.holesCompleted || 0) : 0),
       },
       groupC: is3Ball ? {
         displayName: pC.name || playerC,
@@ -1844,8 +1890,8 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
         roundScore: groupCScore,
         holesCompleted: pC.holesCompleted,
       } : null,
-      matchStatus: statusVsB,       // A vs B
-      matchStatusVsC: statusVsC,    // A vs C (3-ball only)
+      matchStatus: statusVsB,
+      matchStatusVsC: statusVsC,
     };
   } catch (err) {
     console.error('[ESPN] Golf 2-ball live error:', err.message);
