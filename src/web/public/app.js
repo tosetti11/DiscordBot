@@ -575,6 +575,22 @@ function updateCategoryFields(category) {
   document.getElementById('prop-fields').classList.add('hidden');
   document.getElementById('futures-fields').classList.add('hidden');
   document.getElementById('mlb-live-fields').classList.add('hidden');
+  // Show/hide tie toggle based on whether a hole is selected AND wager is 2ball/3ball
+  const golfHoleEl = document.getElementById('golf-hole');
+  const tieRow = document.getElementById('matchplay-tie-row');
+  function syncTieRowVisibility() {
+    const wager = document.getElementById('wager-type')?.value;
+    const hole = golfHoleEl?.value;
+    if (tieRow) tieRow.style.display = (hole && (wager === '2ball' || wager === '3ball')) ? '' : 'none';
+    if (!hole || !(wager === '2ball' || wager === '3ball')) {
+      const tieEl = document.getElementById('matchplay-bet-tie');
+      if (tieEl) tieEl.checked = false;
+    }
+  }
+  golfHoleEl?.addEventListener('change', syncTieRowVisibility);
+  // Also call syncTieRowVisibility when wager type changes (already handled in onWagerTypeChange via existing listener)
+  document.getElementById('wager-type')?.addEventListener('change', syncTieRowVisibility);
+
   document.getElementById('matchplay-fields')?.classList.add('hidden');
 
   const wagerGroup = document.getElementById('wager-type-group');
@@ -864,6 +880,14 @@ function buildParlayLegs() {
             <input type="text" class="leg-match-player-c" data-leg="${i}" placeholder="e.g. Rory McIlroy" maxlength="80">
           </div>
         </div>
+        <div class="form-row leg-matchplay-tie-row-${i}" style="display:none">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" class="leg-matchplay-tie" data-leg="${i}">
+              Betting the Tie (both players same score on hole)
+            </label>
+          </div>
+        </div>
       </div>
 
       <!-- Prop fields -->
@@ -1069,6 +1093,18 @@ function buildParlayLegs() {
       const leg = e.target.dataset.leg;
       const wager = e.target.value;
 
+    // Wire up hole selector to show/hide tie checkbox for this leg
+    card.querySelector('.leg-golf-hole')?.addEventListener('change', (e) => {
+      const leg = e.target.dataset.leg;
+      const holeVal = e.target.value;
+      const wager = document.querySelector(`.leg-wager-type[data-leg="${leg}"]`)?.value;
+      const tieRowEl = document.querySelector(`.leg-matchplay-tie-row-${leg}`);
+      if (tieRowEl) tieRowEl.style.display = (holeVal && (wager === '2ball' || wager === '3ball')) ? '' : 'none';
+      if (!holeVal || !(wager === '2ball' || wager === '3ball')) {
+        const tc = document.querySelector(`.leg-matchplay-tie[data-leg="${leg}"]`); if (tc) tc.checked = false;
+      }
+    });
+
       const spreadRow = document.querySelector(`.leg-spread-row-${leg}`);
       const ouRow = document.querySelector(`.leg-ou-row-${leg}`);
       const spreadLabel = document.querySelector(`.leg-spread-label-${leg}`);
@@ -1113,9 +1149,14 @@ function buildParlayLegs() {
         document.querySelector(`.leg-team-fields-${leg}`)?.classList.add('hidden');
         // Update label and player C row visibility
         const label = document.querySelector(`.leg-matchplay-type-label-${leg}`);
-        if (label) label.textContent = wager === '3ball' ? '\u26f3 3-Ball Match Details' : '\u26f3 2-Ball Match Details';
+        if (label) label.textContent = wager === '3ball' ? '⛳ 3-Ball Match Details' : '⛳ 2-Ball Match Details';
         const playerCRow = document.querySelector(`.leg-matchplay-playerc-row-${leg}`);
         if (playerCRow) playerCRow.style.display = wager === '3ball' ? '' : 'none';
+        // Sync tie row visibility based on current hole selection
+        const holeVal = document.querySelector(`.leg-golf-hole[data-leg="${leg}"]`)?.value;
+        const tieRowEl = document.querySelector(`.leg-matchplay-tie-row-${leg}`);
+        if (tieRowEl) tieRowEl.style.display = holeVal ? '' : 'none';
+        if (!holeVal) { const tc = document.querySelector(`.leg-matchplay-tie[data-leg="${leg}"]`); if (tc) tc.checked = false; }
       } else {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
@@ -1235,6 +1276,7 @@ async function handleSubmit(e) {
             const mpB2 = document.querySelector(`.leg-match-player-b2[data-leg="${i}"]`)?.value?.trim();
             const mpC = document.querySelector(`.leg-match-player-c[data-leg="${i}"]`)?.value?.trim();
             const mpRound = document.querySelector(`.leg-matchplay-round[data-leg="${i}"]`)?.value;
+            const isTieBet = !!(document.querySelector(`.leg-matchplay-tie[data-leg="${i}"]`)?.checked);
             if (!mpA || !mpB) throw new Error(`Leg ${i}: Enter Group A and Group B player names`);
             leg.matchPlayerA = mpA;
             if (mpA2) leg.matchPlayerA2 = mpA2;
@@ -1242,7 +1284,8 @@ async function handleSubmit(e) {
             if (mpB2) leg.matchPlayerB2 = mpB2;
             if (mpC) leg.matchPlayerC = mpC;
             if (mpRound) leg.golfRound = parseInt(mpRound);
-            leg.teamA = mpA2 ? `${mpA} / ${mpA2}` : mpA;
+            if (isTieBet) leg.isTieBet = true;
+            leg.teamA = isTieBet ? 'Tie' : (mpA2 ? `${mpA} / ${mpA2}` : mpA);
             leg.teamB = mpB2 ? `${mpB} / ${mpB2}` : mpB;
           } else {
             leg.teamA = document.querySelector(`.leg-team-a[data-leg="${i}"]`)?.value;

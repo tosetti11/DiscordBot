@@ -1011,9 +1011,10 @@ client.once(Events.ClientReady, (c) => {
           if (!mpData.holeMode || !mpData.holeData) continue;
           const { holeWinner } = mpData.holeData;
           if (holeWinner === null) continue; // hole not yet complete
+          const isTieBet = bet.team_a === 'Tie';
           let result = null;
-          if (holeWinner === 'tie') result = 'push';
-          else if (holeWinner === 'A') result = 'win';
+          if (holeWinner === 'tie') result = isTieBet ? 'win' : 'push';
+          else if (!isTieBet && holeWinner === 'A') result = 'win';
           else result = 'loss';
 
           if (result) {
@@ -1065,9 +1066,10 @@ client.once(Events.ClientReady, (c) => {
           if (!mpData.holeMode || !mpData.holeData) continue;
           const { holeWinner } = mpData.holeData;
           if (holeWinner === null) continue;
+          const isTieBet = leg.team_a === 'Tie';
           let result = null;
-          if (holeWinner === 'tie') result = 'push';
-          else if (holeWinner === 'A') result = 'win';
+          if (holeWinner === 'tie') result = isTieBet ? 'win' : 'push';
+          else if (!isTieBet && holeWinner === 'A') result = 'win';
           else result = 'loss';
 
           if (result) {

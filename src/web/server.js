@@ -1922,10 +1922,18 @@ function createWebServer() {
             fields.pick = `Draw No Bet: ${mergedBet.team_a || ''}`;
           } else if (wt === '2ball') {
             const rdTag = mergedBet.golf_round ? ` R${mergedBet.golf_round}` : '';
-            fields.pick = `2-Ball${rdTag}: ${mergedBet.team_a || ''} to beat ${mergedBet.team_b || ''}`.trim();
+            const holeTag = mergedBet.golf_hole ? ` H${mergedBet.golf_hole}` : '';
+            const isTie = mergedBet.team_a === 'Tie';
+            fields.pick = isTie
+              ? `2-Ball${rdTag}${holeTag}: Tie — ${mergedBet.match_player_a || ''} vs ${mergedBet.match_player_b || ''}`.trim()
+              : `2-Ball${rdTag}${holeTag}: ${mergedBet.team_a || ''} to beat ${mergedBet.team_b || ''}`.trim();
           } else if (wt === '3ball') {
             const rdTag = mergedBet.golf_round ? ` R${mergedBet.golf_round}` : '';
-            fields.pick = `3-Ball${rdTag}: ${mergedBet.team_a || ''} to win group`.trim();
+            const holeTag = mergedBet.golf_hole ? ` H${mergedBet.golf_hole}` : '';
+            const isTie = mergedBet.team_a === 'Tie';
+            fields.pick = isTie
+              ? `3-Ball${rdTag}${holeTag}: Tie — ${mergedBet.match_player_a || ''} / ${mergedBet.match_player_b || ''} / ${mergedBet.match_player_c || ''}`.trim()
+              : `3-Ball${rdTag}${holeTag}: ${mergedBet.team_a || ''} to win group`.trim();
           }
         } else if (cat === 'player_prop') {
           fields.pick = mergedBet.prop_description || mergedBet.pick || bet.pick;
