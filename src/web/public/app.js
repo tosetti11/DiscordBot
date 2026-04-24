@@ -2117,6 +2117,25 @@ function applySingleData(data) {
   if (data.golfRound && (data.wagerType === '2ball' || data.wagerType === '3ball')) {
     const el = document.getElementById('matchplay-round'); if (el) el.value = data.golfRound;
   }
+  // Auto-split combined "Player / Partner" strings that OCR puts in single fields
+  const _mpA = document.getElementById('match-player-a');
+  const _mpA2 = document.getElementById('match-player-a2');
+  if (_mpA && _mpA2 && !_mpA2.value && _mpA.value.includes(' / ')) {
+    const [p1, p2] = _mpA.value.split(' / ');
+    _mpA.value = p1.trim(); _mpA2.value = p2.trim();
+  }
+  const _mpB = document.getElementById('match-player-b');
+  const _mpB2 = document.getElementById('match-player-b2');
+  if (_mpB && _mpB2 && !_mpB2.value && _mpB.value.includes(' / ')) {
+    const [p1, p2] = _mpB.value.split(' / ');
+    _mpB.value = p1.trim(); _mpB2.value = p2.trim();
+  }
+  // If OCR detected a tie bet, check the tie checkbox
+  if (data.teamA === 'Tie' && (data.wagerType === '2ball' || data.wagerType === '3ball')) {
+    const tieCheck = document.getElementById('matchplay-bet-tie');
+    if (tieCheck) tieCheck.checked = true;
+    syncTieRowVisibility();
+  }
 
   // MLB Live fields
   if (data.betCategory === 'mlb_live') {
@@ -2345,6 +2364,24 @@ function applyParlayData(data) {
     if (leg.matchPlayerC) { const el = document.querySelector(`.leg-match-player-c[data-leg="${i}"]`); if (el) el.value = leg.matchPlayerC; }
     if (leg.golfRound && (leg.wagerType === '2ball' || leg.wagerType === '3ball')) {
       const el = document.querySelector(`.leg-matchplay-round[data-leg="${i}"]`); if (el) el.value = leg.golfRound;
+    }
+    // Auto-split combined "Player / Partner" strings
+    const _lmpA = document.querySelector(`.leg-match-player-a[data-leg="${i}"]`);
+    const _lmpA2 = document.querySelector(`.leg-match-player-a2[data-leg="${i}"]`);
+    if (_lmpA && _lmpA2 && !_lmpA2.value && _lmpA.value.includes(' / ')) {
+      const [p1, p2] = _lmpA.value.split(' / ');
+      _lmpA.value = p1.trim(); _lmpA2.value = p2.trim();
+    }
+    const _lmpB = document.querySelector(`.leg-match-player-b[data-leg="${i}"]`);
+    const _lmpB2 = document.querySelector(`.leg-match-player-b2[data-leg="${i}"]`);
+    if (_lmpB && _lmpB2 && !_lmpB2.value && _lmpB.value.includes(' / ')) {
+      const [p1, p2] = _lmpB.value.split(' / ');
+      _lmpB.value = p1.trim(); _lmpB2.value = p2.trim();
+    }
+    // If OCR detected a tie bet, check the leg tie checkbox
+    if (leg.teamA === 'Tie' && (leg.wagerType === '2ball' || leg.wagerType === '3ball')) {
+      const tieCheck = document.querySelector(`.leg-matchplay-tie[data-leg="${i}"]`);
+      if (tieCheck) tieCheck.checked = true;
     }
 
     // Trigger sport-specific field visibility for each leg
