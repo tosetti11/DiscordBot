@@ -575,19 +575,20 @@ function updateCategoryFields(category) {
   document.getElementById('prop-fields').classList.add('hidden');
   document.getElementById('futures-fields').classList.add('hidden');
   document.getElementById('mlb-live-fields').classList.add('hidden');
-  // Show/hide tie toggle based on whether a hole is selected AND wager is 2ball/3ball
+  // Show/hide tie toggle based on whether wager is 2ball/3ball
   const golfHoleEl = document.getElementById('golf-hole');
+  const matchplayHoleEl = document.getElementById('matchplay-hole');
   const tieRow = document.getElementById('matchplay-tie-row');
   function syncTieRowVisibility() {
     const wager = document.getElementById('wager-type')?.value;
-    const hole = golfHoleEl?.value;
-    if (tieRow) tieRow.style.display = (hole && (wager === '2ball' || wager === '3ball')) ? '' : 'none';
-    if (!hole || !(wager === '2ball' || wager === '3ball')) {
+    if (tieRow) tieRow.style.display = (wager === '2ball' || wager === '3ball') ? '' : 'none';
+    if (!(wager === '2ball' || wager === '3ball')) {
       const tieEl = document.getElementById('matchplay-bet-tie');
       if (tieEl) tieEl.checked = false;
     }
   }
   golfHoleEl?.addEventListener('change', syncTieRowVisibility);
+  matchplayHoleEl?.addEventListener('change', syncTieRowVisibility);
   // Also call syncTieRowVisibility when wager type changes (already handled in onWagerTypeChange via existing listener)
   document.getElementById('wager-type')?.addEventListener('change', syncTieRowVisibility);
 
@@ -1093,16 +1094,9 @@ function buildParlayLegs() {
       const leg = e.target.dataset.leg;
       const wager = e.target.value;
 
-    // Wire up hole selector to show/hide tie checkbox for this leg
+    // Wire up hole selector for this leg (no longer gates tie row)
     card.querySelector('.leg-golf-hole')?.addEventListener('change', (e) => {
-      const leg = e.target.dataset.leg;
-      const holeVal = e.target.value;
-      const wager = document.querySelector(`.leg-wager-type[data-leg="${leg}"]`)?.value;
-      const tieRowEl = document.querySelector(`.leg-matchplay-tie-row-${leg}`);
-      if (tieRowEl) tieRowEl.style.display = (holeVal && (wager === '2ball' || wager === '3ball')) ? '' : 'none';
-      if (!holeVal || !(wager === '2ball' || wager === '3ball')) {
-        const tc = document.querySelector(`.leg-matchplay-tie[data-leg="${leg}"]`); if (tc) tc.checked = false;
-      }
+      // hole change does not affect tie row visibility
     });
 
       const spreadRow = document.querySelector(`.leg-spread-row-${leg}`);
@@ -1152,11 +1146,9 @@ function buildParlayLegs() {
         if (label) label.textContent = wager === '3ball' ? '⛳ 3-Ball Match Details' : '⛳ 2-Ball Match Details';
         const playerCRow = document.querySelector(`.leg-matchplay-playerc-row-${leg}`);
         if (playerCRow) playerCRow.style.display = wager === '3ball' ? '' : 'none';
-        // Sync tie row visibility based on current hole selection
-        const holeVal = document.querySelector(`.leg-golf-hole[data-leg="${leg}"]`)?.value;
+        // Always show tie row when 2ball/3ball
         const tieRowEl = document.querySelector(`.leg-matchplay-tie-row-${leg}`);
-        if (tieRowEl) tieRowEl.style.display = holeVal ? '' : 'none';
-        if (!holeVal) { const tc = document.querySelector(`.leg-matchplay-tie[data-leg="${leg}"]`); if (tc) tc.checked = false; }
+        if (tieRowEl) tieRowEl.style.display = '';
       } else {
         spreadRow.classList.add('hidden');
         ouRow.classList.add('hidden');
@@ -1430,6 +1422,8 @@ async function handleSubmit(e) {
           if (mpB2) body.matchPlayerB2 = mpB2;
           if (mpC) body.matchPlayerC = mpC;
           if (mpRound) body.golfRound = parseInt(mpRound);
+          const mpHole = document.getElementById('matchplay-hole')?.value;
+          if (mpHole) body.golfHole = parseInt(mpHole);
           body.teamA = mpA2 ? `${mpA} / ${mpA2}` : mpA;
           body.teamB = mpB2 ? `${mpB} / ${mpB2}` : mpB;
         } else {
@@ -2098,14 +2092,19 @@ function applySingleData(data) {
     if (fmEl) fmEl.value = data.fightMethod;
   }
 
-  // Golf fields
-  if (data.golfRound) {
+  // Golf fields — only for prop bets (2ball/3ball use matchplay-hole instead)
+  if (data.golfRound && data.wagerType !== '2ball' && data.wagerType !== '3ball') {
     const grEl = document.getElementById('golf-round');
     if (grEl) grEl.value = data.golfRound;
   }
-  if (data.golfHole) {
+  if (data.golfHole && data.wagerType !== '2ball' && data.wagerType !== '3ball') {
     const ghEl = document.getElementById('golf-hole');
     if (ghEl) ghEl.value = data.golfHole;
+  }
+  // For 2ball/3ball — fill the matchplay hole/round fields
+  if (data.golfHole && (data.wagerType === '2ball' || data.wagerType === '3ball')) {
+    const mhEl = document.getElementById('matchplay-hole');
+    if (mhEl) mhEl.value = data.golfHole;
   }
 
   // 2ball/3ball match player fields
@@ -4693,6 +4692,31 @@ async function fetchBetForEdit(betId) {
               btn.classList.toggle('active', btn.dataset.value === bet.overUnder);
             });
           }
+        } else if (bet.wagerType === '2ball' || bet.wagerType === '3ball') {
+          // Show matchplay fields, hide standard team fields
+          document.getElementById('matchplay-fields')?.classList.remove('hidden');
+          document.getElementById('team-fields')?.classList.add('hidden');
+          const mpLabel = document.getElementById('matchplay-type-label');
+          if (mpLabel) mpLabel.textContent = bet.wagerType === '3ball' ? '⛳ 3-Ball Match Details' : '⛳ 2-Ball Match Details';
+          // Player C row
+          const pcRow = document.getElementById('matchplay-playerc-row');
+          if (pcRow) pcRow.style.display = bet.wagerType === '3ball' ? '' : 'none';
+          // Round & hole
+          if (bet.golfRound) { const el = document.getElementById('matchplay-round'); if (el) el.value = bet.golfRound; }
+          if (bet.golfHole) { const el = document.getElementById('matchplay-hole'); if (el) el.value = bet.golfHole; }
+          // Players — split combined "A / A2" teamA string back into individual fields
+          const splitA = bet.matchPlayerA2 ? [bet.matchPlayerA, bet.matchPlayerA2] : (bet.teamA || '').split(' / ');
+          const splitB = bet.matchPlayerB2 ? [bet.matchPlayerB, bet.matchPlayerB2] : (bet.teamB || '').split(' / ');
+          const mpA = document.getElementById('match-player-a'); if (mpA) mpA.value = splitA[0]?.trim() || '';
+          const mpA2 = document.getElementById('match-player-a2'); if (mpA2) mpA2.value = splitA[1]?.trim() || '';
+          const mpB = document.getElementById('match-player-b'); if (mpB) mpB.value = splitB[0]?.trim() || '';
+          const mpB2 = document.getElementById('match-player-b2'); if (mpB2) mpB2.value = splitB[1]?.trim() || '';
+          if (bet.matchPlayerC) { const el = document.getElementById('match-player-c'); if (el) el.value = bet.matchPlayerC; }
+          // Tie checkbox — teamA === 'Tie' means it was a tie bet
+          const tieCheck = document.getElementById('matchplay-bet-tie');
+          const tieRowEl = document.getElementById('matchplay-tie-row');
+          if (tieRowEl) tieRowEl.style.display = '';
+          if (tieCheck) tieCheck.checked = bet.teamA === 'Tie';
         }
       } else if (cat === 'player_prop') {
         document.getElementById('prop-fields').classList.remove('hidden');
@@ -4739,11 +4763,11 @@ async function fetchBetForEdit(betId) {
 
       // Golf fields
       if (bet.golfRound) {
-        const grEl = document.getElementById('golf-round');
+        const grEl = document.getElementById(bet.wagerType === '2ball' || bet.wagerType === '3ball' ? 'matchplay-round' : 'golf-round');
         if (grEl) grEl.value = bet.golfRound;
       }
       if (bet.golfHole) {
-        const ghEl = document.getElementById('golf-hole');
+        const ghEl = document.getElementById(bet.wagerType === '2ball' || bet.wagerType === '3ball' ? 'matchplay-hole' : 'golf-hole');
         if (ghEl) ghEl.value = bet.golfHole;
       }
 
