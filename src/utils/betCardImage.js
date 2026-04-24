@@ -854,7 +854,9 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       ctx.fillText(mp.groupA?.displayName || '—', mpX, curY + 16);
       ctx.font = '700 11px ' + FF;
       ctx.fillStyle = mpIsLive ? '#4ade80' : C.textSecondary;
-      const gAScore = fmtScore(mp.groupA?.roundScore) + (mp.groupA?.holesCompleted != null ? ` thru ${mp.groupA.holesCompleted}` : '');
+      const gAScoreStr = fmtScore(mp.groupA?.roundScore);
+      const gAStrokesStr = mp.groupA?.strokeCount != null ? ` (${mp.groupA.strokeCount})` : '';
+      const gAScore = `${gAScoreStr}${gAStrokesStr}` + (mp.groupA?.holesCompleted != null ? ` thru ${mp.groupA.holesCompleted}` : '');
       const gAW = ctx.measureText(gAScore).width;
       ctx.fillText(gAScore, W - PAD - gAW - 4, curY + 16);
 
@@ -874,7 +876,9 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       ctx.fillText(mp.groupB?.displayName || '—', mpX, curY + 34);
       ctx.font = '700 11px ' + FF;
       ctx.fillStyle = C.textSecondary;
-      const gBScore = fmtScore(mp.groupB?.roundScore) + (mp.groupB?.holesCompleted != null ? ` thru ${mp.groupB.holesCompleted}` : '');
+      const gBScoreStr = fmtScore(mp.groupB?.roundScore);
+      const gBStrokesStr = mp.groupB?.strokeCount != null ? ` (${mp.groupB.strokeCount})` : '';
+      const gBScore = `${gBScoreStr}${gBStrokesStr}`;
       const gBW = ctx.measureText(gBScore).width;
       ctx.fillText(gBScore, W - PAD - gBW - 4, curY + 34);
 
@@ -1170,7 +1174,9 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         ctx.fillStyle = mpLive ? C.win : C.textSecondary;
         ctx.fillText(legMpd.groupA.displayName, mx, curY + 14);
         ctx.font = '700 10px ' + FF;
-        const gAStr = `${mpFmtScore(legMpd.groupA.roundScore)} ${thruStr}`;
+        const gAScore = mpFmtScore(legMpd.groupA.roundScore);
+        const gAStrokes = legMpd.groupA.strokeCount != null ? ` (${legMpd.groupA.strokeCount})` : '';
+        const gAStr = `${gAScore}${gAStrokes}  ${thruStr}`;
         const gAW = ctx.measureText(gAStr).width;
         ctx.fillText(gAStr, legX + legInner - gAW, curY + 14);
 
@@ -1185,7 +1191,9 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         ctx.fillStyle = C.textMuted;
         ctx.fillText(legMpd.groupB.displayName, mx, curY + 42);
         ctx.font = '700 10px ' + FF;
-        const gBStr = mpFmtScore(legMpd.groupB.roundScore);
+        const gBScore = mpFmtScore(legMpd.groupB.roundScore);
+        const gBStrokes = legMpd.groupB.strokeCount != null ? ` (${legMpd.groupB.strokeCount})` : '';
+        const gBStr = `${gBScore}${gBStrokes}`;
         const gBW = ctx.measureText(gBStr).width;
         ctx.fillText(gBStr, legX + legInner - gBW, curY + 42);
 

@@ -1761,12 +1761,13 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
       let holesCompleted = 0;
       let toParScore = 0;
       let hasToParData = false;
+      let strokeCount = 0;
 
       if (round?.linescores?.length) {
         holesCompleted = round.linescores.length;
         for (const hole of round.linescores) {
-          // Prefer scoreType.displayValue for to-par ('E'=0, '-1'=-1, '+1'=+1)
-          // hole.value is raw stroke count, NOT to-par
+          // hole.value = raw stroke count; scoreType.displayValue = to-par
+          strokeCount += hole.value || 0;
           const tpStr = hole.scoreType?.displayValue ?? hole.t?.displayValue;
           if (tpStr !== undefined && tpStr !== null) {
             hasToParData = true;
@@ -1796,6 +1797,7 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
         name,
         found: true,
         roundScore,
+        strokeCount: holesCompleted > 0 ? strokeCount : null,
         holesCompleted,
         roundStatus,
         overallScore: comp.score || 'E',
@@ -1874,6 +1876,9 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
         player1: pA,
         player2: isTeamFormat && !teamAisSingleEntry ? pA2 : null,
         roundScore: groupAScore,
+        strokeCount: pA.strokeCount != null
+          ? pA.strokeCount + (!teamAisSingleEntry && isTeamFormat && pA2.strokeCount != null ? pA2.strokeCount : 0)
+          : null,
         holesCompleted: Math.max(pA.holesCompleted, isTeamFormat && !teamAisSingleEntry ? (pA2.holesCompleted || 0) : 0),
       },
       groupB: {
@@ -1881,6 +1886,9 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
         player1: pB,
         player2: isTeamFormat && !teamBisSingleEntry ? pB2 : null,
         roundScore: groupBScore,
+        strokeCount: pB.strokeCount != null
+          ? pB.strokeCount + (!teamBisSingleEntry && isTeamFormat && pB2.strokeCount != null ? pB2.strokeCount : 0)
+          : null,
         holesCompleted: Math.max(pB.holesCompleted, isTeamFormat && !teamBisSingleEntry ? (pB2.holesCompleted || 0) : 0),
       },
       groupC: is3Ball ? {

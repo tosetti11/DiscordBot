@@ -3943,8 +3943,10 @@ function renderMatchPlayTracker(el, mp) {
 
   const groupRow = (group) => {
     if (!group) return '';
+    const scoreStr = fmtScore(group.roundScore);
+    const strokesStr = group.strokeCount != null ? ` (${group.strokeCount})` : '';
     const holesStr = group.holesCompleted != null ? ` thru ${group.holesCompleted}` : '';
-    return `<div class="matchplay-group-row"><span class="matchplay-group-name">${esc(group.displayName)}</span><span class="matchplay-group-score">${fmtScore(group.roundScore)}${holesStr}</span></div>`;
+    return `<div class="matchplay-group-row"><span class="matchplay-group-name">${esc(group.displayName)}</span><span class="matchplay-group-score">${scoreStr}${strokesStr}${holesStr}</span></div>`;
   };
 
   let statusBadge = '';
