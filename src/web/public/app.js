@@ -3941,12 +3941,12 @@ function renderMatchPlayTracker(el, mp) {
       ? `<span class="tracker-status tracker-final">🏁 FINAL — R${mp.roundNum || ''}</span>`
       : `<span class="tracker-status">⏳ R${mp.roundNum || ''} — ${esc(mp.tournamentName || 'Golf')}</span>`;
 
-  const groupRow = (group) => {
+  const groupRow = (group, showThru = false) => {
     if (!group) return '';
     const scoreStr = fmtScore(group.roundScore);
     const strokesStr = group.strokeCount != null ? ` (${group.strokeCount})` : '';
-    const holesStr = group.holesCompleted != null ? ` thru ${group.holesCompleted}` : '';
-    return `<div class="matchplay-group-row"><span class="matchplay-group-name">${esc(group.displayName)}</span><span class="matchplay-group-score">${scoreStr}${strokesStr}${holesStr}</span></div>`;
+    const holesStr = showThru && group.holesCompleted != null ? `<span class="matchplay-thru"> thru ${group.holesCompleted}</span>` : '';
+    return `<div class="matchplay-group-row"><span class="matchplay-group-name">${esc(group.displayName)}: <span class="matchplay-group-score">${scoreStr}${strokesStr}</span>${holesStr}</span></div>`;
   };
 
   let statusBadge = '';
@@ -3970,7 +3970,7 @@ function renderMatchPlayTracker(el, mp) {
     <div class="tracker-content">
       ${statusHtml}
       <div class="matchplay-scorecard">
-        ${groupRow(mp.groupA)}
+        ${groupRow(mp.groupA, true)}
         ${statusBadge}
         ${groupRow(mp.groupB)}
         ${groupCHtml}

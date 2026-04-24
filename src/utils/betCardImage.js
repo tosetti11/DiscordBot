@@ -848,17 +848,21 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       const mpX = LEFT_BAR + PAD + 6;
       const mp = matchPlayData;
 
-      // Group A row
+      // Group A row — name: score (strokes) left, thru N right
       ctx.font = '600 11px ' + FF;
       ctx.fillStyle = C.textSecondary;
-      ctx.fillText(mp.groupA?.displayName || '—', mpX, curY + 16);
-      ctx.font = '700 11px ' + FF;
-      ctx.fillStyle = mpIsLive ? '#4ade80' : C.textSecondary;
       const gAScoreStr = fmtScore(mp.groupA?.roundScore);
       const gAStrokesStr = mp.groupA?.strokeCount != null ? ` (${mp.groupA.strokeCount})` : '';
-      const gAScore = `${gAScoreStr}${gAStrokesStr}` + (mp.groupA?.holesCompleted != null ? ` thru ${mp.groupA.holesCompleted}` : '');
-      const gAW = ctx.measureText(gAScore).width;
-      ctx.fillText(gAScore, W - PAD - gAW - 4, curY + 16);
+      const gALabel = `${mp.groupA?.displayName || '—'}: ${gAScoreStr}${gAStrokesStr}`;
+      ctx.fillStyle = mpIsLive ? '#4ade80' : C.textSecondary;
+      ctx.fillText(gALabel, mpX, curY + 16);
+      if (mp.groupA?.holesCompleted != null) {
+        ctx.font = '10px ' + FF;
+        ctx.fillStyle = C.textMuted;
+        const thruLabel = `thru ${mp.groupA.holesCompleted}`;
+        const thruLW = ctx.measureText(thruLabel).width;
+        ctx.fillText(thruLabel, W - PAD - thruLW - 4, curY + 16);
+      }
 
       // Match status badge (center)
       if (mp.matchStatus) {
@@ -870,17 +874,13 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         ctx.fillText(badge, LEFT_BAR + PAD + INNER / 2 - bw / 2, curY + 16);
       }
 
-      // Group B row
+      // Group B row — name: score (strokes) left
       ctx.font = '600 11px ' + FF;
-      ctx.fillStyle = C.textSecondary;
-      ctx.fillText(mp.groupB?.displayName || '—', mpX, curY + 34);
-      ctx.font = '700 11px ' + FF;
       ctx.fillStyle = C.textSecondary;
       const gBScoreStr = fmtScore(mp.groupB?.roundScore);
       const gBStrokesStr = mp.groupB?.strokeCount != null ? ` (${mp.groupB.strokeCount})` : '';
-      const gBScore = `${gBScoreStr}${gBStrokesStr}`;
-      const gBW = ctx.measureText(gBScore).width;
-      ctx.fillText(gBScore, W - PAD - gBW - 4, curY + 34);
+      const gBLabel = `${mp.groupB?.displayName || '—'}: ${gBScoreStr}${gBStrokesStr}`;
+      ctx.fillText(gBLabel, mpX, curY + 34);
 
       // Tournament + round
       ctx.font = '10px ' + FF;
@@ -1169,16 +1169,16 @@ async function generateBetCardImage(bet, username, avatarUrl) {
           ? (mpFinal ? 'Final' : `Thru ${legMpd.maxHoles}`)
           : (mpFinal ? 'Final' : 'In Progress');
 
-        // Group A row
+        // Group A row — name: score (strokes) left, thru N right
+        const gAStrokesStr = legMpd.groupA.strokeCount != null ? ` (${legMpd.groupA.strokeCount})` : '';
+        const gALabel = `${legMpd.groupA.displayName}: ${mpFmtScore(legMpd.groupA.roundScore)}${gAStrokesStr}`;
         ctx.font = '600 10px ' + FF;
         ctx.fillStyle = mpLive ? C.win : C.textSecondary;
-        ctx.fillText(legMpd.groupA.displayName, mx, curY + 14);
-        ctx.font = '700 10px ' + FF;
-        const gAScore = mpFmtScore(legMpd.groupA.roundScore);
-        const gAStrokes = legMpd.groupA.strokeCount != null ? ` (${legMpd.groupA.strokeCount})` : '';
-        const gAStr = `${gAScore}${gAStrokes}  ${thruStr}`;
-        const gAW = ctx.measureText(gAStr).width;
-        ctx.fillText(gAStr, legX + legInner - gAW, curY + 14);
+        ctx.fillText(gALabel, mx, curY + 14);
+        ctx.font = '10px ' + FF;
+        ctx.fillStyle = C.textMuted;
+        const thruW = ctx.measureText(thruStr).width;
+        ctx.fillText(thruStr, legX + legInner - thruW, curY + 14);
 
         // Match status badge (centered between rows)
         ctx.font = 'bold 11px ' + FF;
@@ -1186,16 +1186,12 @@ async function generateBetCardImage(bet, username, avatarUrl) {
         const bw = ctx.measureText(msLabel).width;
         ctx.fillText(msLabel, legX + legInner / 2 - bw / 2, curY + 28);
 
-        // Group B row
+        // Group B row — name: score (strokes) left
+        const gBStrokesStr = legMpd.groupB.strokeCount != null ? ` (${legMpd.groupB.strokeCount})` : '';
+        const gBLabel = `${legMpd.groupB.displayName}: ${mpFmtScore(legMpd.groupB.roundScore)}${gBStrokesStr}`;
         ctx.font = '600 10px ' + FF;
         ctx.fillStyle = C.textMuted;
-        ctx.fillText(legMpd.groupB.displayName, mx, curY + 42);
-        ctx.font = '700 10px ' + FF;
-        const gBScore = mpFmtScore(legMpd.groupB.roundScore);
-        const gBStrokes = legMpd.groupB.strokeCount != null ? ` (${legMpd.groupB.strokeCount})` : '';
-        const gBStr = `${gBScore}${gBStrokes}`;
-        const gBW = ctx.measureText(gBStr).width;
-        ctx.fillText(gBStr, legX + legInner - gBW, curY + 42);
+        ctx.fillText(gBLabel, mx, curY + 42);
 
         curY += 58;
       }

@@ -2116,7 +2116,6 @@ textarea {
 
 .matchplay-group-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   padding: 4px 6px;
   background: rgba(255,255,255,0.04);
@@ -2134,6 +2133,11 @@ textarea {
   font-weight: 700;
   color: var(--green, #4ade80);
   letter-spacing: 0.5px;
+}
+.matchplay-thru {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted, #9ca3af);
 }
 
 .matchplay-status-badge {
