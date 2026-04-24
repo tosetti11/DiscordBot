@@ -1925,14 +1925,14 @@ function createWebServer() {
             const holeTag = mergedBet.golf_hole ? ` H${mergedBet.golf_hole}` : '';
             const isTie = mergedBet.team_a === 'Tie';
             fields.pick = isTie
-              ? `2-Ball${rdTag}${holeTag}: Tie — ${mergedBet.match_player_a || ''} vs ${mergedBet.match_player_b || ''}`.trim()
+              ? `2-Ball${rdTag}${holeTag}: Tie`.trim()
               : `2-Ball${rdTag}${holeTag}: ${mergedBet.team_a || ''} to beat ${mergedBet.team_b || ''}`.trim();
           } else if (wt === '3ball') {
             const rdTag = mergedBet.golf_round ? ` R${mergedBet.golf_round}` : '';
             const holeTag = mergedBet.golf_hole ? ` H${mergedBet.golf_hole}` : '';
             const isTie = mergedBet.team_a === 'Tie';
             fields.pick = isTie
-              ? `3-Ball${rdTag}${holeTag}: Tie — ${mergedBet.match_player_a || ''} / ${mergedBet.match_player_b || ''} / ${mergedBet.match_player_c || ''}`.trim()
+              ? `3-Ball${rdTag}${holeTag}: Tie`.trim()
               : `3-Ball${rdTag}${holeTag}: ${mergedBet.team_a || ''} to win group`.trim();
           }
         } else if (cat === 'player_prop') {
@@ -1945,8 +1945,8 @@ function createWebServer() {
           if (mergedBet.fight_method) fParts.push(EDIT_FIGHT_METHOD_LABELS[mergedBet.fight_method] || mergedBet.fight_method);
           if (fParts.length) fields.pick += ` (${fParts.join(', ')})`;
         }
-        // Append golf context
-        if (mergedBet.sport?.startsWith('golf') && fields.pick) {
+        // Append golf context (only for non-2ball/3ball bets — those already include R/H tags in the pick string)
+        if (mergedBet.sport?.startsWith('golf') && fields.pick && wt !== '2ball' && wt !== '3ball') {
           const gParts = [];
           if (mergedBet.golf_round) gParts.push(`R${mergedBet.golf_round}`);
           if (mergedBet.golf_hole) gParts.push(`Hole ${mergedBet.golf_hole}`);
@@ -3853,10 +3853,18 @@ IMPORTANT RULES:
               legPick = `Draw No Bet: ${truncate(leg.teamA, 200)}`;
             } else if (leg.wagerType === '2ball') {
               const rdTag = leg.golfRound ? ` R${leg.golfRound}` : '';
-              legPick = `2-Ball${rdTag}: ${truncate(leg.teamA, 200)} to beat ${truncate(leg.teamB, 200)}`;
+              const holeTag = leg.golfHole ? ` H${leg.golfHole}` : '';
+              const isTie = leg.teamA === 'Tie';
+              legPick = isTie
+                ? `2-Ball${rdTag}${holeTag}: Tie`
+                : `2-Ball${rdTag}${holeTag}: ${truncate(leg.teamA, 200)} to beat ${truncate(leg.teamB, 200)}`;
             } else if (leg.wagerType === '3ball') {
               const rdTag = leg.golfRound ? ` R${leg.golfRound}` : '';
-              legPick = `3-Ball${rdTag}: ${truncate(leg.teamA, 200)} to win group`;
+              const holeTag = leg.golfHole ? ` H${leg.golfHole}` : '';
+              const isTie = leg.teamA === 'Tie';
+              legPick = isTie
+                ? `3-Ball${rdTag}${holeTag}: Tie`
+                : `3-Ball${rdTag}${holeTag}: ${truncate(leg.teamA, 200)} to win group`;
             }
           } else if (leg.betCategory === 'mlb_live') {
             if (leg.mlbLiveType === 'next_pitch') {
@@ -4042,10 +4050,18 @@ IMPORTANT RULES:
             finalPick = `Draw No Bet: ${safeTeamA}`;
           } else if (wagerType === '2ball') {
             const rdTag = golfRound ? ` R${golfRound}` : '';
-            finalPick = `2-Ball${rdTag}: ${safeTeamA} to beat ${safeTeamB}`;
+            const holeTag = golfHole ? ` H${golfHole}` : '';
+            const isTie = safeTeamA === 'Tie';
+            finalPick = isTie
+              ? `2-Ball${rdTag}${holeTag}: Tie`
+              : `2-Ball${rdTag}${holeTag}: ${safeTeamA} to beat ${safeTeamB}`;
           } else if (wagerType === '3ball') {
             const rdTag = golfRound ? ` R${golfRound}` : '';
-            finalPick = `3-Ball${rdTag}: ${safeTeamA} to win group`;
+            const holeTag = golfHole ? ` H${golfHole}` : '';
+            const isTie = safeTeamA === 'Tie';
+            finalPick = isTie
+              ? `3-Ball${rdTag}${holeTag}: Tie`
+              : `3-Ball${rdTag}${holeTag}: ${safeTeamA} to win group`;
           }
         } else {
           finalPick = safePropDesc || safePick;

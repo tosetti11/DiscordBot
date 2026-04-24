@@ -749,7 +749,16 @@ async function generateBetCardImage(bet, username, avatarUrl) {
     if (bet.team_a && bet.team_b) {
       ctx.font = '13px ' + FF;
       ctx.fillStyle = C.textMuted;
-      ctx.fillText(`${bet.team_a} vs ${bet.team_b}`, LEFT_BAR + PAD, curY + 13);
+      // For 2ball/3ball always show actual player names, never 'Tie vs ...' 
+      let matchupLine;
+      if ((bet.wager_type === '2ball' || bet.wager_type === '3ball') && bet.match_player_a && bet.match_player_b) {
+        const sideA = bet.match_player_a2 ? `${bet.match_player_a} / ${bet.match_player_a2}` : bet.match_player_a;
+        const sideB = bet.match_player_b2 ? `${bet.match_player_b} / ${bet.match_player_b2}` : bet.match_player_b;
+        matchupLine = bet.match_player_c ? `${sideA} / ${sideB} / ${bet.match_player_c}` : `${sideA} vs ${sideB}`;
+      } else {
+        matchupLine = `${bet.team_a} vs ${bet.team_b}`;
+      }
+      ctx.fillText(matchupLine, LEFT_BAR + PAD, curY + 13);
       curY += 18;
     }
     if (bet.player_name) {

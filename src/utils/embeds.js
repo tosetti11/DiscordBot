@@ -93,7 +93,11 @@ function buildBetEmbed(bet, username, avatarUrl) {
       desc += `**${sportName}**${wagerLabel ? ` · ${wagerLabel}` : ''}${tagStr}\n`;
       desc += DIVIDER + '\n\n';
       desc += `## ${bet.pick || '—'}\n`;
-      desc += `${bet.team_a} vs ${bet.team_b}\n`;
+      const is2ball = bet.wager_type === '2ball' || bet.wager_type === '3ball';
+      const matchupA = (is2ball && bet.match_player_a) ? (bet.match_player_a2 ? `${bet.match_player_a} / ${bet.match_player_a2}` : bet.match_player_a) : bet.team_a;
+      const matchupB = (is2ball && bet.match_player_b) ? (bet.match_player_b2 ? `${bet.match_player_b} / ${bet.match_player_b2}` : bet.match_player_b) : bet.team_b;
+      const matchupC = is2ball && bet.match_player_c ? ` / ${bet.match_player_c}` : '';
+      desc += `${matchupA} vs ${matchupB}${matchupC}\n`;
     } else {
       // Player prop
       desc += `**${sportName}** · Player Prop${tagStr}\n`;
@@ -308,7 +312,11 @@ function buildWhaleBetEmbed(bet, username, avatarUrl) {
       desc += `**${sportName}**${wagerLabel ? ` · ${wagerLabel}` : ''} · 🐋 WHALE${retroStr}\n`;
       desc += whaleDivider + '\n\n';
       desc += `## 🐋 ${bet.pick || '—'}\n`;
-      desc += `${bet.team_a} vs ${bet.team_b}\n`;
+      const is2ballW = bet.wager_type === '2ball' || bet.wager_type === '3ball';
+      const wMatchupA = (is2ballW && bet.match_player_a) ? (bet.match_player_a2 ? `${bet.match_player_a} / ${bet.match_player_a2}` : bet.match_player_a) : bet.team_a;
+      const wMatchupB = (is2ballW && bet.match_player_b) ? (bet.match_player_b2 ? `${bet.match_player_b} / ${bet.match_player_b2}` : bet.match_player_b) : bet.team_b;
+      const wMatchupC = is2ballW && bet.match_player_c ? ` / ${bet.match_player_c}` : '';
+      desc += `${wMatchupA} vs ${wMatchupB}${wMatchupC}\n`;
     } else {
       desc += `**${sportName}** · 🐋 WHALE PROP${retroStr}\n`;
       desc += whaleDivider + '\n\n';
