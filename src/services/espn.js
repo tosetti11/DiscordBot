@@ -1842,6 +1842,7 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
 
     const competitors = event.competitions?.[0]?.competitors || [];
     const tournamentName = event.name || 'Tournament';
+    const competitionState = event.competitions?.[0]?.status?.type?.state || 'pre';
 
     // Fuzzy player finder
     function normName(s) {
@@ -1913,7 +1914,7 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
       let roundStatus = 'pre';
       if (holesCompleted === 18) roundStatus = 'post';
       else if (holesCompleted > 0) roundStatus = 'in';
-      else if (rIdx < currentRound - 1) roundStatus = 'post';
+      else if (competitionState !== 'pre' && rIdx < currentRound - 1) roundStatus = 'post';
 
       // Round score: use per-hole to-par sum (most reliable), or round.value only if it looks like to-par (small integer)
       let roundScore = null;
