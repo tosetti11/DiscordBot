@@ -200,6 +200,7 @@ client.once(Events.ClientReady, (c) => {
   const STANDARD_INTERVAL = 30_000; // 30s — player props
   const SLOW_INTERVAL = 30_000;    // 30s — card updates
   const AUTO_CLOSE_DELAY = 60 * 60_000; // 1 hour
+  const SITE_OWNER_ID = '1338301556973633577';
 
   // Parse event_start_time → YYYYMMDD for ESPN scoreboard lookup
   // Handles ISO dates and "Fri Apr 10 9:41 PM ET" human-readable format
@@ -1082,6 +1083,118 @@ client.once(Events.ClientReady, (c) => {
         }
       }
 
+      // ── Resolve 2ball/3ball ROUND-level single bets (no specific hole) ──
+      const { data: openRound2BallSingles } = await supa
+        .from('bets')
+        .select('*')
+        .eq('status', 'open')
+        .eq('bet_type', 'single')
+        .in('wager_type', ['2ball', '3ball'])
+        .not('match_player_a', 'is', null)
+        .is('golf_hole', null)
+        .is('auto_close_at', null);
+
+      for (const bet of (openRound2BallSingles || [])) {
+        try {
+          const mpData = await espn.getGolf2BallLive({
+            playerA: bet.match_player_a, playerA2: bet.match_player_a2 || null,
+            playerB: bet.match_player_b, playerB2: bet.match_player_b2 || null,
+            playerC: bet.match_player_c || null, roundNum: bet.golf_round || null,
+          });
+          if (!mpData || mpData.overallStatus !== 'post') continue;
+
+          // Round-level bet: resolve when round is complete using round scores (lower = better)
+          const scoreA = mpData.groupA.roundScore;
+          const scoreB = mpData.groupB.roundScore;
+          if (scoreA == null || scoreB == null) continue;
+
+          const isTieBet = bet.team_a === 'Tie';
+          let result = null;
+          if (scoreA === scoreB) {
+            result = isTieBet ? 'win' : 'push';
+          } else if (!isTieBet) {
+            if (mpData.is3Ball) {
+              const scoreC = mpData.groupC?.roundScore ?? mpData.groupB.roundScore;
+              const minScore = Math.min(scoreA, scoreB, scoreC ?? Infinity);
+              result = scoreA === minScore ? 'win' : 'loss';
+            } else {
+              result = scoreA < scoreB ? 'win' : 'loss';
+            }
+          } else {
+            result = 'loss'; // Tie bet but scores differ
+          }
+
+          if (result) {
+            const autoCloseAt = new Date(Date.now() + AUTO_CLOSE_DELAY).toISOString();
+            const roundLabel = bet.golf_round ? `Round ${bet.golf_round}` : 'Round';
+            await supa.from('bets').update({
+              auto_close_at: autoCloseAt,
+              result_note: `Auto-resolved: ${result} (${roundLabel} scores: A=${scoreA}, B=${scoreB})`,
+            }).eq('id', bet.id);
+            try {
+              const user = await client.users.fetch(bet.discord_id).catch(() => null);
+              if (user) {
+                const emoji = result === 'win' ? '✅' : result === 'loss' ? '❌' : '🔄';
+                await user.send(
+                  `⛳ **${roundLabel} Complete** — ${mpData.groupA.displayName} (${scoreA > 0 ? '+' : ''}${scoreA}) vs ${mpData.groupB.displayName} (${scoreB > 0 ? '+' : ''}${scoreB})\n${emoji} \`${bet.slip_number}\` looks like a **${result.toUpperCase()}**!\n> ${bet.pick}\n\n⏰ Auto-closing in 1 hour.`
+                ).catch(() => {});
+              }
+            } catch {}
+            console.log(`[LiveTracker] Round 2ball/3ball ${bet.slip_number} auto-resolved: ${result}`);
+          }
+        } catch (e) {
+          console.error('[LiveTracker] Round 2ball auto-resolve error:', e.message);
+        }
+      }
+
+      // ── Resolve 2ball/3ball ROUND-level parlay legs (no specific hole) ──
+      const { data: openRound2BallLegs } = await supa
+        .from('parlay_legs')
+        .select('*')
+        .eq('status', 'open')
+        .in('wager_type', ['2ball', '3ball'])
+        .not('match_player_a', 'is', null)
+        .is('golf_hole', null);
+
+      for (const leg of (openRound2BallLegs || [])) {
+        try {
+          const mpData = await espn.getGolf2BallLive({
+            playerA: leg.match_player_a, playerA2: leg.match_player_a2 || null,
+            playerB: leg.match_player_b, playerB2: leg.match_player_b2 || null,
+            playerC: leg.match_player_c || null, roundNum: leg.golf_round || null,
+          });
+          if (!mpData || mpData.overallStatus !== 'post') continue;
+
+          const scoreA = mpData.groupA.roundScore;
+          const scoreB = mpData.groupB.roundScore;
+          if (scoreA == null || scoreB == null) continue;
+
+          const isTieBet = leg.team_a === 'Tie';
+          let result = null;
+          if (scoreA === scoreB) {
+            result = isTieBet ? 'win' : 'push';
+          } else if (!isTieBet) {
+            if (mpData.is3Ball) {
+              const scoreC = mpData.groupC?.roundScore ?? null;
+              const minScore = Math.min(scoreA, scoreB, scoreC ?? Infinity);
+              result = scoreA === minScore ? 'win' : 'loss';
+            } else {
+              result = scoreA < scoreB ? 'win' : 'loss';
+            }
+          } else {
+            result = 'loss';
+          }
+
+          if (result) {
+            await db.updateParlayLegStatus(leg.id, result);
+            parlayBetsToCheck.add(leg.bet_id);
+            console.log(`[LiveTracker] Round 2ball parlay leg ${leg.id} resolved: ${result}`);
+          }
+        } catch (e) {
+          console.error('[LiveTracker] Round 2ball parlay leg error:', e.message);
+        }
+      }
+
       // ── Check if any parlays are fully resolved ──
       for (const betId of parlayBetsToCheck) {
         try {
@@ -1266,6 +1379,76 @@ client.once(Events.ClientReady, (c) => {
     }
   }, 60_000);
   console.log('   ⏰ Auto-close timer started (60s interval, 1hr grace period)');
+
+  // ── ESPN ID Retry Poller (every 15 min) ──
+  // Re-attempts ESPN game ID resolution for bets that failed at creation time.
+  // This handles advance bets placed before a game appears on ESPN's scoreboard.
+  const espnRetryAlerted = new Set(); // tracks bets already owner-alerted (in-memory, resets on restart)
+  setInterval(async () => {
+    try {
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60_000).toISOString();
+
+      // ── Single bets with no ESPN game ID ──
+      const { data: untrackedSingles } = await supa
+        .from('bets')
+        .select('id, slip_number, sport, bet_category, team_a, team_b, event_start_time, created_at, discord_id, pick')
+        .eq('status', 'open')
+        .is('espn_game_id', null)
+        .neq('bet_category', 'futures');
+
+      for (const bet of (untrackedSingles || [])) {
+        if (!espn.ESPN_SUPPORTED.has(bet.sport)) continue;
+        try {
+          const resolved = await espn.resolveGameId(bet.sport, bet.team_a, bet.team_b, bet.event_start_time);
+          if (resolved) {
+            await supa.from('bets').update({ espn_game_id: resolved.gameId }).eq('id', bet.id);
+            try {
+              const user = await client.users.fetch(bet.discord_id).catch(() => null);
+              if (user) await user.send(
+                `✅ **Now tracking your bet!** — \`${bet.slip_number}\`\nMatched to an ESPN game and will auto-close when it finishes.`
+              ).catch(() => {});
+            } catch {}
+            console.log(`[ESPNRetry] Resolved ${bet.slip_number} → ${resolved.gameId}`);
+          } else if (!espnRetryAlerted.has(bet.id) && bet.created_at < fourHoursAgo) {
+            // Still untracked after 4+ hours — alert owner once
+            espnRetryAlerted.add(bet.id);
+            try {
+              const owner = await client.users.fetch(SITE_OWNER_ID).catch(() => null);
+              if (owner) await owner.send(
+                `🚨 **[TRACKING ALERT]** Bet \`${bet.slip_number}\` (${bet.sport}) has no ESPN game ID after 4+ hours.\nUser: <@${bet.discord_id}>\nPick: ${bet.pick}\nCreated: ${new Date(bet.created_at).toLocaleString()}`
+              ).catch(() => {});
+            } catch {}
+          }
+        } catch (e) {
+          console.error(`[ESPNRetry] Error for ${bet.slip_number}:`, e.message);
+        }
+      }
+
+      // ── Open parlay legs with no ESPN game ID ──
+      const { data: untrackedLegs } = await supa
+        .from('parlay_legs')
+        .select('id, bet_id, sport, bet_category, team_a, team_b, event_start_time')
+        .eq('status', 'open')
+        .is('espn_game_id', null)
+        .neq('bet_category', 'futures');
+
+      for (const leg of (untrackedLegs || [])) {
+        if (!espn.ESPN_SUPPORTED.has(leg.sport)) continue;
+        try {
+          const resolved = await espn.resolveGameId(leg.sport, leg.team_a, leg.team_b, leg.event_start_time);
+          if (resolved) {
+            await supa.from('parlay_legs').update({ espn_game_id: resolved.gameId }).eq('id', leg.id);
+            console.log(`[ESPNRetry] Resolved parlay leg ${leg.id} → ${resolved.gameId}`);
+          }
+        } catch (e) {
+          console.error(`[ESPNRetry] Parlay leg ${leg.id} error:`, e.message);
+        }
+      }
+    } catch (err) {
+      console.error('[ESPNRetry] Poller error:', err.message);
+    }
+  }, 15 * 60_000);
+  console.log('   🔄 ESPN ID retry poller started (15min interval)');
 
   // ─── Daily Kings Record Scheduler ───
   streakService.startDailyRecordScheduler(client);

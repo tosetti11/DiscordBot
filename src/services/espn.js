@@ -51,6 +51,20 @@ const ESPN_PATHS = {
   afl: 'football/afl',
 };
 
+// Sports with ESPN scoreboard coverage — bets on these should always get an espn_game_id
+const ESPN_SUPPORTED = new Set([
+  'nba', 'nfl', 'mlb', 'nhl', 'wnba',
+  'cfb', 'cbb', 'ncaa_football', 'ncaa_mbb', 'ncaa_wbb',
+  'mls', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ligue_1',
+  'ucl', 'liga_mx', 'eredivisie', 'primeira_liga', 'europa_league',
+  'mma', 'ufc',
+  'tennis_atp', 'tennis_wta',
+  'kbo', 'npb',
+  'golf_pga',
+  'nascar', 'f1',
+  'rugby', 'cricket', 'cfl', 'afl',
+]);
+
 // ── Team keyword → sport mapping (for correcting GPT mis-classifications) ──
 const TEAM_SPORT_KEYWORDS = {
   nhl: [
@@ -701,34 +715,35 @@ async function resolveGameId(sport, teamA, teamB, eventStartTime) {
 
   if (!teamA) return null;
 
-  // Fetch games for the sport on that date (or today)
-  const games = await getTodaysGames(sport, dateStr || undefined);
-  if (!games.length) return null;
+  // Helper: ET date string with day offset
+  const etDate = (offset) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+  };
 
-  // Try matching teamA first
-  let game = matchTeamToGame(teamA, games);
-  // If no match and teamB exists, try teamB
-  if (!game && teamB) {
-    game = matchTeamToGame(teamB, games);
+  // Build ordered list of dates to try: derived date first, then yesterday/today/tomorrow/+2
+  const datesToTry = [];
+  if (dateStr) datesToTry.push(dateStr);
+  for (const offset of [-1, 0, 1, 2]) {
+    const d = etDate(offset);
+    if (!datesToTry.includes(d)) datesToTry.push(d);
   }
 
-  // If matched game is still 'pre' and we're past midnight ET, check yesterday's scoreboard
-  // (a game that started yesterday may still be in progress or just finished)
-  if (game && game.state === 'pre' && !dateStr) {
-    const now = new Date();
-    const etHour = parseInt(now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }));
-    if (etHour < 6) {
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yDateStr = yesterday.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-      try {
-        const yGames = await getTodaysGames(sport, yDateStr);
-        const yGame = matchTeamToGame(teamA, yGames) || (teamB ? matchTeamToGame(teamB, yGames) : null);
-        if (yGame && (yGame.state === 'in' || yGame.state === 'post')) {
-          return { gameId: yGame.id, game: yGame };
-        }
-      } catch {}
-    }
+  // Search each candidate date until we find a match
+  let game = null;
+  for (const d of datesToTry) {
+    try {
+      const games = await getTodaysGames(sport, d);
+      if (!games.length) continue;
+      game = matchTeamToGame(teamA, games);
+      if (!game && teamB) game = matchTeamToGame(teamB, games);
+      if (game) {
+        // Prefer a game that's live or finished over a 'pre' game on a different date
+        if (game.state !== 'pre' || d === dateStr) break;
+        // Keep searching — a later date may have the actual game in progress
+      }
+    } catch {}
   }
 
   if (game) return { gameId: game.id, game };
@@ -1010,15 +1025,16 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
     }
 
     case 'double_chance': {
-      // Pick covers 2 of 3 outcomes — e.g., "Home/Draw", "Away/Draw", "Home/Away"
-      if (homeScore > awayScore) {
-        return /home|1/i.test(pick) ? 'win' : 'loss';
-      } else if (awayScore > homeScore) {
-        return /away|2/i.test(pick) ? 'win' : 'loss';
-      } else {
-        // Draw
-        return /draw|x/i.test(pick) ? 'win' : 'loss';
+      // Pick format: "Double Chance: Arsenal or Draw" — covers 2 of 3 outcomes
+      if (homeScore === awayScore) {
+        // Draw — win if bet includes draw option
+        return /draw/i.test(pick) ? 'win' : 'loss';
       }
+      // A team won — check if it's the team the user picked via identifyPickSide
+      if (!pickTeamSide) return null;
+      const pickScore = pickTeamSide === 'home' ? homeScore : awayScore;
+      const oppScore  = pickTeamSide === 'home' ? awayScore : homeScore;
+      return pickScore > oppScore ? 'win' : 'loss';
     }
 
     case 'draw_no_bet': {
@@ -1976,6 +1992,7 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
 
 module.exports = {
   ESPN_PATHS,
+  ESPN_SUPPORTED,
   getTodaysGames,
   findGameById,
   getGameSummary,

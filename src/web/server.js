@@ -3943,7 +3943,11 @@ IMPORTANT RULES:
               const resolved = await espn.resolveGameId(
                 record.sport, record.team_a, record.team_b, record.event_start_time
               );
-              if (resolved) record.espn_game_id = resolved.gameId;
+              if (resolved) {
+                record.espn_game_id = resolved.gameId;
+              } else if (espn.ESPN_SUPPORTED.has(record.sport)) {
+                record._trackingFailed = true;
+              }
             } catch (e) {
               console.error('[ESPN] Web parlay leg game ID resolve error:', e.message);
             }
@@ -3951,6 +3955,25 @@ IMPORTANT RULES:
         }
 
         await db.createParlayLegs(legRecords);
+
+        // Notify if any parlay legs couldn't be matched to an ESPN game
+        const untrackedLegs = legRecords.filter(r => r._trackingFailed);
+        if (untrackedLegs.length > 0) {
+          const legNames = untrackedLegs.map(r => `${r.sport}: ${r.team_a || '?'} vs ${r.team_b || '?'}`).join(', ');
+          try {
+            const discordUser = await discordClient?.users.fetch(targetDiscordId).catch(() => null);
+            if (discordUser) await discordUser.send(
+              `⚠️ **Tracking Notice** — Your parlay was saved but ${untrackedLegs.length} leg(s) couldn't be matched to ESPN yet.\nWe'll keep checking every 15 minutes.\n> Untracked: ${legNames}`
+            ).catch(() => {});
+          } catch {}
+          try {
+            const owner = await discordClient?.users.fetch(SITE_OWNER_ID).catch(() => null);
+            if (owner) await owner.send(
+              `⚠️ **[TRACKING ALERT]** Parlay saved with ${untrackedLegs.length} untracked leg(s).\nUser: <@${targetDiscordId}>\nLegs: ${legNames}`
+            ).catch(() => {});
+          } catch {}
+        }
+
         const fullBet = await db.getBet(bet.id);
 
         // Post to Discord
@@ -4171,7 +4194,23 @@ IMPORTANT RULES:
         if (betCategory !== 'futures' && sport) {
           try {
             const resolved = await espn.resolveGameId(sport, safeTeamA, safeTeamB, eventStartTime);
-            if (resolved) betData.espn_game_id = resolved.gameId;
+            if (resolved) {
+              betData.espn_game_id = resolved.gameId;
+            } else if (espn.ESPN_SUPPORTED.has(sport)) {
+              // No game found — alert user and owner; retry poller will keep trying every 15 min
+              try {
+                const discordUser = await discordClient?.users.fetch(targetDiscordId).catch(() => null);
+                if (discordUser) await discordUser.send(
+                  `⚠️ **Tracking Notice** — Your bet was saved but we couldn't match it to an ESPN game yet.\nWe'll keep checking every 15 minutes and notify you when it's matched. If the game is far in the future this is normal.\n> Pick: ${finalPick}`
+                ).catch(() => {});
+              } catch {}
+              try {
+                const owner = await discordClient?.users.fetch(SITE_OWNER_ID).catch(() => null);
+                if (owner) await owner.send(
+                  `⚠️ **[TRACKING ALERT]** Single bet placed with no ESPN game ID.\nUser: <@${targetDiscordId}> | Sport: ${sport}\nPick: ${finalPick}\nEvent: ${eventStartTime || 'unknown'}`
+                ).catch(() => {});
+              } catch {}
+            }
           } catch (e) {
             console.error('[ESPN] Web single bet game ID resolve error:', e.message);
           }
