@@ -1461,6 +1461,7 @@ async function getGolfPlayerRound(playerName, roundNum) {
 
     // Competition status shows current round info
     const compStatus = event.competitions?.[0]?.status;
+    const competitionState = compStatus?.type?.state || 'pre'; // 'pre', 'in', 'post'
     const currentRound = compStatus?.period || rounds.length;
 
     let holesCompleted = 0;
@@ -1479,11 +1480,11 @@ async function getGolfPlayerRound(playerName, roundNum) {
       }
     }
 
-    // Determine round status
+    // Determine round status — only use period inference if competition is actually underway
     let roundStatus = 'pre'; // not started
-    if (round?.linescores?.length === 18) roundStatus = 'post'; // complete
-    else if (round?.linescores?.length > 0) roundStatus = 'in'; // in progress
-    else if (roundNum < currentRound) roundStatus = 'post'; // past round with no hole data
+    if (round?.linescores?.length === 18) roundStatus = 'post'; // complete (hole data present)
+    else if (round?.linescores?.length > 0) roundStatus = 'in'; // in progress (hole data present)
+    else if (competitionState !== 'pre' && roundNum < currentRound) roundStatus = 'post'; // past round, competition live/done
 
     return {
       playerName: comp.athlete?.displayName || playerName,
