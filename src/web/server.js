@@ -1582,6 +1582,25 @@ function createWebServer() {
 
       await db.updateParlayLegStatus(legId, status);
 
+      // Recalculate parlay odds when leg is pushed or voided (removes that leg's contribution)
+      if (status === 'push' || status === 'void') {
+        const freshBet = await db.getBet(betId);
+        const activeLegs = (freshBet.parlay_legs || []).filter(
+          l => l.status !== 'push' && l.status !== 'void' && l.odds_american != null
+        );
+        if (activeLegs.length > 0) {
+          const combinedDecimal = activeLegs.reduce((acc, l) => {
+            const o = Number(l.odds_american);
+            const dec = o > 0 ? (o / 100) + 1 : (100 / Math.abs(o)) + 1;
+            return acc * dec;
+          }, 1);
+          const newOdds = combinedDecimal >= 2
+            ? Math.round((combinedDecimal - 1) * 100)
+            : Math.round(-100 / (combinedDecimal - 1));
+          await db.updateBetFields(betId, { odds_american: newOdds });
+        }
+      }
+
       // Generate updated bet card image
       const updatedBet = await db.getBet(betId);
       const { AttachmentBuilder: ABLeg } = require('discord.js');
@@ -1625,6 +1644,91 @@ function createWebServer() {
     } catch (err) {
       console.error('[API] Close leg error:', err);
       res.status(500).json({ error: 'Failed to close leg' });
+    }
+  });
+
+  // Edit (correct) a parlay leg result — works on any leg regardless of current status
+  app.post('/api/bets/:betId/legs/:legId/edit', authMiddleware, async (req, res) => {
+    try {
+      const { betId, legId } = req.params;
+      const { status } = req.body;
+
+      if (!['win', 'loss', 'push', 'void'].includes(status)) {
+        return res.status(400).json({ error: 'Status must be win, loss, push, or void' });
+      }
+
+      const bet = await db.getBet(betId);
+      if (!bet) return res.status(404).json({ error: 'Bet not found' });
+
+      const isOwner = bet.discord_id === req.user.discordId;
+      const admin = await isAdminInGuild(bet.guild_id, req.user.discordId);
+      if (!isOwner && !admin) return res.status(403).json({ error: 'Not your bet' });
+      if (bet.bet_type !== 'parlay') return res.status(400).json({ error: 'Not a parlay' });
+
+      const leg = (bet.parlay_legs || []).find(l => l.id === legId);
+      if (!leg) return res.status(404).json({ error: 'Leg not found' });
+
+      await db.updateParlayLegStatus(legId, status);
+
+      // Always recalculate parlay odds to reflect corrected leg statuses
+      const freshBet = await db.getBet(betId);
+      const activeLegs = (freshBet.parlay_legs || []).filter(
+        l => l.status !== 'push' && l.status !== 'void' && l.odds_american != null
+      );
+      let newOdds = null;
+      if (activeLegs.length > 0) {
+        const combinedDecimal = activeLegs.reduce((acc, l) => {
+          const o = Number(l.odds_american);
+          const dec = o > 0 ? (o / 100) + 1 : (100 / Math.abs(o)) + 1;
+          return acc * dec;
+        }, 1);
+        newOdds = combinedDecimal >= 2
+          ? Math.round((combinedDecimal - 1) * 100)
+          : Math.round(-100 / (combinedDecimal - 1));
+        await db.updateBetFields(betId, { odds_american: newOdds });
+      }
+
+      // Generate updated bet card image
+      const updatedBet = await db.getBet(betId);
+      const { AttachmentBuilder: ABEdit } = require('discord.js');
+      let imgBuffer;
+      try {
+        imgBuffer = await generateBetCardImage(updatedBet, null, null);
+      } catch (e) {
+        console.warn('Could not generate bet card image for leg edit:', e.message);
+      }
+
+      if (imgBuffer && bet.message_id && bet.channel_id) {
+        try {
+          const channel = await discordClient.channels.fetch(bet.channel_id);
+          const message = await channel.messages.fetch(bet.message_id);
+          const attachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
+          const payload = { files: [attachment], embeds: [], attachments: [] };
+          if (updatedBet.share_link) payload.content = buildContentWithLink('', updatedBet.share_link);
+          await message.edit(payload);
+        } catch (e) {
+          console.warn('Could not update primary parlay message after leg edit:', e.message);
+        }
+      }
+
+      if (imgBuffer && bet.mirror_message_id && bet.mirror_channel_id) {
+        try {
+          const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+          const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+          const mirrorAttachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
+          const mirrorPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+          if (mirrorMsg.components?.length) mirrorPayload.components = mirrorMsg.components;
+          if (updatedBet.share_link) mirrorPayload.content = buildContentWithLink('', updatedBet.share_link);
+          await mirrorMsg.edit(mirrorPayload);
+        } catch (e) {
+          console.warn('Could not update mirror parlay leg edit:', e.message);
+        }
+      }
+
+      res.json({ success: true, newOdds });
+    } catch (err) {
+      console.error('[API] Edit leg error:', err);
+      res.status(500).json({ error: 'Failed to edit leg' });
     }
   });
 
@@ -2369,7 +2473,7 @@ Rules:
 - In parlays, if a total/over-under leg appears under the same game header as a moneyline or spread leg, use that game's teams for the total leg too.
 - For player props, set betCategory to "player_prop", wagerType to "prop"
 - For player props, keep the EXACT prop description as shown on the slip. If the slip says "10+ Rebounds", use "10+ Rebounds" as propDescription (do NOT convert to "Over 10 Rebounds"). If it says "Over 25.5 Points", keep it as "Over 25.5 Points". Preserve the original format.
-- For player props, ALWAYS include teamA and teamB from the game the player is in. Look at the matchup header (e.g. "NYK Knicks @ MIL Bucks") and fill in both teams. Never leave teamA/teamB null for player props.
+- For player props, ALWAYS include teamA and teamB from the game the player is in. Look at the matchup header (e.g. "NYK Knicks @ MIL Bucks") and fill in both teams. Never leave teamA/teamB null for player props. EXCEPTION — GOLF player props (round score, birdies, etc.): teamA MUST always be the player the bet is ON (same as playerName). teamB is the groupmate/opponent shown on the slip. Never put the opponent in teamA for a golf player prop — the player being bet on is always teamA.
 - For over/under totals (team_game with wagerType "total"), the spreadValue should always end in .5 (e.g. 220.5, 45.5). If the line is a whole number, add .5.
 - TEAM TOTALS: If the bet is on a single team's score (e.g. "Duke Over 71.5", "Lakers Under 108.5", "Team Total Over 112.5"), use wagerType "team_total" (NOT "total"). Set teamA to the team whose score is being bet on. The overUnder and spreadValue work the same as regular totals. Team totals typically have lower lines than game totals (e.g. 71.5 for a team vs 141.5 for the full game).
 - NRFI/YRFI (Baseball): If the bet is "No Run First Inning", "NRFI", or a 1st Inning total with a line of exactly 0.5 (e.g. "1st Inning Under 0.5", "F1 Under 0.5"), set wagerType to "nrfi" and betCategory to "team_game". If it's "Yes Run First Inning", "YRFI", or "1st Inning Over 0.5", set wagerType to "yrfi" and betCategory to "team_game". Set teamA and teamB to the two teams in the matchup. No spreadValue or overUnder needed for nrfi/yrfi. IMPORTANT: a 1st inning line of 0.5 always maps to nrfi (Under) or yrfi (Over) — do NOT use wagerType "total" for these. A 1st inning line of 1.5 or higher is a regular "total" with period "1st_inning", overUnder, and spreadValue set normally.
@@ -2388,7 +2492,7 @@ Rules:
 - IMPORTANT: Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })}. Games on betting slips are almost always within the next 1-7 days from today. Use the CURRENT month and year when constructing dates. Do NOT guess old or future months — the event is happening very soon.
 - PERIOD DETECTION: If the bet is for a specific half, quarter, period, or inning (e.g. "1st Half Over 110.5", "3rd Period ML", "1Q Spread -2.5", "First 5 Innings Over 4.5", "1st Inning Under 0.5"), set the period field accordingly. Look for indicators like "1H", "2H", "1st Half", "2nd Half", "1Q", "2Q", "3Q", "4Q", "1st Quarter", "1st Period", "2P", "3P", "1st Set", "F5", "First 5", "1st Inning", "2nd Inning", etc. Default to "full_game" if no period is specified.
 - FIGHT BETS (UFC/Boxing): If the bet mentions a specific round (e.g. "Round 3", "Rd 1-2", "goes the distance"), extract fightRound as the round number. If a method of victory is specified (e.g. "by KO/TKO", "by Submission", "by Decision", "by Points"), set fightMethod to the matching value (ko_tko, submission, decision, unanimous_decision, split_decision, dq, points).
-- GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds.
+- GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds, and round score Over/Under. For round score props and all golf player props: teamA = the player being bet ON (same as playerName), teamB = the groupmate/opponent. The bet subject always goes in teamA — never let the order players appear on the slip determine which is teamA.
 - GOLF 2-BALL BETS (head-to-head matchup): If the bet is a "2 Ball", "2-Ball", "Golf H2H", "Tournament Matchup", or "Player vs Player" bet in golf, use betCategory "team_game" and wagerType "2ball". Set teamA to the name of the player/group you are betting ON (your pick), teamB to the opponent player/group name. CRITICALLY: also extract the individual player names — set matchPlayerA to the first player on your picked side, matchPlayerA2 to their partner (only for team formats like Zurich Classic where each "side" has 2 players), matchPlayerB to the first opponent player, matchPlayerB2 to the opponent's partner (team format). For standard singles 2-ball (Player A vs Player B), matchPlayerA = teamA and matchPlayerB = teamB, with matchPlayerA2 and matchPlayerB2 null. Set golfRound to the tournament round if specified.
 - GOLF 3-BALL BETS: If the bet is a "3 Ball", "3-Ball", "Three Ball", "Three-Ball", "3-Way", or "3 Way" golf matchup with exactly three players listed in the same group, use betCategory "team_game" and wagerType "3ball". Set teamA to the player you are betting to win, teamB to the second player. Extract matchPlayerA (your pick), matchPlayerB (opponent 2), matchPlayerC (opponent 3). Set golfRound if specified.
 - GOLF TIE BETS: ONLY applies when the sport is golf AND the wager is a 2ball or 3ball matchup. If the specific pick on the slip is wagering that all players in the group will tie (finish with the same score) — labels like "Tie", "Dead Heat", "Both Same Score", or "Tie - All Players Same Score" — set teamA to the exact string "Tie". Do NOT use this rule for soccer draws, money line pushes, or any non-golf bet. Do NOT confuse a soccer "Draw" or any standard "Push" with a golf tie bet.
@@ -2496,6 +2600,30 @@ Rules:
           for (const leg of result.legs) {
             if (leg.eventStartTime) leg.eventStartTime = fixEventDate(leg.eventStartTime);
           }
+        }
+      }
+
+      // Post-process: for golf player props, teamA must always equal playerName
+      // GPT sometimes puts the opponent first if they appear first on the slip
+      const fixGolfPropTeams = (item) => {
+        if (
+          item.betCategory === 'player_prop' &&
+          item.playerName &&
+          item.sport?.startsWith('golf') &&
+          item.teamA && item.teamB &&
+          item.teamA.toLowerCase().trim() !== item.playerName.toLowerCase().trim()
+        ) {
+          const tmp = item.teamA;
+          item.teamA = item.teamB;
+          item.teamB = tmp;
+          console.log(`[OCR] Fixed golf prop teamA swap: "${tmp}" → "${item.teamA}" (playerName: ${item.playerName})`);
+        }
+      };
+
+      for (const result of results) {
+        fixGolfPropTeams(result);
+        if (result.legs) {
+          for (const leg of result.legs) fixGolfPropTeams(leg);
         }
       }
 
