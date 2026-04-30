@@ -697,6 +697,22 @@ async function resolveGameId(sport, teamA, teamB, eventStartTime) {
     }
   }
 
+  // UFC/MMA: each fight on a card is its own game — match by fighter name
+  if (sport === 'ufc' || sport === 'mma') {
+    if (!teamA) return null;
+    const etDate2 = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, ''); };
+    const ufcDates = [];
+    if (dateStr) ufcDates.push(dateStr);
+    for (const off of [-1, 0, 1, 2]) { const d = etDate2(off); if (!ufcDates.includes(d)) ufcDates.push(d); }
+    for (const d of ufcDates) {
+      const fights = await getUFCFights(d);
+      let fight = matchTeamToGame(teamA, fights);
+      if (!fight && teamB) fight = matchTeamToGame(teamB, fights);
+      if (fight) return { gameId: fight.id, game: fight };
+    }
+    return null;
+  }
+
   // Golf: tournament is a single event, return it directly
   if (sport === 'golf_pga') {
     const espnPath = ESPN_PATHS[sport];
@@ -809,7 +825,7 @@ function getPeriodScores(game, period) {
  * Supports period-based bets (1st_quarter, 1st_half, etc.) using linescore data.
  * Supports computed stats (hockey points = G+A, football anytime TD).
  */
-function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName, propDescription, sport, game, summary, period }) {
+function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName, propDescription, sport, game, summary, period, fightRound, fightMethod }) {
   if (!game) return null;
   // Golf tournaments stay 'in' for days — resolve per-round via summary._golfRoundScore
   // NRFI/YRFI can resolve after 1st inning (game must be at least 'in', not 'pre')
@@ -840,6 +856,21 @@ function resolveResult({ wagerType, pick, teamA, teamB, spreadValue, playerName,
       if (!pickTeamSide) return null;
       const pickScore = pickTeamSide === 'home' ? homeScore : awayScore;
       const oppScore = pickTeamSide === 'home' ? awayScore : homeScore;
+
+      // For fight bets with a specific round requirement, check the round too
+      // ESPN provides the round the fight ended in via game.fightRound
+      if (fightRound && (sport === 'ufc' || sport === 'mma' || sport === 'boxing')) {
+        if (game.state !== 'post') return null;
+        const endedInRound = game.fightRound === parseInt(fightRound);
+        if (!endedInRound) return pickScore > oppScore ? 'loss' : null; // wrong round = loss if picked fighter won, wait if not
+        // Correct round — still need the right fighter to have won
+      }
+
+      // Method bets (fightMethod set) can't be auto-resolved — ESPN doesn't expose KO/Sub/Decision
+      if (fightMethod && (sport === 'ufc' || sport === 'mma' || sport === 'boxing')) {
+        return null; // Leave for manual close
+      }
+
       if (pickScore > oppScore) return 'win';
       if (pickScore < oppScore) return 'loss';
       return 'push';
@@ -1696,6 +1727,85 @@ async function findGameById(sport, gameId, preferredDateStr) {
 }
 
 /**
+ * Get all individual fights from the UFC card on a given date.
+ * Returns each fight as a game-like object where score is 1 for the winner and 0 for the loser,
+ * so the standard moneyline resolveResult() logic works without modification.
+ * @param {string} [dateStr] - YYYYMMDD
+ * @returns {Array} Fight objects shaped like team game objects
+ */
+async function getUFCFights(dateStr) {
+  const today = dateStr || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
+  const cacheKey = `ufc-fights:${today}`;
+  const cached = getCached(cacheKey, SCOREBOARD_TTL);
+  if (cached) return cached;
+
+  const url = `https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${today}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const json = await res.json();
+
+    const fights = [];
+    for (const event of (json.events || [])) {
+      for (const comp of (event.competitions || [])) {
+        const f1 = comp.competitors?.find(c => c.order === 1) || comp.competitors?.[0];
+        const f2 = comp.competitors?.find(c => c.order === 2) || comp.competitors?.[1];
+        if (!f1 || !f2) continue;
+
+        const statusType = comp.status?.type || {};
+        const state = statusType.state || 'pre';
+        const round = comp.status?.period || 0;
+
+        // Map winner to score=1, loser to score=0 so standard moneyline resolution works
+        const f1Name = f1.athlete?.displayName || f1.athlete?.fullName || '';
+        const f2Name = f2.athlete?.displayName || f2.athlete?.fullName || '';
+
+        fights.push({
+          id: comp.id,
+          sport: 'ufc',
+          eventId: event.id,
+          name: `${f1Name} vs ${f2Name}`,
+          shortName: `${f1.athlete?.shortName || f1Name} vs ${f2.athlete?.shortName || f2Name}`,
+          startTime: event.date,
+          state,
+          completed: statusType.completed || false,
+          detail: statusType.shortDetail || '',
+          // Map fighter 1 (order=1) as "home", fighter 2 (order=2) as "away"
+          // Score is 1 for winner, 0 for loser — makes moneyline resolution work
+          home: {
+            id: f1.id,
+            name: f1Name,
+            abbreviation: f1.athlete?.shortName || f1Name,
+            shortName: f1.athlete?.shortName || f1Name,
+            score: f1.winner ? 1 : 0,
+            record: f1.records?.[0]?.summary || '',
+          },
+          away: {
+            id: f2.id,
+            name: f2Name,
+            abbreviation: f2.athlete?.shortName || f2Name,
+            shortName: f2.athlete?.shortName || f2Name,
+            score: f2.winner ? 1 : 0,
+            record: f2.records?.[0]?.summary || '',
+          },
+          // Fight-specific fields for round-bet resolution
+          fightRound: round,
+          fightClock: comp.status?.displayClock || '',
+          linescores: { home: [], away: [] },
+          _raw: { competitions: [comp] },
+        });
+      }
+    }
+
+    setCache(cacheKey, fights);
+    return fights;
+  } catch (err) {
+    console.error('[ESPN] UFC fights fetch error:', err.message);
+    return [];
+  }
+}
+
+/**
  * Get live 2-ball or 3-ball golf match-play data.
  *
  * Fetches round scores for all players and calculates match-play
@@ -1994,6 +2104,7 @@ module.exports = {
   ESPN_PATHS,
   ESPN_SUPPORTED,
   getTodaysGames,
+  getUFCFights,
   findGameById,
   getGameSummary,
   getAllTodaysGames,

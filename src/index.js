@@ -750,6 +750,12 @@ client.once(Events.ClientReady, (c) => {
                 if (golfGame && !allGames.find(g => g.id === golfGame.id)) allGames.push(golfGame);
               }
             }
+          } else if (sport === 'ufc' || sport === 'mma') {
+            // UFC/MMA: getTodaysGames filters out fights (no homeAway labels) — use getUFCFights
+            const fights = await espn.getUFCFights(dateStr);
+            for (const f of fights) {
+              if (!allGames.find(g => g.id === f.id)) allGames.push(f);
+            }
           } else {
             const games = await espn.getTodaysGames(sport, dateStr);
             allGames.push(...games);
@@ -883,6 +889,8 @@ client.once(Events.ClientReady, (c) => {
           game,
           summary,
           period: bet.period,
+          fightRound: bet.fight_round || null,
+          fightMethod: bet.fight_method || null,
         });
 
         if (result) {
@@ -978,6 +986,8 @@ client.once(Events.ClientReady, (c) => {
           game,
           summary,
           period: leg.period,
+          fightRound: leg.fight_round || null,
+          fightMethod: leg.fight_method || null,
         });
 
         if (result) {
