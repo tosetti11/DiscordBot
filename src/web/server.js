@@ -2362,12 +2362,12 @@ For a SINGLE bet:
   "sport": "<one of: ${validSports.join(', ')}>",
   "betCategory": "<one of: team_game, player_prop, futures, mlb_live>",
   "wagerType": "<one of: moneyline, spread, total, team_total, prop, futures, nrfi, yrfi, double_chance, draw_no_bet, mlb_live, 2ball, 3ball>",
-  "teamA": "<your pick team or null>",
-  "teamB": "<opponent team or null>",
+  "teamA": "<your pick — for team sports: the team you are backing. For golf player props: MUST equal playerName (the player whose stat you bet on).>",
+  "teamB": "<opponent — for team sports: the opposing team. For golf player props: the groupmate/opponent shown in the matchup context.>",
   "spreadValue": "<spread or total line value like -1.5, 220.5, or null>",
   "overUnder": "<Over or Under or null>",
-  "playerName": "<player name or null>",
-  "propDescription": "<full prop like 'Over 25.5 Points' or null>",
+  "playerName": "<For player props: the athlete whose stat is wagered. CRITICAL for golf round score props: this is the player whose stroke total you are betting on — look at the SELECTED BET ROW (the one with the odds value), NOT the matchup header. The player name in the selected row is playerName.>",
+  "propDescription": "<For golf round score/stroke props: MUST start with the player name, e.g. 'Shane Lowry Under 71.5 Round Score - Round 1'. This makes the player unambiguous. For all other props: full prop like 'Over 25.5 Points'.>",
   "futuresMarket": "<market name or null>",
   "futuresSelection": "<selection or null>",
   "oddsAmerican": "<American odds like -110, +150>",
@@ -2421,8 +2421,8 @@ For a PARLAY (multiple legs):
       "teamB": "<opponent or null>",
       "spreadValue": "<spread/line or null>",
       "overUnder": "<Over or Under or null>",
-      "playerName": "<player name or null>",
-      "propDescription": "<prop description or null>",
+      "playerName": "<For player props: the athlete whose stat is wagered. CRITICAL for golf round score props: look at the SELECTED BET ROW with the odds, NOT the matchup header. That player is playerName.>",
+      "propDescription": "<For golf round score/stroke props: MUST start with the player name, e.g. 'Shane Lowry Under 71.5 Round Score - Round 1'. For all other props: exact prop text.>",
       "futuresMarket": "<market or null>",
       "futuresSelection": "<selection or null>",
       "eventStartTime": "<game date and time in format like 'Thu Mar 5 7:00 PM ET', or null>",
@@ -2492,7 +2492,7 @@ Rules:
 - IMPORTANT: Today is ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })}. Games on betting slips are almost always within the next 1-7 days from today. Use the CURRENT month and year when constructing dates. Do NOT guess old or future months — the event is happening very soon.
 - PERIOD DETECTION: If the bet is for a specific half, quarter, period, or inning (e.g. "1st Half Over 110.5", "3rd Period ML", "1Q Spread -2.5", "First 5 Innings Over 4.5", "1st Inning Under 0.5"), set the period field accordingly. Look for indicators like "1H", "2H", "1st Half", "2nd Half", "1Q", "2Q", "3Q", "4Q", "1st Quarter", "1st Period", "2P", "3P", "1st Set", "F5", "First 5", "1st Inning", "2nd Inning", etc. Default to "full_game" if no period is specified.
 - FIGHT BETS (UFC/Boxing): If the bet mentions a specific round (e.g. "Round 3", "Rd 1-2", "goes the distance"), extract fightRound as the round number. If a method of victory is specified (e.g. "by KO/TKO", "by Submission", "by Decision", "by Points"), set fightMethod to the matching value (ko_tko, submission, decision, unanimous_decision, split_decision, dq, points).
-- GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds, and round score Over/Under. For round score props and all golf player props: teamA = the player being bet ON (same as playerName), teamB = the groupmate/opponent. The bet subject always goes in teamA — never let the order players appear on the slip determine which is teamA.
+- GOLF BETS: If the bet involves a specific hole (e.g. "Hole 4 Birdie", "Hole-in-one #7"), extract golfHole. If it mentions a specific tournament round (e.g. "Round 1", "R3"), extract golfRound. Common golf props include birdies, eagles, bogeys, hole-in-one on specific holes/rounds, and round score Over/Under. For round score props and all golf player props: teamA = the player being bet ON (same as playerName), teamB = the groupmate/opponent. The bet subject always goes in teamA — never let the order players appear on the slip determine which is teamA. CRITICAL: For golf round score props, propDescription MUST start with the player name whose stat is wagered, e.g. if the bet is "Shane Lowry Under 71.5 Strokes - Round 1" then propDescription = "Shane Lowry Under 71.5 Round Score - Round 1", playerName = "Shane Lowry", teamA = "Shane Lowry", teamB = "Keegan Bradley". Never use the matchup header order — use the SELECTED BET ROW to determine who the bet is on.
 - GOLF 2-BALL BETS (head-to-head matchup): If the bet is a "2 Ball", "2-Ball", "Golf H2H", "Tournament Matchup", or "Player vs Player" bet in golf, use betCategory "team_game" and wagerType "2ball". Set teamA to the name of the player/group you are betting ON (your pick), teamB to the opponent player/group name. CRITICALLY: also extract the individual player names — set matchPlayerA to the first player on your picked side, matchPlayerA2 to their partner (only for team formats like Zurich Classic where each "side" has 2 players), matchPlayerB to the first opponent player, matchPlayerB2 to the opponent's partner (team format). For standard singles 2-ball (Player A vs Player B), matchPlayerA = teamA and matchPlayerB = teamB, with matchPlayerA2 and matchPlayerB2 null. Set golfRound to the tournament round if specified.
 - GOLF 3-BALL BETS: If the bet is a "3 Ball", "3-Ball", "Three Ball", "Three-Ball", "3-Way", or "3 Way" golf matchup with exactly three players listed in the same group, use betCategory "team_game" and wagerType "3ball". Set teamA to the player you are betting to win, teamB to the second player. Extract matchPlayerA (your pick), matchPlayerB (opponent 2), matchPlayerC (opponent 3). Set golfRound if specified.
 - GOLF TIE BETS: ONLY applies when the sport is golf AND the wager is a 2ball or 3ball matchup. If the specific pick on the slip is wagering that all players in the group will tie (finish with the same score) — labels like "Tie", "Dead Heat", "Both Same Score", or "Tie - All Players Same Score" — set teamA to the exact string "Tie". Do NOT use this rule for soccer draws, money line pushes, or any non-golf bet. Do NOT confuse a soccer "Draw" or any standard "Push" with a golf tie bet.
@@ -2603,20 +2603,39 @@ Rules:
         }
       }
 
-      // Post-process: for golf player props, teamA must always equal playerName
-      // GPT sometimes puts the opponent first if they appear first on the slip
+      // Post-process: for golf player props, enforce playerName and teamA from propDescription
+      // propDescription now starts with the player name (e.g. "Shane Lowry Under 71.5 Round Score - Round 1")
+      // This is the authoritative source — GPT can't confuse matchup order when it's baked into the description
       const fixGolfPropTeams = (item) => {
         if (
           item.betCategory === 'player_prop' &&
-          item.playerName &&
-          item.sport?.startsWith('golf') &&
-          item.teamA && item.teamB &&
-          item.teamA.toLowerCase().trim() !== item.playerName.toLowerCase().trim()
+          item.sport?.startsWith('golf')
         ) {
-          const tmp = item.teamA;
-          item.teamA = item.teamB;
-          item.teamB = tmp;
-          console.log(`[OCR] Fixed golf prop teamA swap: "${tmp}" → "${item.teamA}" (playerName: ${item.playerName})`);
+          // Try to extract player name from propDescription (format: "FirstName LastName Under/Over ...")
+          const pdMatch = item.propDescription?.match(/^([A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(Under|Over)/i);
+          if (pdMatch) {
+            const playerFromDesc = pdMatch[1].trim();
+            item.playerName = playerFromDesc;
+            item.teamA = playerFromDesc;
+            // Strip player name prefix so propDescription stays "Under/Over X.X ..."
+            item.propDescription = item.propDescription.replace(
+              new RegExp('^' + playerFromDesc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), ''
+            ).trim();
+            // If teamB matches playerFromDesc, clear it (opponent unknown)
+            if (item.teamB?.toLowerCase() === playerFromDesc.toLowerCase()) {
+              item.teamB = null;
+            }
+            console.log(`[OCR] Golf prop player locked from propDescription: "${playerFromDesc}"`);
+            return;
+          }
+          // Fallback: if teamA != playerName, swap teamA/teamB
+          if (item.playerName && item.teamA && item.teamB &&
+              item.teamA.toLowerCase().trim() !== item.playerName.toLowerCase().trim()) {
+            const tmp = item.teamA;
+            item.teamA = item.teamB;
+            item.teamB = tmp;
+            console.log(`[OCR] Golf prop teamA swap fallback: "${tmp}" ↔ "${item.teamA}"`);
+          }
         }
       };
 
