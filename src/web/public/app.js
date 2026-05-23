@@ -7243,7 +7243,7 @@ async function initAnalyticsPage() {
     renderAnalyticsInstalls();
     renderAnalyticsActivity();
 
-    // Auto-refresh online users every 15s
+    // Auto-refresh online users every 60s
     setInterval(async () => {
       try {
         const onRes = await fetch('/api/analytics/online');
