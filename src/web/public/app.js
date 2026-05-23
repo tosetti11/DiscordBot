@@ -209,16 +209,23 @@ function formatDateTimePretty(datetimeStr) {
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    const res = await fetch('/api/me', { cache: 'no-store' });
-    if (res.ok) {
-      currentUser = await res.json();
-      showApp();
-    } else {
-      showLogin();
+  // Retry up to 3 times on network errors (server may be restarting)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 1500 * attempt));
+      const res = await fetch('/api/me', { cache: 'no-store' });
+      if (res.ok) {
+        currentUser = await res.json();
+        showApp();
+        return;
+      }
+      if (res.status === 401) { showLogin(); return; }
+      // 5xx or other server error — retry
+      if (attempt === 2) showLogin();
+    } catch (e) {
+      // Network error (server restart in progress) — retry
+      if (attempt === 2) showLogin();
     }
-  } catch (e) {
-    showLogin();
   }
 });
 
@@ -3750,14 +3757,25 @@ function renderBetCard(bet, showOwner = false) {
     const legsContent = bet.legs.map((leg, i) => {
       const legStatusEmoji = STATUS_EMOJI[leg.status] || '⬜';
       const legSport = esc(leg.sportName || leg.sport || '');
-      const legActions = (leg.status === 'open' && canManage)
-        ? `<span class="leg-actions">
-             <button class="leg-btn leg-win" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','win')">✅</button>
-             <button class="leg-btn leg-loss" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','loss')">❌</button>
-             <button class="leg-btn leg-push" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','push')">🔄</button>
-             <button class="leg-btn leg-void" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','void')">⛔</button>
-           </span>`
-        : '';
+      let legActions = '';
+      if (canManage) {
+        if (leg.status === 'open') {
+          legActions = `<span class="leg-actions">
+               <button class="leg-btn leg-win" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','win')">✅</button>
+               <button class="leg-btn leg-loss" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','loss')">❌</button>
+               <button class="leg-btn leg-push" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','push')">🔄</button>
+               <button class="leg-btn leg-void" onclick="event.stopPropagation();closeLeg('${bet.id}','${leg.id}','void')">⛔</button>
+             </span>`;
+        } else {
+          legActions = `<span class="leg-actions leg-edit-actions">
+               <span class="leg-edit-hint">Correct:</span>
+               <button class="leg-btn leg-win" onclick="event.stopPropagation();editLeg('${bet.id}','${leg.id}','win')">✅</button>
+               <button class="leg-btn leg-loss" onclick="event.stopPropagation();editLeg('${bet.id}','${leg.id}','loss')">❌</button>
+               <button class="leg-btn leg-push" onclick="event.stopPropagation();editLeg('${bet.id}','${leg.id}','push')">🔄</button>
+               <button class="leg-btn leg-void" onclick="event.stopPropagation();editLeg('${bet.id}','${leg.id}','void')">⛔</button>
+             </span>`;
+        }
+      }
       // Only show per-leg matchup if NOT already in the header
       let legMatchupHtml = '';
       if (leg.teamA && leg.teamB) {
@@ -4490,6 +4508,34 @@ async function closeLeg(betId, legId, status) {
     loadBets(); // Refresh
   } catch (e) {
     alert('Failed to close leg');
+  }
+}
+
+// ─── Edit (Correct) Parlay Leg ─────────
+async function editLeg(betId, legId, status) {
+  const msg = status === 'push'
+    ? `Correct this leg to PUSH? Parlay odds will be recalculated.`
+    : `Correct this leg to ${status.toUpperCase()}? Parlay odds will be recalculated.`;
+  if (!confirm(msg)) return;
+
+  try {
+    const res = await fetch(`/api/bets/${betId}/legs/${legId}/edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert('Error: ' + data.error);
+      return;
+    }
+    if (data.newOdds != null) {
+      const sign = data.newOdds > 0 ? '+' : '';
+      alert(`Leg corrected. Parlay odds updated to ${sign}${data.newOdds}.`);
+    }
+    loadBets();
+  } catch (e) {
+    alert('Failed to edit leg');
   }
 }
 
