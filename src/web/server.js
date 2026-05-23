@@ -206,7 +206,8 @@ function createWebServer() {
       req.user = decoded;
       next();
     } catch (e) {
-      res.clearCookie('fk_token');
+      console.error('[Auth] JWT verify failed:', e.message, '| path:', req.path);
+      res.clearCookie('fk_token', { path: '/', sameSite: 'lax', secure: true });
       return res.status(401).json({ error: 'Session expired' });
     }
   }
@@ -246,8 +247,9 @@ function createWebServer() {
 
     // Verify OAuth state to prevent CSRF
     const savedState = req.cookies.oauth_state;
-    res.clearCookie('oauth_state');
+    res.clearCookie('oauth_state', { path: '/', sameSite: 'lax', secure: true });
     if (!state || !savedState || state !== savedState) {
+      console.error('[Auth] OAuth state mismatch. savedState:', !!savedState, 'state:', !!state);
       return res.redirect('/?error=invalid_state');
     }
 
@@ -323,7 +325,8 @@ function createWebServer() {
 
       // Redirect to saved destination or default to /
       const redirectTo = req.cookies.oauth_redirect || '/';
-      res.clearCookie('oauth_redirect');
+      res.clearCookie('oauth_redirect', { path: '/', sameSite: 'lax', secure: true });
+      console.log('[Auth] Login success for', userData.username, '| redirectTo:', redirectTo);
       res.redirect(redirectTo);
     } catch (err) {
       console.error('[OAuth2] Error:', err);
