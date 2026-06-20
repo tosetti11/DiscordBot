@@ -487,6 +487,17 @@ const STAT_MAP = {
   '3-pointers': '3pt',
   '3 pointers': '3pt',
   'threes': '3pt',
+  'three pointers': '3pt',
+  'three pointers made': '3pt',
+  'three-pointers': '3pt',
+  'three-pointers made': '3pt',
+  'three point made': '3pt',
+  'three points made': '3pt',
+  '3-pointers made': '3pt',
+  '3 pointers made': '3pt',
+  '3pt made': '3pt',
+  '3pts made': '3pt',
+  '3s made': '3pt',
   'steals': 'stl',
   'blocks': 'blk',
   'turnovers': 'to',
@@ -566,9 +577,17 @@ const STAT_MAP = {
   'goals against': 'ga',
   'shots against': 'sa',
   'save percentage': 'sv%',
-  // Golf
+  // Golf — all round-qualified variants map to same key; golf_round field on the bet carries the round number
   'round score': 'golf_round_score',
   'score': 'golf_round_score',
+  'round score - round 1': 'golf_round_score',
+  'round score - round 2': 'golf_round_score',
+  'round score - round 3': 'golf_round_score',
+  'round score - round 4': 'golf_round_score',
+  'round 1 score': 'golf_round_score',
+  'round 2 score': 'golf_round_score',
+  'round 3 score': 'golf_round_score',
+  'round 4 score': 'golf_round_score',
 };
 
 // Stats that require special golf handling (not in standard box score)
@@ -1855,7 +1874,9 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
       const norm = normName(searchName);
       if (!dn || !norm) return false;
       const lastName = norm.split(' ').pop();
-      return dn === norm || dn.includes(norm) || norm.includes(dn) || dn.includes(lastName);
+      // Use whole-word last name match to avoid "Im" matching "Kim" (substring "im" inside "kim")
+      const dnWords = dn.split(' ');
+      return dn === norm || dn.includes(norm) || norm.includes(dn) || dnWords.includes(lastName);
     }
 
     function getCompName(c) {
