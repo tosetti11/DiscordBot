@@ -359,65 +359,103 @@ async function generateNrfiAnalysis(client, guildId) {
     return;
   }
 
-  // Fetch weather for first few games (batch limit to avoid rate limits)
+  // Fetch weather for all games
   const weatherMap = {};
-  for (const game of games.slice(0, 8)) {
+  for (const game of games) {
     const w = await fetchGameWeather(game.espnGameId);
     if (w) weatherMap[game.espnGameId] = w;
   }
 
+  // Fetch detailed pitcher stats (K/9, WHIP, ERA, IP) — same data F5 uses
+  console.log('[MLB NRFI] Fetching pitcher stats...');
+  const pitcherStatsCache = {};
+  const statFetches = [];
+  for (const g of games) {
+    if (g.homePitcher.id) statFetches.push(fetchPitcherDetailedStats(g.homePitcher.id).then(s => { pitcherStatsCache[g.homePitcher.id] = s; }));
+    if (g.awayPitcher.id) statFetches.push(fetchPitcherDetailedStats(g.awayPitcher.id).then(s => { pitcherStatsCache[g.awayPitcher.id] = s; }));
+  }
+  await Promise.all(statFetches);
+
   const record = await mlbDb.getRecord('nrfi', guildId);
 
-  const gamesData = games.map(g => ({
-    espnGameId: g.espnGameId,
-    matchup: `${g.away.abbr} @ ${g.home.abbr}`,
-    awayTeam: g.away.team,
-    homeTeam: g.home.team,
-    awayRecord: g.away.record,
-    homeRecord: g.home.record,
-    awayPitcher: g.awayPitcher.name,
-    awayPitcherRecord: g.awayPitcher.record,
-    awayPitcherERA: g.awayPitcher.stats?.ERA || 'N/A',
-    homePitcher: g.homePitcher.name,
-    homePitcherRecord: g.homePitcher.record,
-    homePitcherERA: g.homePitcher.stats?.ERA || 'N/A',
-    overUnder: g.odds.overUnder,
-    startTime: g.startTime,
-    gameNumber: g.gameNumber,
-    weather: weatherMap[g.espnGameId] ? {
-      temp: weatherMap[g.espnGameId].temperature,
-      condition: weatherMap[g.espnGameId].conditionId,
-      wind: weatherMap[g.espnGameId].gust,
-    } : null,
-  }));
+  const gamesData = games.map(g => {
+    const hpStats = pitcherStatsCache[g.homePitcher.id];
+    const apStats = pitcherStatsCache[g.awayPitcher.id];
+    const w = weatherMap[g.espnGameId];
+    return {
+      espnGameId: g.espnGameId,
+      matchup: `${g.away.abbr} @ ${g.home.abbr}`,
+      awayTeam: g.away.team,
+      homeTeam: g.home.team,
+      awayRecord: g.away.record,
+      homeRecord: g.home.record,
+      awayPitcher: {
+        name: g.awayPitcher.name,
+        record: g.awayPitcher.record,
+        ERA: apStats?.ERA || g.awayPitcher.stats?.ERA || 'N/A',
+        WHIP: apStats?.WHIP || 'N/A',
+        K9: apStats?.K9 || 'N/A',
+        BB: apStats?.BB || 'N/A',
+        IP: apStats?.IP || 'N/A',
+        isTBD: g.awayPitcher.name === 'TBD',
+      },
+      homePitcher: {
+        name: g.homePitcher.name,
+        record: g.homePitcher.record,
+        ERA: hpStats?.ERA || g.homePitcher.stats?.ERA || 'N/A',
+        WHIP: hpStats?.WHIP || 'N/A',
+        K9: hpStats?.K9 || 'N/A',
+        BB: hpStats?.BB || 'N/A',
+        IP: hpStats?.IP || 'N/A',
+        isTBD: g.homePitcher.name === 'TBD',
+      },
+      overUnder: g.odds.overUnder,
+      startTime: g.startTime,
+      gameNumber: g.gameNumber,
+      weather: w ? { temp: w.temperature, condition: w.conditionId, windMph: w.gust } : null,
+    };
+  });
 
-  const prompt = `You are an elite MLB analytics model specializing in NRFI (No Run First Inning) bets. Your current NRFI record is ${record.hits}-${record.misses}.
+  const prompt = `You are an MLB NRFI (No Run First Inning) specialist. Classify each game as NRFI or YRFI. Current record: ${record.hits}-${record.misses}.
 
-Analyze EVERY game on today's MLB slate for NRFI probability. For each game, consider:
-1. Starting pitcher 1st inning tendencies and overall ERA
-2. Starting pitcher K/9 rate and control (walks)
-3. Opposing lineup power and recent scoring in 1st innings
-4. Ballpark factors (pitcher-friendly vs hitter-friendly)
-5. Weather conditions (temp, wind — heat + wind out = more runs)
-6. Historical NRFI rates for these pitcher matchups
-7. Bullpen usage — are starters likely to be on short leash?
-8. Day/night splits
+FUNDAMENTAL TRUTH: ~65% of MLB first innings score zero runs. NRFI is the statistical default. Only call YRFI when there is a specific, data-backed reason — not vague "the lineup is dangerous."
 
-Today's MLB slate:
+NRFI LEAN — default to NRFI when:
+- Both starters: ERA ≤ 4.50, WHIP ≤ 1.35, K/9 ≥ 8.0
+- O/U ≤ 8.5 (low-scoring game expected)
+- Cold weather < 60°F or indoor dome
+- Wind < 10 mph or blowing in
+- At least one starter is elite (ERA < 3.50, K/9 > 10)
+
+YRFI ONLY when you can cite TWO or more of these:
+- Game O/U ≥ 10.0
+- Either/both starters TBD
+- Either starter ERA > 5.50
+- WHIP > 1.50 for a starter (consistently gives up baserunners)
+- Wind ≥ 15 mph blowing OUT at a hitter-friendly park
+- Temperature ≥ 88°F at a hitter-friendly outdoor park
+
+CONFIDENCE:
+- 80-95: Both starters strong (ERA < 4.0, K/9 > 8.5), low O/U, good conditions → NRFI
+- 65-79: One solid starter, nothing alarming → NRFI
+- 50-64: One TBD/weak starter or high O/U → NRFI unless YRFI signals stack
+- YRFI confidence must be ≥ 60 and cite specific numbers
+
+Today's slate (includes ERA, WHIP, K/9 per starter):
 ${JSON.stringify(gamesData, null, 2)}
 
-Return a JSON array with one object per game in this EXACT format:
+Return JSON array, one entry per game:
 [
   {
     "espnGameId": "<ESPN game ID>",
     "suggestion": "NRFI" or "YRFI",
-    "confidence": <number 50-99>,
-    "reasoning": "<1-2 sentence specific analysis for this matchup>",
-    "nrfiOdds": "<approximate NRFI odds if known, e.g. '-140', or null if unknown>"
+    "confidence": <50-95>,
+    "reasoning": "<1-2 sentences citing specific stats: ERA, K/9, WHIP, O/U, weather. No vague statements.>",
+    "nrfiOdds": null
   }
 ]
 
-Order by confidence (highest first). Return ONLY valid JSON array. No markdown.`;
+Order by confidence descending. Return ONLY valid JSON. No markdown.`;
 
   try {
     const oaiRes = await fetch('https://api.openai.com/v1/chat/completions', {

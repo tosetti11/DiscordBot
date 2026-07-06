@@ -183,16 +183,17 @@ function makeAnalyticsCandidate(base) {
   if (implied === null || base.modelWinProbability === null) return null;
 
   const edge = base.modelWinProbability - implied;
-  if (base.oddsAmerican > -120 || base.oddsAmerican < -150) return null;
-  if (base.modelWinProbability < 0.57) return null;
-  if (edge < 0.015) return null;
+  // Tighter criteria: odds -115 to -160, probability ≥ 60%, edge ≥ 3%
+  if (base.oddsAmerican > -115 || base.oddsAmerican < -160) return null;
+  if (base.modelWinProbability < 0.60) return null;
+  if (edge < 0.03) return null;
 
   return {
     ...base,
     marketImpliedProbability: implied,
     modelEdge: edge,
     selectionScore: (base.modelWinProbability * 100) + (edge * 100 * 1.75),
-    confidence: Math.max(58, Math.min(79, Math.round(base.modelWinProbability * 100))),
+    confidence: Math.max(60, Math.min(82, Math.round(base.modelWinProbability * 100))),
   };
 }
 
@@ -224,57 +225,9 @@ async function buildAnalyticsCandidates(allGames) {
     console.error('[AI Pick] NBA analytics build error:', err.message);
   }
 
-  const nonNbaGames = allGames.filter(game => game.sport !== 'nba');
-  for (const game of nonNbaGames) {
-    const summaryJson = await fetchSummaryJson(game.sport, game.espnGameId);
-    if (!summaryJson) continue;
-
-    const probs = extractPredictorProbabilities(summaryJson);
-    const moneylines = extractMoneylines(summaryJson);
-    if (!probs) continue;
-
-    const homeCandidate = makeAnalyticsCandidate({
-      sport: game.sport,
-      sportName: game.sportName,
-      espnGameId: game.espnGameId,
-      pick: `${game.homeAbbr} ML`,
-      teamA: game.home,
-      teamB: game.away,
-      wagerType: 'moneyline',
-      betCategory: 'team_game',
-      oddsAmerican: moneylines.home,
-      eventStartTime: game.startTime || null,
-      modelWinProbability: probs.home,
-      analyticsSource: 'ESPN predictor',
-      analyticsFactors: [
-        `${game.homeAbbr} win probability ${toPercentString(probs.home * 100 / 100)}`,
-        `Market price ${moneylines.home > 0 ? '+' : ''}${moneylines.home}`,
-        `${game.awayRecord || 'N/A'} on one side vs ${game.homeRecord || 'N/A'} on the other`,
-      ],
-    });
-    const awayCandidate = makeAnalyticsCandidate({
-      sport: game.sport,
-      sportName: game.sportName,
-      espnGameId: game.espnGameId,
-      pick: `${game.awayAbbr} ML`,
-      teamA: game.away,
-      teamB: game.home,
-      wagerType: 'moneyline',
-      betCategory: 'team_game',
-      oddsAmerican: moneylines.away,
-      eventStartTime: game.startTime || null,
-      modelWinProbability: probs.away,
-      analyticsSource: 'ESPN predictor',
-      analyticsFactors: [
-        `${game.awayAbbr} win probability ${toPercentString(probs.away * 100 / 100)}`,
-        `Market price ${moneylines.away > 0 ? '+' : ''}${moneylines.away}`,
-        `${game.awayRecord || 'N/A'} on one side vs ${game.homeRecord || 'N/A'} on the other`,
-      ],
-    });
-
-    if (homeCandidate) candidates.push(homeCandidate);
-    if (awayCandidate) candidates.push(awayCandidate);
-  }
+  // Non-NBA sports excluded from analytics path: ESPN predictor probability is a public model
+  // already priced into betting lines, making edge calculations circular. NBA analytics model
+  // uses real team/form data and is the only trustworthy signal here.
 
   candidates.sort((a, b) => b.selectionScore - a.selectionScore);
   return candidates;
@@ -446,61 +399,65 @@ async function generateDailyPick(client, guildId) {
     return obj;
   }), null, 2);
 
-  const prompt = `You are an expert sports handicapper AI running a public betting record. Your current record is ${record.wins}-${record.losses}-${record.pushes}.
+  const prompt = `You are a disciplined sports handicapper AI with a public betting record. Current record: ${record.wins}-${record.losses}-${record.pushes}.
 
-Recent results (most recent first): ${recentPerformance || 'No recent picks'}
+Recent results: ${recentPerformance || 'No recent picks'}
 
-=== STRICT VARIETY RULES (MUST FOLLOW) ===
-${lastSport ? `- Your last pick was ${SPORT_NAMES[lastSport] || lastSport}. You MUST pick a DIFFERENT sport today.` : ''}
-${overusedSports.length > 0 ? `- These sports have been picked too often recently and are BANNED today: ${overusedSports.map(s => SPORT_NAMES[s] || s).join(', ')}` : ''}
-${last3Sports.length > 0 ? `- Last 3 picks were from: ${last3Sports.map(s => SPORT_NAMES[s] || s).join(', ')}. Pick something DIFFERENT.` : ''}
-${last3WagerTypes.length > 0 ? `- Last 3 wager types: ${last3WagerTypes.join(', ')}. Vary your bet type — try totals (over/under), team totals, or player props if you haven't recently.` : ''}
-- PRIORITIZE variety. NHL, Golf, Soccer, and player props are GREAT options. Don't default to MLB.
+YOUR ONLY GOAL IS HIT RATE. Do not force a pick if no strong play exists today.
 
-=== ODDS RANGE (STRICT) ===
-- Odds MUST be between -150 and -120. This is a HARD requirement. No plus odds. No heavy favorites beyond -150.
-- Target the -120 to -145 sweet spot. These are strong favorites without paying extreme juice.
+=== SELECTION CRITERIA (ALL must be met) ===
+1. Odds between -115 and -160 only. No plus odds. No heavy juice beyond -160.
+2. The team must have a CLEAR, SPECIFIC advantage — records, recent form, home/away, rest days, pitching matchup.
+3. You must be able to articulate WHY this team is more likely to win than the market implies.
+4. If you cannot identify a genuine edge on any game today, return a NO PICK response.
 
-STRATEGY NOTES:
-- Primary objective is hit rate, not long-shot upside. Favor the most likely winner in a reasonable price band.
-- Use analytics and market mismatch first. Only take a pick if the book looks light versus the probability.
-- Consider situational factors: rest days, travel, motivation, injuries
-- For MLB: pitcher matchups are critical — a strong pitcher vs weak lineup is high value
-- If no strong mismatch exists, prefer passing on thin edges and choose the cleanest favorite in-range.
+=== NO PICK OPTION ===
+If today's slate has no game that clearly meets all criteria above, return:
+{"noPick": true, "reason": "<one sentence why no pick today>"}
+This is the CORRECT answer on a bad day. A bad forced pick is worse than no pick.
 
-Analytics shortlist from model-first ranking (if available):
-${analyticsShortlist.length ? JSON.stringify(analyticsShortlist, null, 2) : 'No shortlist available'}
+=== WHAT COUNTS AS REAL EDGE ===
+- Strong home team with rest advantage vs tired road team
+- MLB: elite pitcher (ERA < 3.5) vs weak lineup, or weak opposing pitcher
+- Recent dominant form (6+ wins in last 10) vs struggling opponent
+- Significant talent disparity in a -130 to -150 line (implies ~57-60% win prob)
+- Clear situational angle (must-win game, rivalry, revenge, etc.)
 
-Today's available games:
+=== WHAT IS NOT AN EDGE ===
+- "The team is good" — every team in the playoffs/late season is good
+- Records alone without situational context
+- Any logic that could apply equally to both teams
+
+Analytics shortlist (NBA model only — high confidence picks):
+${analyticsShortlist.length ? JSON.stringify(analyticsShortlist, null, 2) : 'None today'}
+
+Today's games:
 ${gamesJson}
 
-Select ONE "Lock Pick of the Day" — your single best value play. Requirements:
-- Odds MUST be between -150 and -120 (NO exceptions — no plus odds, no heavy juice beyond -150)
-- Prefer moneylines and analytically-supported favorites over thin contrarian plays.
-- Team total = one team's score over/under a line (e.g. 'Lakers Over 112.5')
-- Focus on book mismatches where the win probability is clearly higher than the market implies.
-- Variety is secondary to quality. Do not force variety if the strongest analytics point elsewhere.
-- Consider the matchup, records, situational factors, and line value
+Return ONLY a JSON object — either a pick or a no-pick:
 
-Return a JSON object with this EXACT structure:
+Pick format:
 {
-  "sport": "<sport value from the game>",
-  "betCategory": "team_game" or "player_prop",
-  "wagerType": "moneyline" or "spread" or "total" or "team_total" or "prop",
-  "pick": "<formatted pick text, e.g. 'Lakers ML', 'Celtics -3.5', 'Over 220.5', 'Lakers Over 112.5'>",
-  "teamA": "<team being bet on or first team for totals>",
-  "teamB": "<opponent or second team>",
-  "playerName": "<player name if player_prop, else null>",
-  "propDescription": "<prop description if player_prop, else null>",
-  "spreadValue": <numeric spread or total line, or null>,
+  "sport": "<sport>",
+  "betCategory": "team_game",
+  "wagerType": "moneyline" or "spread" or "total",
+  "pick": "<e.g. Cubs ML, Over 8.5, Lakers -4.5>",
+  "teamA": "<team picked or home team for totals>",
+  "teamB": "<opponent>",
+  "playerName": null,
+  "propDescription": null,
+  "spreadValue": <number or null>,
   "overUnder": "Over" or "Under" or null,
-  "oddsAmerican": <American odds number between -150 and -120>,
-  "espnGameId": "<ESPN game ID from the data>",
-  "confidence": <number 85-99 representing confidence level>,
-  "reasoning": "<2-3 sentence analysis explaining WHY this is the lock pick. Be specific about matchup advantages, trends, or line value.>"
+  "oddsAmerican": <number -115 to -160>,
+  "espnGameId": "<ESPN game ID>",
+  "confidence": <60-85>,
+  "reasoning": "<2-3 sentences citing SPECIFIC factors: form, matchup, rest, pitching. No generic statements.>"
 }
 
-IMPORTANT: Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
+No-pick format:
+{"noPick": true, "reason": "<why>"}
+
+Return ONLY valid JSON. No markdown.`;
 
   try {
     let pickData = null;
@@ -516,7 +473,7 @@ IMPORTANT: Return ONLY valid JSON. No markdown, no explanation outside the JSON.
         body: JSON.stringify({
           model: 'gpt-4o',
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.4 + (attempt - 1) * 0.15, // Increase randomness on retries
+          temperature: 0.15,
           max_tokens: 600,
         }),
       });
@@ -536,23 +493,19 @@ IMPORTANT: Return ONLY valid JSON. No markdown, no explanation outside the JSON.
       const jsonStr = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const candidate = JSON.parse(jsonStr);
 
-      // === HARD VALIDATION: reject bad picks and retry ===
+      // Model chose no pick today — respect it
+      if (candidate.noPick === true) {
+        console.log(`[AI Pick] Model returned no pick: ${candidate.reason}`);
+        return null;
+      }
+
+      // === HARD VALIDATION ===
       const odds = candidate.oddsAmerican;
       const violations = [];
 
-      // Check odds range: must be -150 to -120
-      if (odds > -120 || odds < -150) {
-        violations.push(`odds ${odds} outside -150 to -120`);
-      }
-
-      // Check sport variety: must not repeat last pick's sport
-      if (lastSport && candidate.sport === lastSport) {
-        violations.push(`same sport as last pick (${SPORT_NAMES[lastSport] || lastSport})`);
-      }
-
-      // Check overused sports
-      if (overusedSports.includes(candidate.sport)) {
-        violations.push(`overused sport (${SPORT_NAMES[candidate.sport] || candidate.sport})`);
+      // Odds range: -115 to -160
+      if (odds > -115 || odds < -160) {
+        violations.push(`odds ${odds} outside -115 to -160`);
       }
 
       if (violations.length > 0) {
