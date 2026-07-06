@@ -1604,46 +1604,37 @@ function createWebServer() {
         }
       }
 
-      // Generate updated bet card image
-      const updatedBet = await db.getBet(betId);
-      const { AttachmentBuilder: ABLeg } = require('discord.js');
-      let imgBuffer;
-      try {
-        imgBuffer = await generateBetCardImage(updatedBet, null, null);
-      } catch (e) {
-        console.warn('Could not generate bet card image for leg close:', e.message);
-      }
-
-      // Update Discord message with new leg statuses
-      if (imgBuffer && bet.message_id && bet.channel_id) {
-        try {
-          const channel = await discordClient.channels.fetch(bet.channel_id);
-          const message = await channel.messages.fetch(bet.message_id);
-          const attachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
-          const legEditPayload = { files: [attachment], embeds: [], attachments: [] };
-          if (updatedBet.share_link) legEditPayload.content = buildContentWithLink('', updatedBet.share_link);
-          await message.edit(legEditPayload);
-        } catch (e) {
-          console.warn('Could not update primary parlay message:', e.message);
-        }
-      }
-
-      // Update mirror message in open slips channel (independent of primary)
-      if (imgBuffer && bet.mirror_message_id && bet.mirror_channel_id) {
-        try {
-          const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
-          const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
-          const mirrorAttachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
-          const mirrorLegPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
-          if (mirrorMsg.components?.length) mirrorLegPayload.components = mirrorMsg.components;
-          if (updatedBet.share_link) mirrorLegPayload.content = buildContentWithLink('', updatedBet.share_link);
-          await mirrorMsg.edit(mirrorLegPayload);
-        } catch (e) {
-          console.warn('Could not update mirror parlay leg:', e.message);
-        }
-      }
-
+      // Respond immediately — Discord update runs in background
       res.json({ success: true });
+
+      setImmediate(async () => {
+        try {
+          const updatedBet = await db.getBet(betId);
+          const { AttachmentBuilder: ABLeg } = require('discord.js');
+          const imgBuffer = await generateBetCardImage(updatedBet, null, null);
+          if (bet.message_id && bet.channel_id) {
+            try {
+              const channel = await discordClient.channels.fetch(bet.channel_id);
+              const message = await channel.messages.fetch(bet.message_id);
+              const attachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
+              const legEditPayload = { files: [attachment], embeds: [], attachments: [] };
+              if (updatedBet.share_link) legEditPayload.content = buildContentWithLink('', updatedBet.share_link);
+              await message.edit(legEditPayload);
+            } catch (e) { console.warn('Could not update primary parlay message:', e.message); }
+          }
+          if (bet.mirror_message_id && bet.mirror_channel_id) {
+            try {
+              const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+              const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+              const mirrorAttachment = new ABLeg(imgBuffer, { name: 'bet-card.png' });
+              const mirrorLegPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+              if (mirrorMsg.components?.length) mirrorLegPayload.components = mirrorMsg.components;
+              if (updatedBet.share_link) mirrorLegPayload.content = buildContentWithLink('', updatedBet.share_link);
+              await mirrorMsg.edit(mirrorLegPayload);
+            } catch (e) { console.warn('Could not update mirror parlay leg:', e.message); }
+          }
+        } catch (e) { console.warn('[BG] Close leg Discord update error:', e.message); }
+      });
     } catch (err) {
       console.error('[API] Close leg error:', err);
       res.status(500).json({ error: 'Failed to close leg' });
@@ -1691,44 +1682,37 @@ function createWebServer() {
         await db.updateBetFields(betId, { odds_american: newOdds });
       }
 
-      // Generate updated bet card image
-      const updatedBet = await db.getBet(betId);
-      const { AttachmentBuilder: ABEdit } = require('discord.js');
-      let imgBuffer;
-      try {
-        imgBuffer = await generateBetCardImage(updatedBet, null, null);
-      } catch (e) {
-        console.warn('Could not generate bet card image for leg edit:', e.message);
-      }
-
-      if (imgBuffer && bet.message_id && bet.channel_id) {
-        try {
-          const channel = await discordClient.channels.fetch(bet.channel_id);
-          const message = await channel.messages.fetch(bet.message_id);
-          const attachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
-          const payload = { files: [attachment], embeds: [], attachments: [] };
-          if (updatedBet.share_link) payload.content = buildContentWithLink('', updatedBet.share_link);
-          await message.edit(payload);
-        } catch (e) {
-          console.warn('Could not update primary parlay message after leg edit:', e.message);
-        }
-      }
-
-      if (imgBuffer && bet.mirror_message_id && bet.mirror_channel_id) {
-        try {
-          const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
-          const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
-          const mirrorAttachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
-          const mirrorPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
-          if (mirrorMsg.components?.length) mirrorPayload.components = mirrorMsg.components;
-          if (updatedBet.share_link) mirrorPayload.content = buildContentWithLink('', updatedBet.share_link);
-          await mirrorMsg.edit(mirrorPayload);
-        } catch (e) {
-          console.warn('Could not update mirror parlay leg edit:', e.message);
-        }
-      }
-
+      // Respond immediately — Discord update runs in background
       res.json({ success: true, newOdds });
+
+      setImmediate(async () => {
+        try {
+          const updatedBet = await db.getBet(betId);
+          const { AttachmentBuilder: ABEdit } = require('discord.js');
+          const imgBuffer = await generateBetCardImage(updatedBet, null, null);
+          if (bet.message_id && bet.channel_id) {
+            try {
+              const channel = await discordClient.channels.fetch(bet.channel_id);
+              const message = await channel.messages.fetch(bet.message_id);
+              const attachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
+              const payload = { files: [attachment], embeds: [], attachments: [] };
+              if (updatedBet.share_link) payload.content = buildContentWithLink('', updatedBet.share_link);
+              await message.edit(payload);
+            } catch (e) { console.warn('Could not update primary parlay message after leg edit:', e.message); }
+          }
+          if (bet.mirror_message_id && bet.mirror_channel_id) {
+            try {
+              const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+              const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+              const mirrorAttachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
+              const mirrorPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+              if (mirrorMsg.components?.length) mirrorPayload.components = mirrorMsg.components;
+              if (updatedBet.share_link) mirrorPayload.content = buildContentWithLink('', updatedBet.share_link);
+              await mirrorMsg.edit(mirrorPayload);
+            } catch (e) { console.warn('Could not update mirror parlay leg edit:', e.message); }
+          }
+        } catch (e) { console.warn('[BG] Edit leg Discord update error:', e.message); }
+      });
     } catch (err) {
       console.error('[API] Edit leg error:', err);
       res.status(500).json({ error: 'Failed to edit leg' });
@@ -1770,125 +1754,71 @@ function createWebServer() {
         }
       }
 
-      // Delete mirror message from open bets channel
-      if (bet.mirror_message_id && bet.mirror_channel_id) {
-        try {
-          const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
-          const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
-          await mirrorMsg.delete();
-
-          // Also delete scoreboard placeholder
-          if (bet.mirror_scoreboard_msg_id) {
-            try {
-              const sbMsg = await mirrorChannel.messages.fetch(bet.mirror_scoreboard_msg_id);
-              await sbMsg.delete();
-            } catch (e2) {}
-          }
-        } catch (e) {
-          console.error('[API] Mirror message delete error:', e.message);
-        }
-      }
-
-      // End any active scoreboard for this bet
-      if (bet.id) {
-        try {
-          await scoreboardDb.endScoreboardsByBet(bet.id);
-        } catch (e) {}
-      }
-
-      // Delete original Discord message and post a fresh one with the result (wins only)
-      // For losses/push/void, just edit the existing message in place
-      if (bet.message_id && bet.channel_id) {
-        try {
-          const channel = await discordClient.channels.fetch(bet.channel_id);
-
-          // Build the updated embed/image
-          const updatedBet = await db.getBet(betId);
-
-          // Resolve the ORIGINAL bettor's display name (not the admin closing it)
-          let bettorDisplayName = 'Unknown';
-          try {
-            const guild = discordClient.guilds.cache.get(bet.guild_id);
-            if (guild) {
-              const member = await fetchMember(guild, bet.discord_id);
-              bettorDisplayName = member.displayName;
-            }
-          } catch (e) {}
-
-          // Resolve closing user's display name for the announcement text
-          let closerDisplayName = req.user.displayName || req.user.username || 'Unknown';
-          try {
-            const guild = discordClient.guilds.cache.get(bet.guild_id);
-            if (guild) {
-              const member = await fetchMember(guild, req.user.discordId);
-              closerDisplayName = member.displayName;
-            }
-          } catch (e) {}
-
-          const resultEmoji = status === 'win' ? '✅' : status === 'loss' ? '❌' : status === 'cashout' ? '💸' : '🔄';
-          const statusLabel = status === 'cashout' ? 'CASHED OUT' : status.toUpperCase();
-          let content = `${resultEmoji} **${closerDisplayName}** closed a bet as **${statusLabel}**`;
-          if (status === 'cashout' && cashOutAmount) {
-            content += ` (${parseFloat(cashOutAmount).toFixed(2)}u returned)`;
-          }
-
-          // Append the user's community message
-          if (communityMessage && communityMessage.trim()) {
-            content += `\n\n${communityMessage.trim()}`;
-          }
-
-          const { AttachmentBuilder: ABClose } = require('discord.js');
-          const imgBuffer = await generateBetCardImage(updatedBet, bettorDisplayName, null);
-          const attachment = new ABClose(imgBuffer, { name: 'bet-card.png' });
-
-          if (status === 'win' || status === 'cashout') {
-            // WIN/CASHOUT: Delete old message, post a fresh one
-            try {
-              const oldMsg = await channel.messages.fetch(bet.message_id);
-              await oldMsg.delete();
-            } catch (e) {} // Original may already be deleted
-
-            let sendPayload = { content, files: [attachment] };
-            if (gifUrl && gifUrl.trim()) {
-              sendPayload.content += `\n${gifUrl.trim()}`;
-            }
-
-            const newMsg = await channel.send(sendPayload);
-            await db.updateBetMessageId(betId, newMsg.id);
-          } else {
-            // LOSS/PUSH/VOID: Edit the existing message in place
-            try {
-              const oldMsg = await channel.messages.fetch(bet.message_id);
-              let editPayload = { content, files: [attachment], embeds: [], components: [] };
-              if (gifUrl && gifUrl.trim()) {
-                editPayload.content += `\n${gifUrl.trim()}`;
-              }
-              await oldMsg.edit(editPayload);
-            } catch (e) {
-              // If edit fails (message deleted), post a new one
-              let sendPayload = { content, files: [attachment] };
-              if (gifUrl && gifUrl.trim()) {
-                sendPayload.content += `\n${gifUrl.trim()}`;
-              }
-              const newMsg = await channel.send(sendPayload);
-              await db.updateBetMessageId(betId, newMsg.id);
-            }
-          }
-        } catch (e) {
-          console.error('[API] Close bet Discord update error:', e);
-        }
-      }
-
+      // Respond immediately after DB is updated — all Discord/image work in background
       res.json({ success: true });
 
-      // Trigger role update for the bettor (non-blocking)
-      try {
-        const roleManager = require('../services/roleManager');
-        if (discordClient && bet.guild_id && bet.discord_id) {
-          const guild = discordClient.guilds.cache.get(bet.guild_id);
-          if (guild) roleManager.updateUserRoles(guild, bet.discord_id).catch(() => {});
-        }
-      } catch (e) { /* role manager not critical */ }
+      setImmediate(async () => {
+        try {
+          // Delete mirror message
+          if (bet.mirror_message_id && bet.mirror_channel_id) {
+            try {
+              const mirrorChannel = await discordClient.channels.fetch(bet.mirror_channel_id);
+              const mirrorMsg = await mirrorChannel.messages.fetch(bet.mirror_message_id);
+              await mirrorMsg.delete();
+              if (bet.mirror_scoreboard_msg_id) {
+                try { const sbMsg = await mirrorChannel.messages.fetch(bet.mirror_scoreboard_msg_id); await sbMsg.delete(); } catch (e2) {}
+              }
+            } catch (e) { console.error('[BG] Mirror message delete error:', e.message); }
+          }
+
+          if (bet.id) { try { await scoreboardDb.endScoreboardsByBet(bet.id); } catch (e) {} }
+
+          if (bet.message_id && bet.channel_id) {
+            try {
+              const channel = await discordClient.channels.fetch(bet.channel_id);
+              const updatedBet = await db.getBet(betId);
+
+              let bettorDisplayName = 'Unknown';
+              try { const guild = discordClient.guilds.cache.get(bet.guild_id); if (guild) { const member = await fetchMember(guild, bet.discord_id); bettorDisplayName = member.displayName; } } catch (e) {}
+              let closerDisplayName = req.user.displayName || req.user.username || 'Unknown';
+              try { const guild = discordClient.guilds.cache.get(bet.guild_id); if (guild) { const member = await fetchMember(guild, req.user.discordId); closerDisplayName = member.displayName; } } catch (e) {}
+
+              const resultEmoji = status === 'win' ? '✅' : status === 'loss' ? '❌' : status === 'cashout' ? '💸' : '🔄';
+              const statusLabel = status === 'cashout' ? 'CASHED OUT' : status.toUpperCase();
+              let content = `${resultEmoji} **${closerDisplayName}** closed a bet as **${statusLabel}**`;
+              if (status === 'cashout' && cashOutAmount) content += ` (${parseFloat(cashOutAmount).toFixed(2)}u returned)`;
+              if (communityMessage && communityMessage.trim()) content += `\n\n${communityMessage.trim()}`;
+              if (gifUrl && gifUrl.trim()) content += `\n${gifUrl.trim()}`;
+
+              const { AttachmentBuilder: ABClose } = require('discord.js');
+              const imgBuffer = await generateBetCardImage(updatedBet, bettorDisplayName, null);
+              const attachment = new ABClose(imgBuffer, { name: 'bet-card.png' });
+
+              if (status === 'win' || status === 'cashout') {
+                try { const oldMsg = await channel.messages.fetch(bet.message_id); await oldMsg.delete(); } catch (e) {}
+                const newMsg = await channel.send({ content, files: [attachment] });
+                await db.updateBetMessageId(betId, newMsg.id);
+              } else {
+                try {
+                  const oldMsg = await channel.messages.fetch(bet.message_id);
+                  await oldMsg.edit({ content, files: [attachment], embeds: [], components: [] });
+                } catch (e) {
+                  const newMsg = await channel.send({ content, files: [attachment] });
+                  await db.updateBetMessageId(betId, newMsg.id);
+                }
+              }
+            } catch (e) { console.error('[BG] Close bet Discord update error:', e.message); }
+          }
+
+          try {
+            const roleManager = require('../services/roleManager');
+            if (discordClient && bet.guild_id && bet.discord_id) {
+              const guild = discordClient.guilds.cache.get(bet.guild_id);
+              if (guild) roleManager.updateUserRoles(guild, bet.discord_id).catch(() => {});
+            }
+          } catch (e) {}
+        } catch (e) { console.error('[BG] Close bet background error:', e.message); }
+      });
     } catch (err) {
       console.error('[API] Close bet error:', err);
       res.status(500).json({ error: 'Failed to close bet' });
@@ -2179,79 +2109,82 @@ function createWebServer() {
         return res.status(400).json({ error: 'No fields to update' });
       }
 
-      // Update Discord message
       const updatedBet = await db.getBet(betId);
-      if (updatedBet.message_id && updatedBet.channel_id) {
-        try {
-          // Resolve display name for the embed
-          let embedName = req.user.displayName || req.user.username || 'Unknown';
-          let embedAvatar = req.user.avatar || null;
-          if (updatedBet.discord_id !== req.user.discordId && discordClient) {
-            // Admin editing someone else's bet — get the original user's info
-            const guild = discordClient.guilds.cache.get(updatedBet.guild_id);
-            if (guild) {
-              const member = await guild.members.fetch(updatedBet.discord_id).catch(() => null);
-              if (member) {
-                embedName = member.displayName || member.user.username;
-                embedAvatar = member.user.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
-              }
-            }
-          } else if (discordClient) {
-            const dUser = await discordClient.users.fetch(req.user.discordId).catch(() => null);
-            if (dUser) {
-              embedAvatar = dUser.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
-            }
-          }
-          const channel = await discordClient.channels.fetch(updatedBet.channel_id);
-          const message = await channel.messages.fetch(updatedBet.message_id);
-          const { AttachmentBuilder: ABEdit } = require('discord.js');
-          const imgBuffer = await generateBetCardImage(updatedBet, embedName, embedAvatar);
-          const attachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
-          const editPayload = { files: [attachment], embeds: [], attachments: [] };
-          if (updatedBet.share_link) editPayload.content = buildContentWithLink('', updatedBet.share_link);
-          else editPayload.content = '';
-          await message.edit(editPayload);
-        } catch (e) {
-          console.error('[API] Discord message update failed:', e.message);
-        }
-      }
 
-      // Update mirror message in open bets channel
-      if (updatedBet.mirror_message_id && updatedBet.mirror_channel_id) {
-        try {
-          let mirrorName = req.user.displayName || req.user.username || 'Unknown';
-          let mirrorAvatar = req.user.avatar || null;
-          if (updatedBet.discord_id !== req.user.discordId && discordClient) {
-            const guild = discordClient.guilds.cache.get(updatedBet.guild_id);
-            if (guild) {
-              const member = await guild.members.fetch(updatedBet.discord_id).catch(() => null);
-              if (member) {
-                mirrorName = member.displayName || member.user.username;
-                mirrorAvatar = member.user.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
-              }
-            }
-          } else if (discordClient) {
-            const dUser = await discordClient.users.fetch(req.user.discordId).catch(() => null);
-            if (dUser) {
-              mirrorAvatar = dUser.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
-            }
-          }
-          const mirrorChannel = await discordClient.channels.fetch(updatedBet.mirror_channel_id);
-          const mirrorMsg = await mirrorChannel.messages.fetch(updatedBet.mirror_message_id);
-          const { AttachmentBuilder: ABMirrorEdit } = require('discord.js');
-          const mirrorImgBuffer = await generateBetCardImage(updatedBet, mirrorName, mirrorAvatar);
-          const mirrorAttachment = new ABMirrorEdit(mirrorImgBuffer, { name: 'bet-card.png' });
-          const mirrorEditPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
-          if (mirrorMsg.components?.length) mirrorEditPayload.components = mirrorMsg.components;
-          if (updatedBet.share_link) mirrorEditPayload.content = buildContentWithLink('', updatedBet.share_link);
-          else mirrorEditPayload.content = '';
-          await mirrorMsg.edit(mirrorEditPayload);
-        } catch (e) {
-          console.error('[API] Mirror message update failed:', e.message);
-        }
-      }
-
+      // Respond immediately — Discord update runs in background
       res.json({ success: true, bet: formatBetForApi(updatedBet) });
+
+      setImmediate(async () => {
+        try {
+          if (updatedBet.message_id && updatedBet.channel_id) {
+            try {
+              // Resolve display name for the embed
+              let embedName = req.user.displayName || req.user.username || 'Unknown';
+              let embedAvatar = req.user.avatar || null;
+              if (updatedBet.discord_id !== req.user.discordId && discordClient) {
+                const guild = discordClient.guilds.cache.get(updatedBet.guild_id);
+                if (guild) {
+                  const member = await guild.members.fetch(updatedBet.discord_id).catch(() => null);
+                  if (member) {
+                    embedName = member.displayName || member.user.username;
+                    embedAvatar = member.user.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+                  }
+                }
+              } else if (discordClient) {
+                const dUser = await discordClient.users.fetch(req.user.discordId).catch(() => null);
+                if (dUser) {
+                  embedAvatar = dUser.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+                }
+              }
+              const channel = await discordClient.channels.fetch(updatedBet.channel_id);
+              const message = await channel.messages.fetch(updatedBet.message_id);
+              const { AttachmentBuilder: ABEdit } = require('discord.js');
+              const imgBuffer = await generateBetCardImage(updatedBet, embedName, embedAvatar);
+              const attachment = new ABEdit(imgBuffer, { name: 'bet-card.png' });
+              const editPayload = { files: [attachment], embeds: [], attachments: [] };
+              if (updatedBet.share_link) editPayload.content = buildContentWithLink('', updatedBet.share_link);
+              else editPayload.content = '';
+              await message.edit(editPayload);
+            } catch (e) {
+              console.error('[BG] Edit bet primary Discord update failed:', e.message);
+            }
+          }
+
+          if (updatedBet.mirror_message_id && updatedBet.mirror_channel_id) {
+            try {
+              let mirrorName = req.user.displayName || req.user.username || 'Unknown';
+              let mirrorAvatar = req.user.avatar || null;
+              if (updatedBet.discord_id !== req.user.discordId && discordClient) {
+                const guild = discordClient.guilds.cache.get(updatedBet.guild_id);
+                if (guild) {
+                  const member = await guild.members.fetch(updatedBet.discord_id).catch(() => null);
+                  if (member) {
+                    mirrorName = member.displayName || member.user.username;
+                    mirrorAvatar = member.user.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+                  }
+                }
+              } else if (discordClient) {
+                const dUser = await discordClient.users.fetch(req.user.discordId).catch(() => null);
+                if (dUser) {
+                  mirrorAvatar = dUser.displayAvatarURL({ size: 128, extension: 'png', forceStatic: true });
+                }
+              }
+              const mirrorChannel = await discordClient.channels.fetch(updatedBet.mirror_channel_id);
+              const mirrorMsg = await mirrorChannel.messages.fetch(updatedBet.mirror_message_id);
+              const { AttachmentBuilder: ABMirrorEdit } = require('discord.js');
+              const mirrorImgBuffer = await generateBetCardImage(updatedBet, mirrorName, mirrorAvatar);
+              const mirrorAttachment = new ABMirrorEdit(mirrorImgBuffer, { name: 'bet-card.png' });
+              const mirrorEditPayload = { files: [mirrorAttachment], embeds: [], attachments: [] };
+              if (mirrorMsg.components?.length) mirrorEditPayload.components = mirrorMsg.components;
+              if (updatedBet.share_link) mirrorEditPayload.content = buildContentWithLink('', updatedBet.share_link);
+              else mirrorEditPayload.content = '';
+              await mirrorMsg.edit(mirrorEditPayload);
+            } catch (e) {
+              console.error('[BG] Edit bet mirror Discord update failed:', e.message);
+            }
+          }
+        } catch (e) { console.error('[BG] Edit bet background error:', e.message); }
+      });
     } catch (err) {
       console.error('[API] Edit bet error:', err);
       res.status(500).json({ error: 'Failed to edit bet' });
@@ -4128,60 +4061,67 @@ IMPORTANT RULES:
 
         const fullBet = await db.getBet(bet.id);
 
-        // Post to Discord
-        const channel = await discordClient.channels.fetch(channelId);
-        const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder: AB } = require('discord.js');
+        // Respond immediately — Discord posting runs in background
+        res.json({ success: true, slipNumber: bet.slip_number, betId: bet.id });
 
-        const imgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
-        const attachment = new AB(imgBuffer, { name: 'bet-card.png' });
-        const sendPayload = { files: [attachment] };
+        setImmediate(async () => {
+          try {
+            // Post to Discord
+            const channel = await discordClient.channels.fetch(channelId);
+            const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder: AB } = require('discord.js');
 
-        const pollRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('No').setStyle(ButtonStyle.Danger),
-        );
+            const imgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
+            const attachment = new AB(imgBuffer, { name: 'bet-card.png' });
+            const sendPayload = { files: [attachment] };
 
-        const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${targetDiscordId}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
-        sendPayload.components = [pollRow];
-        sendPayload.content = buildContentWithLink(isWhale ? whaleContent : 'Are You Tailing This Bet?', fullBet.share_link);
-        const message = await channel.send(sendPayload);
-        await db.updateBetMessageId(bet.id, message.id);
+            const pollRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
+              new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('No').setStyle(ButtonStyle.Danger),
+            );
 
-        // Mirror to open bets channel
-        try {
-          const mirrorChannelId = targetDiscordId === KING_DISCORD_ID ? KING_OPEN_CHANNEL : COMMUNITY_OPEN_CHANNEL;
-          const mirrorChannel = await discordClient.channels.fetch(mirrorChannelId);
-          const mirrorImgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
-          const { AttachmentBuilder: ABMirror } = require('discord.js');
-          const mirrorAttachment = new ABMirror(mirrorImgBuffer, { name: 'bet-card.png' });
+            const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${targetDiscordId}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
+            sendPayload.components = [pollRow];
+            sendPayload.content = buildContentWithLink(isWhale ? whaleContent : 'Are You Tailing This Bet?', fullBet.share_link);
+            const message = await channel.send(sendPayload);
+            await db.updateBetMessageId(bet.id, message.id);
 
-          const mirrorPollRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Tail').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('Fade').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setLabel('Comment').setStyle(ButtonStyle.Link).setURL(`https://discord.com/channels/${guildId}/${channelId}/${message.id}`),
-          );
+            // Mirror to open bets channel
+            try {
+              const mirrorChannelId = targetDiscordId === KING_DISCORD_ID ? KING_OPEN_CHANNEL : COMMUNITY_OPEN_CHANNEL;
+              const mirrorChannel = await discordClient.channels.fetch(mirrorChannelId);
+              const mirrorImgBuffer = await generateBetCardImage(fullBet, displayName, req.user.avatar);
+              const { AttachmentBuilder: ABMirror } = require('discord.js');
+              const mirrorAttachment = new ABMirror(mirrorImgBuffer, { name: 'bet-card.png' });
 
-          const mirrorPayload2 = { files: [mirrorAttachment], components: [mirrorPollRow] };
-          if (bet.share_link) mirrorPayload2.content = buildContentWithLink('', bet.share_link);
-          const mirrorMsg = await mirrorChannel.send(mirrorPayload2);
-          await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
+              const mirrorPollRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Tail').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('Fade').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setLabel('Comment').setStyle(ButtonStyle.Link).setURL(`https://discord.com/channels/${guildId}/${channelId}/${message.id}`),
+              );
 
-          // [SCOREBOARD DISABLED] Placeholder posting disabled — feature dormant
-          // To re-enable: uncomment below and the matching code in single bet section (~line 2687)
-          // try {
-          //   const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
-          //   await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
-          // } catch (phErr) {
-          //   console.error('[API] Scoreboard placeholder error (parlay):', phErr.message);
-          // }
-        } catch (mirrorErr) {
-          console.error('[API] Mirror post error (parlay):', mirrorErr);
-        }
+              const mirrorPayload2 = { files: [mirrorAttachment], components: [mirrorPollRow] };
+              if (bet.share_link) mirrorPayload2.content = buildContentWithLink('', bet.share_link);
+              const mirrorMsg = await mirrorChannel.send(mirrorPayload2);
+              await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
-        // Notify followers
-        notifyFollowers(discordClient, targetDiscordId, guildId, fullBet, displayName, false);
+              // [SCOREBOARD DISABLED] Placeholder posting disabled — feature dormant
+              // To re-enable: uncomment below and the matching code in single bet section (~line 2687)
+              // try {
+              //   const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
+              //   await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
+              // } catch (phErr) {
+              //   console.error('[API] Scoreboard placeholder error (parlay):', phErr.message);
+              // }
+            } catch (mirrorErr) {
+              console.error('[API] Mirror post error (parlay):', mirrorErr);
+            }
 
-        return res.json({ success: true, slipNumber: bet.slip_number, betId: bet.id });
+            // Notify followers
+            notifyFollowers(discordClient, targetDiscordId, guildId, fullBet, displayName, false);
+          } catch (e) { console.error('[BG] Submit parlay Discord error:', e.message); }
+        });
+
+        return;
 
       } else {
         // ── Single bet ──
@@ -4370,60 +4310,65 @@ IMPORTANT RULES:
 
         const bet = await db.createBet(betData, displayName);
 
-        // Post to Discord
-        const channel = await discordClient.channels.fetch(channelId);
-        const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder: AB2 } = require('discord.js');
+        // Respond immediately — Discord posting runs in background
+        res.json({ success: true, slipNumber: bet.slip_number, betId: bet.id });
 
-        const imgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
-        const attachment = new AB2(imgBuffer, { name: 'bet-card.png' });
-        const sendPayload = { files: [attachment] };
+        setImmediate(async () => {
+          try {
+            // Post to Discord
+            const channel = await discordClient.channels.fetch(channelId);
+            const { ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder: AB2 } = require('discord.js');
 
-        const pollRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
-          new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('No').setStyle(ButtonStyle.Danger),
-        );
+            const imgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
+            const attachment = new AB2(imgBuffer, { name: 'bet-card.png' });
+            const sendPayload = { files: [attachment] };
 
-        const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${targetDiscordId}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
-        sendPayload.components = [pollRow];
-        sendPayload.content = buildContentWithLink(isWhale ? whaleContent : 'Are You Tailing This Bet?', bet.share_link);
-        const message = await channel.send(sendPayload);
-        await db.updateBetMessageId(bet.id, message.id);
+            const pollRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
+              new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('No').setStyle(ButtonStyle.Danger),
+            );
 
-        // Mirror to open bets channel
-        try {
-          const mirrorChannelId = targetDiscordId === KING_DISCORD_ID ? KING_OPEN_CHANNEL : COMMUNITY_OPEN_CHANNEL;
-          const mirrorChannel = await discordClient.channels.fetch(mirrorChannelId);
-          const mirrorImgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
-          const { AttachmentBuilder: ABMirror2 } = require('discord.js');
-          const mirrorAttachment = new ABMirror2(mirrorImgBuffer, { name: 'bet-card.png' });
+            const whaleContent = `🚨🚨🐋🍆🐋🍆🐋🍆 <@${targetDiscordId}> JUST SUBMITTED A MF'ING WHALE DICK BET! 🍆🐋🍆🐋🍆🐋🚨🚨\n\nARE YOU READY TO MAKE SOME MF'ING MONEY. #JMM`;
+            sendPayload.components = [pollRow];
+            sendPayload.content = buildContentWithLink(isWhale ? whaleContent : 'Are You Tailing This Bet?', bet.share_link);
+            const message = await channel.send(sendPayload);
+            await db.updateBetMessageId(bet.id, message.id);
 
-          const mirrorPollRow2 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Tail').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('Fade').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setLabel('Comment').setStyle(ButtonStyle.Link).setURL(`https://discord.com/channels/${guildId}/${channelId}/${message.id}`),
-          );
+            // Mirror to open bets channel
+            try {
+              const mirrorChannelId = targetDiscordId === KING_DISCORD_ID ? KING_OPEN_CHANNEL : COMMUNITY_OPEN_CHANNEL;
+              const mirrorChannel = await discordClient.channels.fetch(mirrorChannelId);
+              const mirrorImgBuffer = await generateBetCardImage(bet, displayName, req.user.avatar);
+              const { AttachmentBuilder: ABMirror2 } = require('discord.js');
+              const mirrorAttachment = new ABMirror2(mirrorImgBuffer, { name: 'bet-card.png' });
 
-          const mirrorPayload = { files: [mirrorAttachment], components: [mirrorPollRow2] };
-          if (bet.share_link) mirrorPayload.content = buildContentWithLink('', bet.share_link);
-          const mirrorMsg = await mirrorChannel.send(mirrorPayload);
-          await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
+              const mirrorPollRow2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`tailbet_yes_${bet.id}`).setLabel('Tail').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`tailbet_no_${bet.id}`).setLabel('Fade').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setLabel('Comment').setStyle(ButtonStyle.Link).setURL(`https://discord.com/channels/${guildId}/${channelId}/${message.id}`),
+              );
 
-          // [SCOREBOARD DISABLED] Placeholder posting disabled — feature dormant
-          // To re-enable: uncomment below and the matching code in parlay section (~line 2596)
-          // try {
-          //   const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
-          //   await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
-          // } catch (phErr) {
-          //   console.error('[API] Scoreboard placeholder error (single):', phErr.message);
-          // }
-        } catch (mirrorErr) {
-          console.error('[API] Mirror post error (single):', mirrorErr);
-        }
+              const mirrorPayload = { files: [mirrorAttachment], components: [mirrorPollRow2] };
+              if (bet.share_link) mirrorPayload.content = buildContentWithLink('', bet.share_link);
+              const mirrorMsg = await mirrorChannel.send(mirrorPayload);
+              await db.updateBetMirrorMessageId(bet.id, mirrorMsg.id, mirrorChannelId);
 
-        // Notify followers
-        notifyFollowers(discordClient, targetDiscordId, guildId, bet, displayName, false);
+              // [SCOREBOARD DISABLED] Placeholder posting disabled — feature dormant
+              // To re-enable: uncomment below and the matching code in parlay section (~line 2596)
+              // try {
+              //   const placeholderMsg = await mirrorChannel.send({ content: '📡 *Scoreboard will appear here when game starts*', flags: [4096] });
+              //   await db.updateBetScoreboardMsgId(bet.id, placeholderMsg.id);
+              // } catch (phErr) {
+              //   console.error('[API] Scoreboard placeholder error (single):', phErr.message);
+              // }
+            } catch (mirrorErr) {
+              console.error('[API] Mirror post error (single):', mirrorErr);
+            }
 
-        return res.json({ success: true, slipNumber: bet.slip_number, betId: bet.id });
+            // Notify followers
+            notifyFollowers(discordClient, targetDiscordId, guildId, bet, displayName, false);
+          } catch (e) { console.error('[BG] Submit bet Discord error:', e.message); }
+        });
       }
     } catch (err) {
       console.error('[API] Submit bet error:', err);
