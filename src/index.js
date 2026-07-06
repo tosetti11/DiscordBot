@@ -279,7 +279,8 @@ client.once(Events.ClientReady, (c) => {
         sportDateSet.add(`${sport}:${eventDateStr(eventStartTime, createdAt)}`);
       }
       // Always include today and yesterday ET per sport to handle midnight crossings.
-      const _etDateN = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, ''); };
+      // Compute offset relative to current ET date (not UTC day) to avoid UTC/ET skew.
+      const _etDateN = (offset) => { const [y,m,d] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).split('-').map(Number); const s = new Date(y, m-1, d+offset); return s.getFullYear()+String(s.getMonth()+1).padStart(2,'0')+String(s.getDate()).padStart(2,'0'); };
       for (const { sport } of gameChecks.values()) {
         if (sport && sport !== 'golf_pga') {
           sportDateSet.add(`${sport}:${_etDateN(0)}`);
@@ -433,7 +434,7 @@ client.once(Events.ClientReady, (c) => {
                 continue;
               }
 
-              if (!leg.espn_game_id) continue;
+              if (!leg.espn_game_id) { allGamesPost = false; continue; }
               const dateStr = eventDateStr(leg.event_start_time || bet.event_start_time, leg.created_at || bet.created_at);
               let game;
               if (legIsGolf) {
@@ -479,6 +480,9 @@ client.once(Events.ClientReady, (c) => {
                 }
                 hashParts.push(hashPart);
                 if (game.state === 'in') isLive = true;
+              } else {
+                // Game not started yet (pre) or not found — this leg is not finished
+                allGamesPost = false;
               }
             }
             if (hashParts.length) {
@@ -729,7 +733,7 @@ client.once(Events.ClientReady, (c) => {
       }
       // Always also check today and yesterday ET for every active sport to
       // handle late-night games that cross midnight or have a mismatched date.
-      const _etDate = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, ''); };
+      const _etDate = (offset) => { const [y,m,d] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).split('-').map(Number); const s = new Date(y, m-1, d+offset); return s.getFullYear()+String(s.getMonth()+1).padStart(2,'0')+String(s.getDate()).padStart(2,'0'); };
       const _etToday = _etDate(0), _etYday = _etDate(-1);
       for (const item of allItems) {
         if (!item.sport || item.sport === 'golf_pga') continue;

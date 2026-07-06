@@ -15,13 +15,13 @@ const AI_OPEN_SLIPS_CHANNEL_ID = '1485903920906895370';
 // Seasonal sport weighting — prefer sports that are in season
 function getSeasonalSports() {
   const month = new Date().getMonth() + 1; // 1-12
-  if (month >= 9 && month <= 12) return ['nfl', 'nba', 'nhl', 'ncaa_mbb', 'ncaa_football', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ucl'];
-  if (month >= 1 && month <= 2) return ['nba', 'nhl', 'ncaa_mbb', 'nfl', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ucl'];
-  if (month === 3) return ['nba', 'nhl', 'ncaa_mbb', 'mlb', 'epl', 'la_liga', 'serie_a', 'ucl', 'kbo', 'npb'];
-  if (month >= 4 && month <= 5) return ['nhl', 'nba', 'mlb', 'golf_pga', 'epl', 'la_liga', 'serie_a', 'ucl', 'mls', 'kbo', 'npb'];
-  if (month === 6) return ['mlb', 'wnba', 'mls', 'kbo', 'npb', 'golf_pga'];
-  if (month >= 7 && month <= 8) return ['mlb', 'wnba', 'mls', 'mma', 'kbo', 'npb', 'golf_pga', 'epl'];
-  return ['nba', 'nfl', 'mlb', 'nhl', 'epl'];
+  if (month >= 9 && month <= 12) return ['nfl', 'nba', 'nhl', 'ncaa_mbb', 'ncaa_football', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ucl', 'tennis_atp'];
+  if (month >= 1 && month <= 2) return ['nba', 'nhl', 'ncaa_mbb', 'nfl', 'epl', 'la_liga', 'serie_a', 'bundesliga', 'ucl', 'tennis_atp'];
+  if (month === 3) return ['nba', 'nhl', 'ncaa_mbb', 'mlb', 'epl', 'la_liga', 'serie_a', 'ucl', 'kbo', 'npb', 'tennis_atp'];
+  if (month >= 4 && month <= 5) return ['nhl', 'nba', 'mlb', 'epl', 'la_liga', 'serie_a', 'ucl', 'mls', 'kbo', 'npb', 'tennis_atp'];
+  if (month === 6) return ['mlb', 'wnba', 'mls', 'kbo', 'npb', 'tennis_atp'];
+  if (month >= 7 && month <= 8) return ['mlb', 'wnba', 'mls', 'kbo', 'npb', 'tennis_atp', 'liga_mx'];
+  return ['nba', 'nfl', 'mlb', 'nhl', 'epl', 'tennis_atp'];
 }
 
 function americanToImpliedProbability(odds) {
@@ -255,10 +255,22 @@ async function generateDailyPick(client, guildId) {
   // Fetch games from in-season sports
   const seasonalSports = getSeasonalSports();
   const allGames = [];
+
+  // Compute win% from a record string like "68-42" or "3-1"
+  const parseWinPct = (record) => {
+    if (!record) return null;
+    const m = record.match(/^(\d+)-(\d+)/);
+    if (!m) return null;
+    const w = parseInt(m[1]), l = parseInt(m[2]);
+    return w + l >= 5 ? Math.round(w / (w + l) * 100) : null;
+  };
+
   for (const sport of seasonalSports) {
     const games = await getTodaysGames(sport);
     const preGames = games.filter(g => g.state === 'pre');
     for (const g of preGames) {
+      const homeWinPct = parseWinPct(g.home.record);
+      const awayWinPct = parseWinPct(g.away.record);
       allGames.push({
         sport,
         sportName: SPORT_NAMES[sport] || sport,
@@ -266,13 +278,15 @@ async function generateDailyPick(client, guildId) {
         home: g.home.name,
         homeAbbr: g.home.abbreviation,
         homeRecord: g.home.record,
+        homeWinPct: homeWinPct !== null ? `${homeWinPct}%` : null,
         away: g.away.name,
         awayAbbr: g.away.abbreviation,
         awayRecord: g.away.record,
+        awayWinPct: awayWinPct !== null ? `${awayWinPct}%` : null,
+        winPctGap: homeWinPct !== null && awayWinPct !== null ? (homeWinPct - awayWinPct) : null,
         startTime: g.startTime,
         spread: g.odds?.spread || 'N/A',
         overUnder: g.odds?.overUnder || 'N/A',
-        broadcast: g.broadcast || '',
       });
     }
   }
@@ -312,18 +326,6 @@ async function generateDailyPick(client, guildId) {
   const last10 = (closedPicks || []).slice(0, 10);
   const recentPerformance = last10.map(p => `${p.sport} ${p.wager_type} ${p.pick}: ${p.status}`).join('; ');
 
-  // Use ALL recent picks (including pending) for variety tracking
-  const allRecentPicks = await aiPicksDb.getAllAiPicks(guildId);
-  const recentForVariety = (allRecentPicks || []).slice(0, 5);
-
-  // Build sport frequency from last 5 picks to enforce variety
-  const last5Sports = recentForVariety.map(p => p.sport);
-  const last3Sports = last5Sports.slice(0, 3);
-  const sportFreq = {};
-  for (const s of last5Sports) sportFreq[s] = (sportFreq[s] || 0) + 1;
-  const overusedSports = Object.entries(sportFreq).filter(([, c]) => c >= 2).map(([s]) => s);
-  const lastSport = last5Sports[0] || null;
-  const last3WagerTypes = recentForVariety.slice(0, 3).map(p => p.wager_type);
 
   const analyticsCandidates = await buildAnalyticsCandidates(allGames);
   const analyticsShortlist = analyticsCandidates.slice(0, 5).map(candidate => ({
@@ -388,7 +390,10 @@ async function generateDailyPick(client, guildId) {
       sportName: g.sportName,
       matchup: `${g.away} @ ${g.home}`,
       awayRecord: g.awayRecord,
+      awayWinPct: g.awayWinPct,
       homeRecord: g.homeRecord,
+      homeWinPct: g.homeWinPct,
+      winPctGap: g.winPctGap,
       spread: g.spread,
       overUnder: g.overUnder,
       startTime: g.startTime,
@@ -399,65 +404,84 @@ async function generateDailyPick(client, guildId) {
     return obj;
   }), null, 2);
 
-  const prompt = `You are a disciplined sports handicapper AI with a public betting record. Current record: ${record.wins}-${record.losses}-${record.pushes}.
+  const prompt = `You are a sharp sports handicapper AI. Your ONLY goal is a 75%+ win rate. Current record: ${record.wins}-${record.losses}-${record.pushes}.
 
 Recent results: ${recentPerformance || 'No recent picks'}
 
-YOUR ONLY GOAL IS HIT RATE. Do not force a pick if no strong play exists today.
+=== MANDATORY LOCK CRITERIA — ALL must be true or do not pick ===
 
-=== SELECTION CRITERIA (ALL must be met) ===
-1. Odds between -115 and -160 only. No plus odds. No heavy juice beyond -160.
-2. The team must have a CLEAR, SPECIFIC advantage — records, recent form, home/away, rest days, pitching matchup.
-3. You must be able to articulate WHY this team is more likely to win than the market implies.
-4. If you cannot identify a genuine edge on any game today, return a NO PICK response.
+WIN% GAP REQUIREMENT (uses winPctGap field — positive means home team leads):
+- Home favorite: winPctGap ≥ +12 (home team wins 12+ percentage points more than visitor)
+- Road favorite: winPctGap ≥ +18 (road team must be significantly better to overcome home field)
+- If winPctGap is null (insufficient sample), use record and context instead
 
-=== NO PICK OPTION ===
-If today's slate has no game that clearly meets all criteria above, return:
-{"noPick": true, "reason": "<one sentence why no pick today>"}
-This is the CORRECT answer on a bad day. A bad forced pick is worse than no pick.
+ODDS RANGE: -115 to -175 only. No plus odds. No juice beyond -175.
 
-=== WHAT COUNTS AS REAL EDGE ===
-- Strong home team with rest advantage vs tired road team
-- MLB: elite pitcher (ERA < 3.5) vs weak lineup, or weak opposing pitcher
-- Recent dominant form (6+ wins in last 10) vs struggling opponent
-- Significant talent disparity in a -130 to -150 line (implies ~57-60% win prob)
-- Clear situational angle (must-win game, rivalry, revenge, etc.)
+SPORT-SPECIFIC LOCK STANDARDS:
 
-=== WHAT IS NOT AN EDGE ===
-- "The team is good" — every team in the playoffs/late season is good
-- Records alone without situational context
-- Any logic that could apply equally to both teams
+MLB (highest confidence plays):
+- Ace matchup: starting pitcher ERA ≤ 2.80 AND WHIP ≤ 1.10 vs. lineup below .240 average — moneyline or F5
+- Opponent starter ERA ≥ 5.50 AND WHIP ≥ 1.55 — fade the bad starter
+- Win% gap ≥ 15% (e.g., 62% win team vs 47% win team)
+- Do NOT pick MLB without pitcher data unless win% gap is massive (≥ 20%)
 
-Analytics shortlist (NBA model only — high confidence picks):
+SOCCER (very pickable when clear):
+- Top-half table team (top 8) hosting bottom-half team (bottom 8) at home — strong home advantage
+- A team with 6+ wins in last 10 vs one with 3 or fewer
+- Cite league position or form explicitly
+
+TENNIS (best lock sport when rankings diverge):
+- Top-20 ranked player vs unranked or 50+ ranked in a regular-season match
+- Head-to-head dominance (4-1 or better H2H)
+- Surface specialist on their preferred surface
+
+WNBA / KBO / NPB:
+- Win% gap ≥ 15% AND home game, OR
+- Win% gap ≥ 20% regardless of venue
+
+OTHER SPORTS: Win% gap ≥ 15% + clear situational edge (rest, home court, recent form 7+ wins in last 10)
+
+=== NO-PICK RULE ===
+If no game today meets the full criteria above, return:
+{"noPick": true, "reason": "<one specific sentence about why today's slate has no lock>"}
+A correct no-pick is better than a forced bad pick. Skipping bad days IS how you hit 75%.
+
+=== WHAT IS NOT A LOCK ===
+- "The team is good" — cite numbers
+- Win% gap < 10% — too close
+- Any reasoning that would apply equally to both teams
+- Heavy juice (-180 or worse) pricing in the edge already
+
+Analytics shortlist (NBA model — verified edge picks):
 ${analyticsShortlist.length ? JSON.stringify(analyticsShortlist, null, 2) : 'None today'}
 
-Today's games:
+Today's games across all sports:
 ${gamesJson}
 
-Return ONLY a JSON object — either a pick or a no-pick:
+Return ONLY a JSON object:
 
 Pick format:
 {
-  "sport": "<sport>",
+  "sport": "<sport key>",
   "betCategory": "team_game",
   "wagerType": "moneyline" or "spread" or "total",
-  "pick": "<e.g. Cubs ML, Over 8.5, Lakers -4.5>",
+  "pick": "<e.g. Cubs ML, Over 8.5, Real Madrid ML>",
   "teamA": "<team picked or home team for totals>",
   "teamB": "<opponent>",
   "playerName": null,
   "propDescription": null,
   "spreadValue": <number or null>,
   "overUnder": "Over" or "Under" or null,
-  "oddsAmerican": <number -115 to -160>,
-  "espnGameId": "<ESPN game ID>",
-  "confidence": <60-85>,
-  "reasoning": "<2-3 sentences citing SPECIFIC factors: form, matchup, rest, pitching. No generic statements.>"
+  "oddsAmerican": <number, must be -115 to -175>,
+  "espnGameId": "<ESPN game ID from the games list>",
+  "confidence": <68-90>,
+  "reasoning": "<2-3 sentences. Must cite: win% gap or record gap, specific pitcher stats (MLB), league position (soccer), or ranking (tennis). No vague statements.>"
 }
 
 No-pick format:
 {"noPick": true, "reason": "<why>"}
 
-Return ONLY valid JSON. No markdown.`;
+Return ONLY valid JSON. No markdown. No explanation.`;
 
   try {
     let pickData = null;
@@ -503,9 +527,9 @@ Return ONLY valid JSON. No markdown.`;
       const odds = candidate.oddsAmerican;
       const violations = [];
 
-      // Odds range: -115 to -160
-      if (odds > -115 || odds < -160) {
-        violations.push(`odds ${odds} outside -115 to -160`);
+      // Odds range: -115 to -175
+      if (odds > -115 || odds < -175) {
+        violations.push(`odds ${odds} outside -115 to -175`);
       }
 
       if (violations.length > 0) {

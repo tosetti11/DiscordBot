@@ -4,6 +4,24 @@ const { SPORT_NAMES, WAGER_TYPES, PERIODS, FIGHT_METHODS } = require('../config/
 const { formatOdds, calculatePayout } = require('./odds');
 const { getGameSummary, getGolfPlayerRound, getGolf2BallLive, parsePropDescription, findPlayer, MLB_API_STATS, findMlbGamePk, getMlbPlayerStats, COMPUTED_STATS } = require('../services/espn');
 
+// Short display labels for espnKeys that have verbose parsed stat names
+const STAT_SHORT_LABELS = {
+  '3pt': '3P FG',
+  'pts': 'PTS',
+  'reb': 'REB',
+  'ast': 'AST',
+  'stl': 'STL',
+  'blk': 'BLK',
+  'to': 'TO',
+  'g': 'Goals',
+  'sv': 'Saves',
+  's': 'Shots',
+  'k': 'K',
+  'h': 'Hits',
+  'hr': 'HR',
+  'rbi': 'RBI',
+};
+
 // ── Parse event start time to YYYY-MM-DD date string ────────
 const MONTH_MAP = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' };
 function parseEventDate(eventStartTime) {
@@ -244,6 +262,7 @@ async function fetchLivePropStat(sport, espnGameId, playerName, propDescription,
     if (!summary || !summary.state || summary.state === 'pre') return null;
 
     let statVal = null;
+    let rawDisplay = null; // preserves "3-7" made-attempted format for display
 
     // Try ESPN box score first
     const playerData = findPlayer(summary.players, playerName);
@@ -251,6 +270,7 @@ async function fetchLivePropStat(sport, espnGameId, playerName, propDescription,
       const rawStat = playerData.stats?.[parsed.espnKey];
       if (typeof rawStat === 'string' && rawStat.includes('-') && /^\d+-\d+$/.test(rawStat)) {
         statVal = parseFloat(rawStat.split('-')[0]) || 0;
+        rawDisplay = rawStat; // keep "1-8" for display
       } else if (rawStat !== undefined) {
         statVal = parseFloat(rawStat) || 0;
       }
@@ -277,14 +297,14 @@ async function fetchLivePropStat(sport, espnGameId, playerName, propDescription,
 
     if (statVal === null) return null;
 
-    // Build a friendly label from the prop description stat portion
-    const label = parsed.stat.replace(/\b\w/g, c => c.toUpperCase());
+    const label = STAT_SHORT_LABELS[parsed.espnKey] || parsed.stat.replace(/\b\w/g, c => c.toUpperCase());
 
     return {
-      label,           // e.g. "Total Bases", "Strikeouts"
-      current: statVal, // e.g. 2
-      line: parsed.line, // e.g. 1.5
-      direction: parsed.direction, // 'over' or 'under'
+      label,
+      current: statVal,
+      rawDisplay,      // e.g. "1-8" for 3PT FG; null for simple counts
+      line: parsed.line,
+      direction: parsed.direction,
     };
   } catch { return null; }
 }
@@ -931,9 +951,9 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       roundRect(ctx, LEFT_BAR + PAD - 2, curY + 2, INNER + 4, 18, 4);
       ctx.fillStyle = pBg;
       ctx.fill();
-      // "📊 Total Bases: 2 / Over 1.5"
       const dirLabel = singlePropStat.direction === 'over' ? 'O' : 'U';
-      const propText = `📊 ${singlePropStat.label}: ${singlePropStat.current}  ·  ${dirLabel} ${singlePropStat.line}`;
+      const propDisplay = singlePropStat.rawDisplay || singlePropStat.current;
+      const propText = `📊 ${singlePropStat.label}: ${propDisplay}  ·  ${dirLabel} ${singlePropStat.line}`;
       ctx.font = 'bold 11px ' + FF;
       const hitting = (singlePropStat.direction === 'over' && singlePropStat.current > singlePropStat.line) ||
                       (singlePropStat.direction === 'under' && singlePropStat.current < singlePropStat.line);
@@ -1208,7 +1228,8 @@ async function generateBetCardImage(bet, username, avatarUrl) {
       const legPs = legPropStats[i];
       if (legPs) {
         const dirLabel = legPs.direction === 'over' ? 'O' : 'U';
-        const lpText = `📊 ${legPs.label}: ${legPs.current} · ${dirLabel} ${legPs.line}`;
+        const legPsDisplay = legPs.rawDisplay || legPs.current;
+        const lpText = `📊 ${legPs.label}: ${legPsDisplay} · ${dirLabel} ${legPs.line}`;
         ctx.font = 'bold 9px ' + FF;
         const legHitting = (legPs.direction === 'over' && legPs.current > legPs.line) ||
                            (legPs.direction === 'under' && legPs.current < legPs.line);

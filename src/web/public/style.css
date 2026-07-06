@@ -2460,6 +2460,23 @@ textarea {
 .ticket-leg .leg-push:hover { border-color: #888; }
 .ticket-leg .leg-void:hover { border-color: #555; }
 
+.ticket-leg .leg-edit-actions {
+  align-items: center;
+  opacity: 0.75;
+}
+
+.ticket-leg .leg-edit-actions:hover {
+  opacity: 1;
+}
+
+.ticket-leg .leg-edit-hint {
+  font-size: 9px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 2px;
+}
+
 /* Legacy compat */
 .tailed-card { opacity: 0.95; }
 
