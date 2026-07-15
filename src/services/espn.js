@@ -1865,7 +1865,14 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
 
     // Fuzzy player finder
     function normName(s) {
-      return (s || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+      // NFD decomposition converts diacritics to base+combining (Å → A + ̊), then strip combining marks
+      // so "Åberg" and "Aberg" both normalize to "aberg"
+      return (s || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z ]/g, '')
+        .trim();
     }
 
     function nameMatches(entryName, searchName) {
@@ -1873,10 +1880,15 @@ async function getGolf2BallLive({ playerA, playerA2, playerB, playerB2, playerC,
       const dn = normName(entryName);
       const norm = normName(searchName);
       if (!dn || !norm) return false;
-      const lastName = norm.split(' ').pop();
-      // Use whole-word last name match to avoid "Im" matching "Kim" (substring "im" inside "kim")
-      const dnWords = dn.split(' ');
-      return dn === norm || dn.includes(norm) || norm.includes(dn) || dnWords.includes(lastName);
+      if (dn === norm) return true;
+      if (norm.includes(' ')) {
+        // Multi-word search (full name): substring match only — no last-name fallback.
+        // "Si Woo Kim" must NOT match "Tom Kim" by shared last name.
+        return dn.includes(norm) || norm.includes(dn);
+      }
+      // Single word (last name or abbreviated): whole-word match only.
+      // "Im" must NOT match "Kim" as a substring.
+      return dn.split(' ').includes(norm);
     }
 
     function getCompName(c) {

@@ -4014,6 +4014,7 @@ IMPORTANT RULES:
         });
 
         // Resolve ESPN game IDs for each parlay leg
+        const untrackedLegs = [];
         for (const record of legRecords) {
           // Correct sport if GPT returned 'other' but team names match a known sport
           if ((!record.sport || record.sport === 'other') && (record.team_a || record.team_b)) {
@@ -4031,7 +4032,7 @@ IMPORTANT RULES:
               if (resolved) {
                 record.espn_game_id = resolved.gameId;
               } else if (espn.ESPN_SUPPORTED.has(record.sport)) {
-                record._trackingFailed = true;
+                untrackedLegs.push(record);
               }
             } catch (e) {
               console.error('[ESPN] Web parlay leg game ID resolve error:', e.message);
@@ -4042,7 +4043,6 @@ IMPORTANT RULES:
         await db.createParlayLegs(legRecords);
 
         // Notify if any parlay legs couldn't be matched to an ESPN game
-        const untrackedLegs = legRecords.filter(r => r._trackingFailed);
         if (untrackedLegs.length > 0) {
           const legNames = untrackedLegs.map(r => `${r.sport}: ${r.team_a || '?'} vs ${r.team_b || '?'}`).join(', ');
           try {
