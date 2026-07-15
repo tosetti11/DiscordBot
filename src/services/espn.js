@@ -732,19 +732,34 @@ async function resolveGameId(sport, teamA, teamB, eventStartTime) {
     return null;
   }
 
-  // Golf: tournament is a single event, return it directly
-  if (sport === 'golf_pga') {
+  // Golf: tournament is a single event, return it directly.
+  // Try a range of dates — tournaments span 4 days and ESPN may not list the event
+  // until round 1 begins, so a bet placed the day before needs adjacent-date fallback.
+  if (sport === 'golf_pga' || sport === 'golf_liv' || sport === 'golf_dp' || sport === 'golf_lpga' || sport === 'golf_champions') {
     const espnPath = ESPN_PATHS[sport];
     if (!espnPath) return null;
-    const ds = dateStr || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-    const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${ds}`;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) return null;
-      const json = await res.json();
-      const event = json.events?.[0];
-      if (event) return { gameId: event.id, game: { id: event.id, sport, name: event.name, state: event.status?.type?.state || 'pre' } };
-    } catch {}
+    const etDateStr = (offset) => {
+      const [y,m,d] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).split('-').map(Number);
+      const s = new Date(y, m-1, d+offset);
+      return s.getFullYear()+String(s.getMonth()+1).padStart(2,'0')+String(s.getDate()).padStart(2,'0');
+    };
+    // Build ordered candidate dates: derived date first, then today ±3 days
+    const golfDates = [];
+    if (dateStr) golfDates.push(dateStr);
+    for (const off of [0, 1, -1, 2, -2, 3, -3]) {
+      const d = etDateStr(off);
+      if (!golfDates.includes(d)) golfDates.push(d);
+    }
+    for (const ds of golfDates) {
+      try {
+        const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${ds}`;
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const json = await res.json();
+        const event = json.events?.[0];
+        if (event) return { gameId: event.id, game: { id: event.id, sport, name: event.name, state: event.status?.type?.state || 'pre' } };
+      } catch {}
+    }
     return null;
   }
 
