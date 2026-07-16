@@ -4040,7 +4040,13 @@ IMPORTANT RULES:
           }
         }
 
-        await db.createParlayLegs(legRecords);
+        try {
+          await db.createParlayLegs(legRecords);
+        } catch (legErr) {
+          // Roll back: delete the orphan bet so we don't leave a zero-leg bet record
+          await supabase.from('bets').delete().eq('id', bet.id).catch(() => {});
+          throw legErr;
+        }
 
         // Notify if any parlay legs couldn't be matched to an ESPN game
         if (untrackedLegs.length > 0) {

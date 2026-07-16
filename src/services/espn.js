@@ -239,41 +239,55 @@ async function getGolfEventStatus(gameId, dateStr) {
   const espnPath = ESPN_PATHS.golf_pga;
   if (!espnPath) return null;
 
-  const today = dateStr || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).replace(/-/g, '');
-  const cacheKey = `golf-event:${today}`;
-  let events;
-  const cached = getCached(cacheKey, SCOREBOARD_TTL);
-  if (cached) {
-    events = cached;
-  } else {
-    try {
-      const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${today}`;
-      const res = await fetch(url);
-      if (!res.ok) return null;
-      const json = await res.json();
-      events = json.events || [];
-      setCache(cacheKey, events);
-    } catch { return null; }
+  const etDateStr = (offset) => {
+    const [y,m,d] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }).split('-').map(Number);
+    const s = new Date(y, m-1, d+offset);
+    return s.getFullYear()+String(s.getMonth()+1).padStart(2,'0')+String(s.getDate()).padStart(2,'0');
+  };
+  // Try provided date first, then today ±3 days — tournaments span multiple days and
+  // the dateStr may be stale (computed from created_at when event_start_time is null)
+  const datesToTry = [];
+  if (dateStr) datesToTry.push(dateStr);
+  for (const off of [0, 1, -1, 2, -2, 3, -3]) {
+    const d = etDateStr(off);
+    if (!datesToTry.includes(d)) datesToTry.push(d);
   }
 
-  const event = events.find(e => e.id === gameId) || events[0];
-  if (!event) return null;
+  for (const ds of datesToTry) {
+    const cacheKey = `golf-event:${ds}`;
+    let events;
+    const cached = getCached(cacheKey, SCOREBOARD_TTL);
+    if (cached !== undefined) {
+      events = cached;
+    } else {
+      try {
+        const url = `https://site.api.espn.com/apis/site/v2/sports/${espnPath}/scoreboard?dates=${ds}`;
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const json = await res.json();
+        events = json.events || [];
+        setCache(cacheKey, events);
+      } catch { continue; }
+    }
 
-  const status = event.status || {};
-  const statusType = status.type || {};
+    const event = gameId ? events.find(e => e.id === gameId) : events[0];
+    if (!event) continue;
 
-  return {
-    id: event.id,
-    sport: 'golf_pga',
-    name: event.name || 'Golf Tournament',
-    state: statusType.state || 'pre',
-    completed: statusType.completed || false,
-    detail: statusType.shortDetail || statusType.detail || '',
-    // Dummy home/away so resolveResult doesn't crash — golf uses prop resolution only
-    home: { name: event.name || 'Field', abbreviation: 'GOLF', score: 0 },
-    away: { name: '', abbreviation: '', score: 0 },
-    linescores: { home: [], away: [] },
-  };
+    const statusType = event.status?.type || {};
+    return {
+      id: event.id,
+      sport: 'golf_pga',
+      name: event.name || 'Golf Tournament',
+      state: statusType.state || 'pre',
+      completed: statusType.completed || false,
+      detail: statusType.shortDetail || statusType.detail || '',
+      // Dummy home/away so resolveResult doesn't crash — golf uses prop resolution only
+      home: { name: event.name || 'Field', abbreviation: 'GOLF', score: 0 },
+      away: { name: '', abbreviation: '', score: 0 },
+      linescores: { home: [], away: [] },
+    };
+  }
+  return null;
 }
 
 /**
