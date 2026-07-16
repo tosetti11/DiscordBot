@@ -257,7 +257,7 @@ async function getGolfEventStatus(gameId, dateStr) {
     const cacheKey = `golf-event:${ds}`;
     let events;
     const cached = getCached(cacheKey, SCOREBOARD_TTL);
-    if (cached !== undefined) {
+    if (cached !== null) {
       events = cached;
     } else {
       try {
