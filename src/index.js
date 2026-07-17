@@ -450,7 +450,7 @@ client.once(Events.ClientReady, (c) => {
                 // Golf parlay legs: use player round data for hash (game scores are dummy 0s)
                 if (legIsGolf && leg.player_name) {
                   try {
-                    const golfData = await espn.getGolfPlayerRound(leg.player_name, leg.golf_round || null);
+                    const golfData = await espn.getGolfPlayerRound(leg.player_name, leg.golf_round || null, leg.espn_game_id || null);
                     if (golfData) {
                       hashPart = `${leg.espn_game_id}:golf:${golfData.holesCompleted}:${golfData.roundScore}:${golfData.roundStatus}`;
                       if (golfData.roundStatus !== 'post') allGamesPost = false;
@@ -518,7 +518,7 @@ client.once(Events.ClientReady, (c) => {
                 console.log(`[CardUpdate] ${bet.slip_number} 2ball update: thru ${mpData.maxHoles}, ${mpData.matchStatus?.label}`);
               }
             } else {
-              const golfData = await espn.getGolfPlayerRound(bet.player_name, bet.golf_round || null);
+              const golfData = await espn.getGolfPlayerRound(bet.player_name, bet.golf_round || null, bet.espn_game_id || null);
               if (golfData && (golfData.roundStatus === 'in' || golfData.roundStatus === 'post')) {
                 if (golfData.roundStatus !== 'post') allGamesPost = false;
                 // Build a quick hash to avoid re-editing when nothing changed

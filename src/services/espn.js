@@ -1475,9 +1475,10 @@ function findPlayer(players, playerName) {
  * Get a golf player's round data from the ESPN scoreboard.
  * @param {string} playerName - Player display name (e.g. "Si Woo Kim")
  * @param {number} roundNum - Round number (1-4)
+ * @param {string} [gameId] - ESPN event ID to target the correct tournament when multiple events exist
  * @returns {Object|null} { playerName, overallScore, roundNum, roundScore, roundDisplay, holesCompleted, totalHoles, holeScores, tournamentName, roundStatus }
  */
-async function getGolfPlayerRound(playerName, roundNum) {
+async function getGolfPlayerRound(playerName, roundNum, gameId) {
   if (!playerName) return null;
   const espnPath = ESPN_PATHS.golf_pga;
   if (!espnPath) return null;
@@ -1489,16 +1490,17 @@ async function getGolfPlayerRound(playerName, roundNum) {
     const res = await fetch(url);
     if (!res.ok) return null;
     const json = await res.json();
-    const event = json.events?.[0];
+    // Prefer the event matching the known game ID; fall back to first event
+    const event = (gameId ? json.events?.find(e => e.id === gameId) : null) || json.events?.[0];
     if (!event) return null;
 
     const competitors = event.competitions?.[0]?.competitors || [];
-    const norm = playerName.toLowerCase().replace(/[^a-z ]/g, '').trim();
+    const norm = normName(playerName);
 
-    // Find the player (fuzzy)
+    // Find the player (fuzzy, with NFD normalization)
     const comp = competitors.find(c => {
-      const dn = (c.athlete?.displayName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
-      const fn = (c.athlete?.fullName || '').toLowerCase().replace(/[^a-z ]/g, '').trim();
+      const dn = normName(c.athlete?.displayName || '');
+      const fn = normName(c.athlete?.fullName || '');
       return dn === norm || fn === norm || dn.includes(norm) || norm.includes(dn);
     });
     if (!comp) return null;
