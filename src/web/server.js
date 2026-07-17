@@ -3884,12 +3884,19 @@ IMPORTANT RULES:
 
       if (betType === 'parlay' && legs?.length > 0) {
         // ── Parlay bet ──
+        // Derive predominant sport from legs so the bet record is trackable
+        const legSports = legs.map(l => l.sport).filter(Boolean);
+        const parlayBetSport = legSports.length > 0
+          ? legSports.reduce((a, b) => legSports.filter(s => s === b).length >= legSports.filter(s => s === a).length ? b : a)
+          : null;
+
         const bet = await db.createBet({
           user_id: user.id,
           discord_id: targetDiscordId,
           guild_id: guildId,
           channel_id: channelId,
           bet_type: 'parlay',
+          sport: parlayBetSport || null,
           odds_american: parsedOdds,
           odds_decimal: oddsDecimal,
           units: parsedUnits,

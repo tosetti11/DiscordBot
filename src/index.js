@@ -458,8 +458,8 @@ client.once(Events.ClientReady, (c) => {
                     }
                   } catch {}
                 }
-                // Include prop stat + batting line in hash (non-golf)
-                if (leg.player_name && leg.espn_game_id) {
+                // Include prop stat + batting line in hash (non-golf sports only)
+                if (!legIsGolf && leg.player_name && leg.espn_game_id) {
                   try {
                     const summary = await espn.getGameSummary(leg.sport, leg.espn_game_id);
                     const player = summary ? espn.findPlayer(summary.players, leg.player_name) : null;
