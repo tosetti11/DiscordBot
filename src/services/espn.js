@@ -1495,12 +1495,13 @@ async function getGolfPlayerRound(playerName, roundNum, gameId) {
     if (!event) return null;
 
     const competitors = event.competitions?.[0]?.competitors || [];
-    const norm = normName(playerName);
+    const nn = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, '').trim();
+    const norm = nn(playerName);
 
     // Find the player (fuzzy, with NFD normalization)
     const comp = competitors.find(c => {
-      const dn = normName(c.athlete?.displayName || '');
-      const fn = normName(c.athlete?.fullName || '');
+      const dn = nn(c.athlete?.displayName || '');
+      const fn = nn(c.athlete?.fullName || '');
       return dn === norm || fn === norm || dn.includes(norm) || norm.includes(dn);
     });
     if (!comp) return null;
